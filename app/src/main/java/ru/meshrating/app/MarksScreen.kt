@@ -181,22 +181,22 @@ fun MarksScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         if (subjectId == null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(
+            SingleChoiceSegmentedButtonRow {
+                SegmentedButton(
                     selected = mode == "date",
                     onClick = { mode = "date" },
-                    label = { Text("По дате") }
-                )
-                FilterChip(
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
+                ) { Text("По дате") }
+                SegmentedButton(
                     selected = mode == "subject",
                     onClick = { mode = "subject" },
-                    label = { Text("По предмету") }
-                )
-                FilterChip(
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
+                ) { Text("По предмету") }
+                SegmentedButton(
                     selected = mode == "final",
                     onClick = { mode = "final" },
-                    label = { Text("Итоговые") }
-                )
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+                ) { Text("Итоговые") }
             }
             Spacer(Modifier.height(4.dp))
         }

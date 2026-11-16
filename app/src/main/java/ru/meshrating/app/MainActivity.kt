@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -53,7 +54,23 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     var themeId by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var themeColors by remember { mutableStateOf(prefs.getString("theme_colors", null)) }
     var language by remember { mutableStateOf(prefs.getString("language", "ru") ?: "ru") }
-    val colors = remember(themeId, themeColors) { AppTheme.colors(themeId, themeColors) }
+    val dark = isSystemInDarkTheme()
+    val colors = remember(themeId, themeColors, dark) {
+        if (themeId == "dynamic") {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else {
+            AppTheme.colors(themeId, themeColors)
+        }
+    }
+    val shapes = remember {
+        Shapes(
+            extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+            small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
+        )
+    }
 
     val applyTheme: (String) -> Unit = { id ->
         themeId = id
@@ -71,7 +88,7 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         LocalAppLanguage provides language,
         LocalAppLanguageSetter provides applyLanguage
     ) {
-        MaterialTheme(colorScheme = colors, content = content)
+        MaterialTheme(colorScheme = colors, shapes = shapes, content = content)
     }
 }
 
@@ -408,7 +425,7 @@ fun MainScaffold(
             }
         },
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },

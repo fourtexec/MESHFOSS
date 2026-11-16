@@ -168,17 +168,17 @@ fun HomeworksScreen(
             onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) },
             onDateSelected = { selectedDate = it }
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(
+        SingleChoiceSegmentedButtonRow {
+            SegmentedButton(
                 selected = mode == "due",
                 onClick = { mode = "due" },
-                label = { Text("На день") }
-            )
-            FilterChip(
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+            ) { Text("На день") }
+            SegmentedButton(
                 selected = mode == "assigned",
                 onClick = { mode = "assigned" },
-                label = { Text("Задано") }
-            )
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+            ) { Text("Задано") }
         }
         Spacer(Modifier.height(4.dp))
 

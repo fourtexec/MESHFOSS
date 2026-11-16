@@ -31,7 +31,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ru.meshrating.app"
+        applicationId = "ru.meshrating.app.m3e"
         minSdk = 24
         targetSdk = 35
         versionCode = buildVersionCode

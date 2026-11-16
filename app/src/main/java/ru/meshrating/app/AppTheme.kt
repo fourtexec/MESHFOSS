@@ -18,7 +18,7 @@ object AppTheme {
     const val DEFAULT_ID = "midnight"
 
     /** Порядок вариантов в списке настроек. */
-    val ids = listOf("midnight", "ocean", "forest", "sunset", "light", "custom")
+    val ids = listOf("midnight", "ocean", "forest", "sunset", "light", "dynamic", "custom")
 
     /** Соответствие «встроенный id → тройка цветов (акцент, фон, поверхность)». */
     private val palettes = mapOf(
@@ -66,6 +66,7 @@ object AppTheme {
         "forest" -> "Лес"
         "sunset" -> "Закат"
         "light" -> "Светлая"
+        "dynamic" -> "Динамическая (M3E)"
         "custom" -> customName.ifBlank { "Моя тема" }
         else -> id
     }
