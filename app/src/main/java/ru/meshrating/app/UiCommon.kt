@@ -10,18 +10,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.view.HapticFeedbackConstants
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 /** Цель перехода из расписания в конкретное ДЗ. */
 data class HomeworkTarget(
@@ -72,27 +79,88 @@ fun DaySelector(
     date: String,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onDateSelected: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val view = LocalView.current
+    var showPicker by remember { mutableStateOf(false) }
+    val pickerState = rememberDatePickerState(initialSelectedDateMillis = isoToMillisUtc(date))
+
+    if (showPicker) {
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { millis ->
+                        onDateSelected(millisToIsoUtc(millis))
+                    }
+                    showPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Отмена") }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        IconButton(onClick = onPrev) {
+        IconButton(onClick = {
+            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            onPrev()
+        }) {
             Text("‹", style = MaterialTheme.typography.headlineMedium)
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                showPicker = true
+            }
+        ) {
             Text(MeshCore.dateRu(date, weekday = true), style = MaterialTheme.typography.titleMedium)
             val relative = remember(date) { relativeDayLabel(date) }
             if (relative != null) {
                 Text(relative, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
         }
-        IconButton(onClick = onNext) {
+        IconButton(onClick = {
+            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            onNext()
+        }) {
             Text("›", style = MaterialTheme.typography.headlineMedium)
         }
     }
+}
+
+private fun isoToMillisUtc(iso: String): Long {
+    val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+    val parsed = MeshCore.parseIso(iso)
+    cal.set(Calendar.YEAR, parsed.get(Calendar.YEAR))
+    cal.set(Calendar.MONTH, parsed.get(Calendar.MONTH))
+    cal.set(Calendar.DAY_OF_MONTH, parsed.get(Calendar.DAY_OF_MONTH))
+    cal.set(Calendar.HOUR_OF_DAY, 0)
+    cal.set(Calendar.MINUTE, 0)
+    cal.set(Calendar.SECOND, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
+}
+
+private fun millisToIsoUtc(millis: Long): String {
+    val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+    cal.timeInMillis = millis
+    return String.format(
+        Locale.US,
+        "%04d-%02d-%02d",
+        cal.get(Calendar.YEAR),
+        cal.get(Calendar.MONTH) + 1,
+        cal.get(Calendar.DAY_OF_MONTH)
+    )
 }
 
 /** Оценка с учётом коэффициента: при weight>1 — красная рамка и цифра коэффициента. */

@@ -89,7 +89,8 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
             onNext = {
                 val week = state?.optJSONObject("feedingWeek")
                 selectedDate = MeshCore.nextFeedingDate(selectedDate, week, 1)
-            }
+            },
+            onDateSelected = { selectedDate = it }
         )
         Spacer(Modifier.height(4.dp))
 

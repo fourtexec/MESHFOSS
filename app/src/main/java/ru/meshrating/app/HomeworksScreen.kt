@@ -162,7 +162,8 @@ fun HomeworksScreen(
         DaySelector(
             date = selectedDate,
             onPrev = { selectedDate = MeshCore.addDays(selectedDate, -1) },
-            onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) }
+            onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) },
+            onDateSelected = { selectedDate = it }
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(
@@ -293,12 +294,7 @@ private fun HomeworkCard(
                     Text(
                         description,
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.pointerInput(description) {
-                            detectTapGestures(onLongPress = {
-                                clipboardManager.setText(AnnotatedString(description))
-                                Toast.makeText(context, "Текст задания скопирован", Toast.LENGTH_SHORT).show()
-                            })
-                        }
+                        modifier = Modifier.padding(4.dp)
                     )
                 }
                 Spacer(Modifier.height(4.dp))
@@ -309,7 +305,7 @@ private fun HomeworkCard(
                     },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text("📋 Копировать")
+                    Text("📋")
                 }
             }
             Spacer(Modifier.height(4.dp))

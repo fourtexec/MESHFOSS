@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -21,11 +23,13 @@ fun MarkDetailDialog(
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val view = LocalView.current
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<JSONObject?>(null) }
 
     LaunchedEffect(markId) {
+        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         loading = true
         error = null
         try {

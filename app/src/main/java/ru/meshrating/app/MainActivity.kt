@@ -15,8 +15,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -314,6 +316,7 @@ fun MainScaffold(
     onLogout: () -> Unit
 ) {
     var currentTab by remember { mutableStateOf("ranking") }
+    val hapticView = LocalView.current
     var rankingSubjectId by remember { mutableStateOf<String?>(null) }
     var marksSubjectId by remember { mutableStateOf<String?>(null) }
     var marksSubjectName by remember { mutableStateOf<String?>(null) }
@@ -330,6 +333,7 @@ fun MainScaffold(
 
     fun navigateTo(next: NavState) {
         if (next == currentState()) return
+        hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         backStack.add(currentState())
         currentTab = next.tab
         rankingSubjectId = next.rankingSubjectId
@@ -343,6 +347,7 @@ fun MainScaffold(
 
     // Жест/кнопка «назад» сначала проходят по истории экранов, а не сворачивают приложение.
     BackHandler(enabled = hasContext) {
+        hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         if (backStack.isNotEmpty()) {
             val previous = backStack.removeAt(backStack.lastIndex)
             currentTab = previous.tab
