@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -30,6 +31,7 @@ class SessionStore(context: Context) {
         private const val KEY_PARENT_NAME = "parentName"
         private const val KEY_NAMES = "names_v2"
         private const val KEY_RANKING_CACHE = "ranking_cache_v1"
+        private const val KEY_MARKS_CACHE = "marks_cache_v1"
         private const val KEY_LAST_REFRESH = "lastRefresh"
         private const val KEY_LAST_UPDATE_CHECK = "lastUpdateCheck"
     }
@@ -182,6 +184,38 @@ class SessionStore(context: Context) {
 
     fun saveRankingCache(value: JSONObject) {
         cache.edit().putString(KEY_RANKING_CACHE, value.toString()).apply()
+    }
+
+    // ------------------------------------------- кэш старых оценок (неизменны) --
+
+    /**
+     * Старые оценки не меняются, поэтому их можно кэшировать по диапазону дат.
+     * Ключ диапазона: "from_to". Возвращает null, если диапазона нет в кэше.
+     */
+    fun loadMarksRange(from: String, to: String): List<JSONObject>? {
+        val raw = cache.getString(KEY_MARKS_CACHE, null) ?: return null
+        return try {
+            val json = JSONObject(raw)
+            val ranges = json.optJSONObject("ranges") ?: return null
+            val arr = ranges.optJSONArray("${from}_${to}") ?: return null
+            (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+        } catch (error: Exception) {
+            null
+        }
+    }
+
+    fun saveMarksRange(from: String, to: String, marks: List<JSONObject>) {
+        val raw = cache.getString(KEY_MARKS_CACHE, null)
+        val json = try {
+            JSONObject(raw ?: "{}")
+        } catch (error: Exception) {
+            JSONObject()
+        }
+        val ranges = json.optJSONObject("ranges") ?: JSONObject().also { json.put("ranges", it) }
+        val arr = JSONArray()
+        marks.forEach { arr.put(it) }
+        ranges.put("${from}_${to}", arr)
+        cache.edit().putString(KEY_MARKS_CACHE, json.toString()).apply()
     }
 
     // -------------------------------------------------------------- настройки --

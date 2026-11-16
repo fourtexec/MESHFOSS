@@ -2,15 +2,19 @@ package ru.meshrating.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -23,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -52,7 +57,12 @@ fun MarksScreen(
     var mode by remember { mutableStateOf("date") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var marks by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var loadedFrom by remember { mutableStateOf(MeshCore.addDays(MeshCore.today(), -30)) }
+    var loadedTo by remember { mutableStateOf(MeshCore.today()) }
+    var loadingOlder by remember { mutableStateOf(false) }
+    var noMoreOlder by remember { mutableStateOf(false) }
     var subjects by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var retryKey by remember { mutableStateOf(0) }
 
@@ -63,9 +73,37 @@ fun MarksScreen(
     var finalLoading by remember { mutableStateOf(false) }
     var finalError by remember { mutableStateOf<String?>(null) }
 
-    val from = MeshCore.addDays(MeshCore.today(), -30)
-    val to = MeshCore.today()
+    val listState = rememberLazyListState()
     val effectivePersonId = personId?.takeIf { it.isNotBlank() } ?: store.personId
+
+    fun loadOlderMarks() {
+        val sid = studentId ?: return
+        if (loadingOlder || noMoreOlder) return
+        loadingOlder = true
+        scope.launch {
+            try {
+                val newTo = MeshCore.addDays(loadedFrom, -1)
+                val newFrom = MeshCore.addDays(newTo, -30)
+                val cached = store.loadMarksRange(newFrom, newTo)
+                val fetched = cached ?: withContext(Dispatchers.IO) {
+                    client.getMarks(sid, newFrom, newTo)
+                }
+                if (cached == null) store.saveMarksRange(newFrom, newTo, fetched)
+                if (fetched.isEmpty()) {
+                    noMoreOlder = true
+                } else {
+                    val existingIds = marks.map { it.optString("id") }.toSet()
+                    val newMarks = fetched.filter { it.optString("id") !in existingIds }
+                    marks = (marks + newMarks).sortedByDescending { it.optString("date") }
+                    loadedFrom = newFrom
+                }
+            } catch (e: Exception) {
+                error = MeshCore.describeError(e)
+            } finally {
+                loadingOlder = false
+            }
+        }
+    }
 
     LaunchedEffect(studentId, mode, subjectId, retryKey) {
         if (studentId.isNullOrBlank()) {
@@ -82,9 +120,14 @@ fun MarksScreen(
                     client.getSubjectMarksDetailed(studentId).toObjectList()
                 }
             } else {
+                val recentFrom = MeshCore.addDays(MeshCore.today(), -30)
                 marks = withContext(Dispatchers.IO) {
-                    client.getMarks(studentId, from, to)
-                }
+                    client.getMarks(studentId, recentFrom, MeshCore.today())
+                }.sortedByDescending { it.optString("date") }
+                loadedFrom = recentFrom
+                loadedTo = MeshCore.today()
+                loadingOlder = false
+                noMoreOlder = false
             }
         } catch (e: Exception) {
             error = MeshCore.describeError(e)
@@ -206,7 +249,7 @@ fun MarksScreen(
                     }
                 }
             }
-            else -> DateMarksList(marks, from, to, Modifier.weight(1f))
+            else -> DateMarksList(marks, loadedFrom, loadedTo, Modifier.weight(1f), listState, loadingOlder, noMoreOlder, ::loadOlderMarks)
         }
     }
 }
@@ -216,12 +259,27 @@ private fun DateMarksList(
     marks: List<JSONObject>,
     from: String,
     to: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    loadingOlder: Boolean,
+    noMoreOlder: Boolean,
+    onLoadOlder: () -> Unit
 ) {
     val grouped = remember(marks) {
         marks.groupBy { it.optString("date") }.entries.sortedByDescending { it.key }
     }
-    LazyColumn(modifier = modifier) {
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo }.collect { info ->
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = info.totalItemsCount
+            if (total > 0 && lastVisible >= total - 3 && !loadingOlder && !noMoreOlder) {
+                onLoadOlder()
+            }
+        }
+    }
+
+    LazyColumn(state = listState, modifier = modifier) {
         item {
             Text(
                 MeshCore.dateRangeText(from, to),
@@ -258,6 +316,26 @@ private fun DateMarksList(
                 items(dayMarks) { mark ->
                     MarkCard(mark, showSubject = true, showDate = false)
                 }
+            }
+        }
+        if (loadingOlder) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+        if (noMoreOlder && marks.isNotEmpty()) {
+            item {
+                Text(
+                    "Больше оценок нет",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
             }
         }
     }
@@ -767,9 +845,34 @@ private fun SummaryStat(label: String, value: String) {
 }
 
 @Composable
+@Composable
+private fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
+    val nonUnit = weight > 1.0
+    Box(
+        modifier = if (nonUnit) Modifier.border(1.dp, Color.Red, RoundedCornerShape(10.dp)) else Modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Box {
+            GradeBadge(markText, value)
+            if (nonUnit) {
+                Text(
+                    text = formatWeight(weight),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    color = Color.Red,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun formatWeight(weight: Double): String =
+    if (weight == Math.floor(weight)) weight.toInt().toString() else String.format(Locale.US, "%.1f", weight)
+
 private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean) {
     val value = mark.nullableDouble("value")
     val markText = mark.optString("markText").takeIf { it.isNotBlank() } ?: formatMark(value)
+    val weight = mark.nullableDouble("weight") ?: 1.0
     val title = if (showSubject) {
         mark.optString("subjectName").ifBlank { "Предмет" }
     } else {
@@ -816,7 +919,7 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean) 
                 }
             }
             Spacer(Modifier.width(12.dp))
-            GradeBadge(markText, value)
+            WeightedGradeBadge(markText, value, weight)
         }
     }
 }

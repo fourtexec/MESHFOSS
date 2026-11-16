@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -13,9 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
@@ -235,6 +239,7 @@ private fun HomeworkCard(
     onToggleDone: (Boolean) -> Unit
 ) {
     val description = h.optString("description").trim().let { if (it == ".") "" else it }
+    val clipboardManager = LocalClipboardManager.current
     val assigned = h.optString("assignedOn").takeIf { it.isNotBlank() && it != "null" }
     val due = h.optString("dueDate").takeIf { it.isNotBlank() && it != "null" }
     val materials = h.optJSONArray("materials")
@@ -283,7 +288,16 @@ private fun HomeworkCard(
             }
             if (description.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
-                Text(description, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.pointerInput(description) {
+                        detectTapGestures(onLongPress = {
+                            clipboardManager.setText(AnnotatedString(description))
+                            Toast.makeText(context, "Текст задания скопирован", Toast.LENGTH_SHORT).show()
+                        })
+                    }
+                )
             }
             Spacer(Modifier.height(4.dp))
             val dates = buildString {
