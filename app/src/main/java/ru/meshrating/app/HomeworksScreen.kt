@@ -258,12 +258,11 @@ private fun HomeworkCard(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .alpha(cardAlpha),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceContainerLow
             }
         ),
         border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null

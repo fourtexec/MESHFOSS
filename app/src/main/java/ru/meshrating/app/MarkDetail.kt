@@ -4,9 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -40,18 +38,15 @@ fun MarkDetailDialog(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                detail?.optString("subject_name")?.takeIf { it.isNotBlank() } ?: "Оценка",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Закрыть") }
+        },
+        title = {
+            Text(detail?.optString("subject_name")?.takeIf { it.isNotBlank() } ?: "Оценка")
+        },
+        text = {
             if (loading) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -59,7 +54,7 @@ fun MarkDetailDialog(
             } else if (error != null) {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
             } else {
-                val d = detail ?: return@Column
+                val d = detail ?: return@AlertDialog
                 val value = d.nullableDouble("value")
                 val markText = d.optString("markText").takeIf { it.isNotBlank() }
                     ?: d.optString("value").ifBlank { formatMark(value) }
