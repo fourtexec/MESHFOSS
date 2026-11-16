@@ -91,14 +91,26 @@ fun RankingScreen(
                 }
                 subjects = result.first
                 board = result.second
-                val saved = if (validDay) existing else JSONObject().put("day", dayKey)
-                val subjectsCache = saved.optJSONObject("subjects") ?: JSONObject()
-                subjectsCache.put(personId, JSONArray(result.first))
-                val boardsCache = saved.optJSONObject("boards") ?: JSONObject()
-                boardsCache.put(boardKey, result.second)
-                saved.put("subjects", subjectsCache)
-                saved.put("boards", boardsCache)
-                store.saveRankingCache(saved)
+                // Ночной сбой МЭШ может ответить 200 с пустым payload: такое «пустое»
+                // не кэшируем, иначе «Нет данных» продержится до 05:00 и заслонит
+                // данные после восстановления сервера. Ошибки/таймауты и так не
+                // кэшируются — ветка catch записи не делает.
+                val newRows = result.second.optJSONArray("rows")
+                val hasRows = newRows != null && newRows.length() > 0
+                if (result.first.isNotEmpty() || hasRows) {
+                    val saved = if (validDay) existing else JSONObject().put("day", dayKey)
+                    if (result.first.isNotEmpty()) {
+                        val subjectsCache = saved.optJSONObject("subjects") ?: JSONObject()
+                        subjectsCache.put(personId, JSONArray(result.first))
+                        saved.put("subjects", subjectsCache)
+                    }
+                    if (hasRows) {
+                        val boardsCache = saved.optJSONObject("boards") ?: JSONObject()
+                        boardsCache.put(boardKey, result.second)
+                        saved.put("boards", boardsCache)
+                    }
+                    store.saveRankingCache(saved)
+                }
             } catch (e: Exception) {
                 error = MeshCore.describeError(e)
             } finally {
