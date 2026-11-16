@@ -76,6 +76,13 @@ android {
         }
     }
 
+    lint {
+        // AGP 8.7: детектор NonNullableMutableLiveDataDetector (issue NullSafeMutableLiveData)
+        // несовместим с Kotlin 2.1 Analysis API и роняет lintVitalRelease
+        // (IncompatibleClassChangeError: KaCallableMemberCall). К проекту не относится.
+        disable += "NullSafeMutableLiveData"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
