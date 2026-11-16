@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import androidx.compose.foundation.clickable
@@ -30,6 +32,8 @@ fun ScheduleScreen(
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(studentId != null) }
+    // Обновление свайпом «потянуть»: список остаётся, крутится индикатор.
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var lessons by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selectedDate by remember { mutableStateOf(MeshCore.today()) }
@@ -39,6 +43,7 @@ fun ScheduleScreen(
     fun load() {
         if (studentId.isNullOrBlank()) {
             loading = false
+            refreshing = false
             return
         }
         loading = true
@@ -51,6 +56,7 @@ fun ScheduleScreen(
                 error = MeshCore.describeError(e)
             } finally {
                 loading = false
+                refreshing = false
             }
         }
     }
@@ -73,14 +79,14 @@ fun ScheduleScreen(
             studentId.isNullOrBlank() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
                         Text("Загружаем профиль ученика…")
                     }
                 }
             }
-            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            loading && !refreshing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                LoadingIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -93,7 +99,12 @@ fun ScheduleScreen(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Нет уроков")
                 }
-            else -> LazyColumn(modifier = Modifier.weight(1f)) {
+            else -> PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = { refreshing = true; load() },
+                modifier = Modifier.weight(1f)
+            ) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(lessons.filter { it.optString("subject").let { s -> s.isNotBlank() && s != "—" } }) { lesson ->
                     val begin = lesson.optString("begin").takeIf { it.isNotBlank() && it != "null" }
                     val end = lesson.optString("end").takeIf { it.isNotBlank() && it != "null" }
@@ -102,7 +113,10 @@ fun ScheduleScreen(
                     val room = lesson.optString("room")
                     val homework = lesson.optString("homework")
 
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.Top
@@ -185,6 +199,7 @@ fun ScheduleScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }

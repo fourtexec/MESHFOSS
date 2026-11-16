@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import androidx.compose.foundation.Canvas
@@ -181,22 +183,29 @@ fun MarksScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         if (subjectId == null) {
-            SingleChoiceSegmentedButtonRow {
-                SegmentedButton(
-                    selected = mode == "date",
-                    onClick = { mode = "date" },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
-                ) { Text("По дате") }
-                SegmentedButton(
-                    selected = mode == "subject",
-                    onClick = { mode = "subject" },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
-                ) { Text("По предмету") }
-                SegmentedButton(
-                    selected = mode == "final",
-                    onClick = { mode = "final" },
-                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
-                ) { Text("Итоговые") }
+            // M3E: connected-группа переключателей — выделенный сегмент меняет и форму, и цвет.
+            ButtonGroup(
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                toggleableItem(
+                    checked = mode == "date",
+                    label = "По дате",
+                    onCheckedChange = { mode = "date" },
+                    weight = 1f
+                )
+                toggleableItem(
+                    checked = mode == "subject",
+                    label = "По предмету",
+                    onCheckedChange = { mode = "subject" },
+                    weight = 1f
+                )
+                toggleableItem(
+                    checked = mode == "final",
+                    label = "Итоговые",
+                    onCheckedChange = { mode = "final" },
+                    weight = 1f
+                )
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -205,7 +214,7 @@ fun MarksScreen(
             studentId.isNullOrBlank() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
                         Text("Загружаем профиль ученика...")
                     }
@@ -220,7 +229,7 @@ fun MarksScreen(
                 error = finalError
             )
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -611,7 +620,7 @@ private fun FinalMarksSection(
         Spacer(Modifier.height(8.dp))
         when {
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             error != null -> Text(
                 error,

@@ -29,8 +29,9 @@
 - Emphasized typography для заголовков и ключевых действий.
 - Spring-физика для переходов и взаимодействий.
 - Расширенная цветовая палитра и динамические цвета.
-- Новые компоненты: button groups, split buttons, toolbars, loading indicator, FAB menu.
-- Контейнеры и визуальная иерархия в стиле M3E.
+- Компоненты M3E: connected `ButtonGroup` с `ToggleButton`, `LoadingIndicator`,
+  волосяные индикаторы прогресса, pull-to-refresh, `MaterialShapes`-радиусы.
+- Контейнеры и визуальная иерархия (surface container levels) в стиле M3E.
 
 ## Сборка
 

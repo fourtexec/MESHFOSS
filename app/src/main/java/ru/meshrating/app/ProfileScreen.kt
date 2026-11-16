@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import androidx.compose.foundation.layout.*
@@ -68,7 +70,7 @@ fun ProfileBody(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 contentAlignment = androidx.compose.ui.Alignment.Center
             ) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             error != null -> {
                 Text(error!!, color = MaterialTheme.colorScheme.error)

@@ -1,8 +1,11 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -57,7 +60,12 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val colors = remember(themeId, themeColors, dark) {
         if (themeId == "dynamic") {
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            } else {
+                // Material You (динамические цвета) есть только на Android 12+.
+                AppTheme.colors(if (dark) AppTheme.DEFAULT_ID else "light", null)
+            }
         } else {
             AppTheme.colors(themeId, themeColors)
         }
@@ -88,7 +96,12 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         LocalAppLanguage provides language,
         LocalAppLanguageSetter provides applyLanguage
     ) {
-        MaterialTheme(colorScheme = colors, shapes = shapes, content = content)
+        MaterialTheme(
+            colorScheme = colors,
+            motionScheme = MotionScheme.expressive(),
+            shapes = shapes,
+            content = content
+        )
     }
 }
 
@@ -294,7 +307,7 @@ fun BootScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CircularProgressIndicator()
+        LoadingIndicator()
         Spacer(Modifier.height(16.dp))
         Text("Загружаем профиль МЭШ…")
     }
@@ -425,7 +438,7 @@ fun MainScaffold(
             }
         },
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },

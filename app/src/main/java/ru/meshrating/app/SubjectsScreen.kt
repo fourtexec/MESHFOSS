@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import androidx.compose.foundation.clickable
@@ -57,14 +59,14 @@ fun SubjectsScreen(
             personId.isNullOrBlank() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
                         Text("Загружаем профиль ученика…")
                     }
                 }
             }
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
