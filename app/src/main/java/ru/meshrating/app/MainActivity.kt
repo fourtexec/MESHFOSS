@@ -449,7 +449,7 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(tonalElevation = 3.dp) {
                 val items = listOf(
                     Triple("ranking", tr("Рейтинг", "Rating"), R.drawable.ic_nav_ranking),
                     Triple("marks", tr("Оценки", "Marks"), R.drawable.ic_nav_marks),

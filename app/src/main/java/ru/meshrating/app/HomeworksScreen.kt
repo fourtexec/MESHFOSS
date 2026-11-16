@@ -193,7 +193,7 @@ fun HomeworksScreen(
                 }
             }
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -258,6 +258,7 @@ private fun HomeworkCard(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .alpha(cardAlpha),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
