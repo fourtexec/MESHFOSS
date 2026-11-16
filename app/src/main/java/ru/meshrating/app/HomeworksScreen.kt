@@ -291,11 +291,12 @@ private fun HomeworkCard(
             if (description.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 SelectionContainer {
-                    Text(
-                        description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(4.dp)
-                    )
+                    Box(modifier = Modifier.padding(4.dp)) {
+                        Text(
+                            description,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(
