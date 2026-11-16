@@ -881,7 +881,8 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean, 
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
