@@ -425,7 +425,7 @@ fun MainScaffold(
             }
         },
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
