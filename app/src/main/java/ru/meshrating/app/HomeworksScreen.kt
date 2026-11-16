@@ -5,6 +5,7 @@ package ru.meshrating.app
 import android.content.Context
 import android.widget.Toast
 import ru.meshrating.app.R
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -271,12 +272,19 @@ private fun HomeworkCard(
     val attachments = h.optJSONArray("attachments")
     val homeworkEntryId = h.optString("homeworkEntryId").ifBlank { h.optString("id") }
     val cardAlpha = if (dimmed) 0.45f else 1f
+    // M3E-морфинг: отмеченное «выполненным» ДЗ пружинисто превращается в пилюлю.
+    val shapeProgress by animateFloatAsState(
+        targetValue = if (isDone) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "homeworkDoneShape"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .alpha(cardAlpha),
+        shape = MaterialMorphShape(MaterialShapes.Square, MaterialShapes.Pill, shapeProgress),
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
@@ -300,7 +308,7 @@ private fun HomeworkCard(
                     modifier = Modifier.weight(1f)
                 )
                 if (savingDone) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    LoadingIndicator(modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
                 }
                 if (due != null) {

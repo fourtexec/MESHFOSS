@@ -1,7 +1,11 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,15 +66,29 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                 )
                 Spacer(Modifier.height(4.dp))
                 AppTheme.ids.forEach { id ->
+                    val selected = theme == id
+                    val shapeProgress by animateFloatAsState(
+                        targetValue = if (selected) 1f else 0f,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "themeShape"
+                    )
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable {
-                            theme = id
-                            prefs.edit().putString("theme_id", id).apply()
-                            applyTheme(id)
-                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialMorphShape(MaterialShapes.Square, MaterialShapes.Pill, shapeProgress))
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.secondaryContainer
+                                else Color.Transparent
+                            )
+                            .clickable {
+                                theme = id
+                                prefs.edit().putString("theme_id", id).apply()
+                                applyTheme(id)
+                            }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = theme == id, onClick = null)
+                        RadioButton(selected = selected, onClick = null)
                         Spacer(Modifier.width(6.dp))
                         Text(AppTheme.label(id, customName.ifBlank { myThemeLabel }))
                     }
@@ -174,7 +194,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                     enabled = !checkingUpdates,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (checkingUpdates) CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    if (checkingUpdates) LoadingIndicator(modifier = Modifier.size(20.dp))
                     else Text(tr("Проверить обновления сейчас", "Check for updates now"))
                 }
                 updateMessage?.let {
@@ -230,7 +250,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                     enabled = !refreshing,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (refreshing) CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    if (refreshing) LoadingIndicator(modifier = Modifier.size(20.dp))
                     else Text(tr("Обновить токен", "Refresh token"))
                 }
                 message?.let {

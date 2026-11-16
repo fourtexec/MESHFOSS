@@ -71,9 +71,6 @@ fun ScheduleScreen(
             onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) },
             onDateSelected = { selectedDate = it }
         )
-        OutlinedButton(onClick = onFoodClick, modifier = Modifier.fillMaxWidth()) {
-            Text(tr("Еда и баланс", "Food & balance"))
-        }
         Spacer(Modifier.height(4.dp))
 
         when {

@@ -12,6 +12,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -462,7 +464,7 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            NavigationBar(tonalElevation = 3.dp) {
+            ShortNavigationBar {
                 val items = listOf(
                     Triple("ranking", tr("Рейтинг", "Rating"), R.drawable.ic_nav_ranking),
                     Triple("marks", tr("Оценки", "Marks"), R.drawable.ic_nav_marks),
@@ -470,7 +472,7 @@ fun MainScaffold(
                     Triple("schedule", tr("Расписание", "Schedule"), R.drawable.ic_nav_schedule)
                 )
                 items.forEach { (key, label, iconRes) ->
-                    NavigationBarItem(
+                    ShortNavigationBarItem(
                         selected = currentTab == key,
                         onClick = { navigateTo(NavState(tab = key)) },
                         label = { Text(label) },
@@ -483,53 +485,97 @@ fun MainScaffold(
                     )
                 }
             }
+        },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = currentTab == "schedule",
+                enter = scaleIn(MaterialTheme.motionScheme.defaultSpatialSpec(), initialScale = 0.6f) +
+                    fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = scaleOut(MaterialTheme.motionScheme.defaultSpatialSpec(), targetScale = 0.6f) +
+                    fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
+            ) {
+                ExtendedFloatingActionButton(
+                    text = { Text(tr("Еда", "Food")) },
+                    icon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_nav_food),
+                            contentDescription = null
+                        )
+                    },
+                    onClick = { navigateTo(NavState(tab = "food")) }
+                )
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            when (currentTab) {
-                "ranking" -> RankingScreen(
-                    store,
-                    client,
-                    personId,
-                    onLogout,
-                    selectedSubjectId = rankingSubjectId,
-                    onSubjectChange = { rankingSubjectId = it }
-                )
-                "marks" -> MarksScreen(
-                    store,
-                    client,
-                    studentId,
-                    personId = personId,
-                    subjectId = marksSubjectId,
-                    onOpenSubject = { id, name ->
-                        if (id.isNotBlank()) {
-                            navigateTo(
-                                NavState(
-                                    tab = "marks",
-                                    marksSubjectId = id,
-                                    marksSubjectName = name
+            val motion = MaterialTheme.motionScheme
+            val tabOrder = listOf("ranking", "marks", "homeworks", "schedule", "food", "settings")
+            AnimatedContent(
+                targetState = currentTab,
+                transitionSpec = {
+                    val forward = tabOrder.indexOf(targetState) >= tabOrder.indexOf(initialState)
+                    val slide = motion.defaultSpatialSpec<IntOffset>()
+                    val fade = motion.defaultEffectsSpec<Float>()
+                    val scale = motion.defaultSpatialSpec<Float>()
+                    val enterX: (Int) -> Int = { w -> (if (forward) w else -w) / 4 }
+                    val exitX: (Int) -> Int = { w -> (if (forward) -w else w) / 4 }
+                    (
+                        slideInHorizontally(animationSpec = slide, initialOffsetX = enterX) +
+                            fadeIn(animationSpec = fade) +
+                            scaleIn(animationSpec = scale, initialScale = 0.96f)
+                    ) togetherWith (
+                        slideOutHorizontally(animationSpec = slide, targetOffsetX = exitX) +
+                            fadeOut(animationSpec = fade) +
+                            scaleOut(animationSpec = scale, targetScale = 0.96f)
+                    )
+                },
+                modifier = Modifier.fillMaxSize()
+            ) { tab ->
+                when (tab) {
+                    "ranking" -> RankingScreen(
+                        store,
+                        client,
+                        personId,
+                        onLogout,
+                        selectedSubjectId = rankingSubjectId,
+                        onSubjectChange = { rankingSubjectId = it }
+                    )
+                    "marks" -> MarksScreen(
+                        store,
+                        client,
+                        studentId,
+                        personId = personId,
+                        subjectId = marksSubjectId,
+                        onOpenSubject = { id, name ->
+                            if (id.isNotBlank()) {
+                                navigateTo(
+                                    NavState(
+                                        tab = "marks",
+                                        marksSubjectId = id,
+                                        marksSubjectName = name
+                                    )
                                 )
-                            )
+                            }
                         }
-                    }
-                )
-                "homeworks" -> HomeworksScreen(
-                    store,
-                    client,
-                    studentId,
-                    target = homeworkTarget,
-                    onTargetConsumed = { homeworkTarget = null }
-                )
-                "schedule" -> ScheduleScreen(
-                    store,
-                    client,
-                    studentId,
-                    personId = personId,
-                    onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
-                    onFoodClick = { navigateTo(NavState(tab = "food")) }
-                )
-                "food" -> FoodScreen(store, client, personId)
-                "settings" -> SettingsScreen(store, client, profile, onLogout)
+                    )
+                    "homeworks" -> HomeworksScreen(
+                        store,
+                        client,
+                        studentId,
+                        target = homeworkTarget,
+                        onTargetConsumed = { homeworkTarget = null }
+                    )
+                    "schedule" -> ScheduleScreen(
+                        store,
+                        client,
+                        studentId,
+                        personId = personId,
+                        onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
+                        onFoodClick = { navigateTo(NavState(tab = "food")) }
+                    )
+                    "food" -> FoodScreen(store, client, personId)
+                    "settings" -> SettingsScreen(store, client, profile, onLogout)
+                }
             }
         }
     }

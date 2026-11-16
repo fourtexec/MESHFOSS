@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package ru.meshrating.app
 
 import android.content.Intent
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -491,13 +494,54 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { start() },
-            enabled = !running,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (running) "Ожидание подтверждения..." else "Получить ссылку")
-        }
+        var menuExpanded by remember { mutableStateOf(false) }
+        SplitButtonLayout(
+            leadingButton = {
+                SplitButtonDefaults.OutlinedLeadingButton(
+                    onClick = { start() },
+                    enabled = !running
+                ) {
+                    Text(if (running) "Ожидание подтверждения..." else "Получить ссылку")
+                }
+            },
+            trailingButton = {
+                Box {
+                    SplitButtonDefaults.OutlinedTrailingButton(
+                        checked = menuExpanded,
+                        onCheckedChange = { menuExpanded = it },
+                        enabled = link != null || running
+                    ) {
+                        Text("▾", style = MaterialTheme.typography.titleMedium)
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Открыть ссылку") },
+                            enabled = link != null,
+                            onClick = {
+                                menuExpanded = false
+                                link?.let { value ->
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(value)))
+                                    }
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Отменить QR-вход") },
+                            enabled = running,
+                            onClick = {
+                                menuExpanded = false
+                                cancel()
+                            }
+                        )
+                    }
+                }
+            },
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
 
         link?.let { value ->
             Spacer(Modifier.height(8.dp))
@@ -549,11 +593,6 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                     Text("Отмена")
                 }
             }
-        }
-
-        if (running) {
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = { cancel() }) { Text("Отменить QR-вход") }
         }
 
         error?.let {
