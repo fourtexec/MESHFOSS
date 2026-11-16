@@ -263,8 +263,9 @@ private fun HomeworkCard(
         ),
         border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        SelectionContainer {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = isDone,
                     onCheckedChange = { onToggleDone(it) },
@@ -290,13 +291,11 @@ private fun HomeworkCard(
             }
             if (description.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
-                SelectionContainer {
-                    Box(modifier = Modifier.padding(4.dp)) {
-                        Text(
-                            description,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
+                Box(modifier = Modifier.padding(4.dp)) {
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(
