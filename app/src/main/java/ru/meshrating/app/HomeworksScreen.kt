@@ -158,8 +158,9 @@ fun HomeworksScreen(
         onTargetConsumed()
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        DaySelector(
+    SelectionContainer {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            DaySelector(
             date = selectedDate,
             onPrev = { selectedDate = MeshCore.addDays(selectedDate, -1) },
             onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) },
@@ -226,6 +227,7 @@ fun HomeworksScreen(
         }
     }
 }
+}
 
 @Composable
 private fun HomeworkCard(
@@ -263,9 +265,8 @@ private fun HomeworkCard(
         ),
         border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
     ) {
-        SelectionContainer {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = isDone,
                     onCheckedChange = { onToggleDone(it) },
@@ -412,7 +413,6 @@ private fun HomeworkCard(
             }
         }
     }
-}
 }
 
 private fun findHomeworkIndex(items: List<JSONObject>, target: HomeworkTarget): Int {
