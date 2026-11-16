@@ -1050,6 +1050,22 @@ object MeshCore {
                 item.opt("mark"), item.opt("mark_value"),
                 lessonObj?.optJSONArray("marks")?.optJSONObject(0)?.opt("value")
             )
+            val rawMarks = firstDefined(
+                lessonObj?.optJSONArray("marks"),
+                item.optJSONArray("marks")
+            ) as? JSONArray ?: JSONArray()
+            val normalizedMarks = JSONArray()
+            for (i in 0 until rawMarks.length()) {
+                rawMarks.optJSONObject(i)?.let { normalizedMarks.put(normalizeMark(it)) }
+            }
+            if (normalizedMarks.length() == 0 && mark != null) {
+                normalizedMarks.put(
+                    JSONObject()
+                        .put("value", mark)
+                        .put("weight", 1.0)
+                        .put("markText", asString(mark))
+                )
+            }
             val homework = asString(
                 firstDefined(
                     text(lessonObj?.opt("homework")),
@@ -1084,6 +1100,7 @@ object MeshCore {
                     .put("homework", homework)
                     .put("homeworkId", homeworkId)
                     .put("mark", asNullableDouble(mark) ?: JSONObject.NULL)
+                    .put("marks", normalizedMarks)
                     .put("isCancelled", asBool(firstDefined(lessonObj?.opt("is_cancelled"), item.opt("is_cancel"), item.opt("isCancelled"))))
             )
         }

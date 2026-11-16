@@ -456,6 +456,7 @@ fun MainScaffold(
                     store,
                     client,
                     studentId,
+                    personId = personId,
                     onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
                     onFoodClick = { navigateTo(NavState(tab = "food")) }
                 )

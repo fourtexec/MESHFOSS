@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -288,16 +289,28 @@ private fun HomeworkCard(
             }
             if (description.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.pointerInput(description) {
-                        detectTapGestures(onLongPress = {
-                            clipboardManager.setText(AnnotatedString(description))
-                            Toast.makeText(context, "Текст задания скопирован", Toast.LENGTH_SHORT).show()
-                        })
-                    }
-                )
+                SelectionContainer {
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.pointerInput(description) {
+                            detectTapGestures(onLongPress = {
+                                clipboardManager.setText(AnnotatedString(description))
+                                Toast.makeText(context, "Текст задания скопирован", Toast.LENGTH_SHORT).show()
+                            })
+                        }
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                OutlinedButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(description))
+                        Toast.makeText(context, "Текст задания скопирован", Toast.LENGTH_SHORT).show()
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("📋 Копировать")
+                }
             }
             Spacer(Modifier.height(4.dp))
             val dates = buildString {

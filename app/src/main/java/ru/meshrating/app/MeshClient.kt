@@ -228,6 +228,12 @@ class MeshClient(
             .sortedByDescending { it.optString("date") }
     }
 
+    /** Подробная информация об оценке (тема урока, комментарий, результаты по классу). */
+    fun getMark(markId: String, personId: String?): JSONObject {
+        val path = "${MeshCore.Paths.MARKS}/$markId"
+        return request(path, mapOf("person_id" to personId, "markId" to markId)) ?: JSONObject()
+    }
+
     fun getSubjectMarks(studentId: String?): JSONArray =
         MeshCore.payloadList(request(MeshCore.Paths.SUBJECT_MARKS, mapOf("student_id" to studentId)))
 

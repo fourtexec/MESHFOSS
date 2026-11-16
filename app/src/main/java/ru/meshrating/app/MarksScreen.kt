@@ -65,6 +65,7 @@ fun MarksScreen(
     var noMoreOlder by remember { mutableStateOf(false) }
     var subjects by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var retryKey by remember { mutableStateOf(0) }
+    var selectedMarkId by remember { mutableStateOf<String?>(null) }
 
     // Итоговые оценки и учебные годы.
     var academicYears by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -230,7 +231,7 @@ fun MarksScreen(
             }
             subjectId != null -> {
                 val subject = subjects.firstOrNull { it.optString("subjectId") == subjectId }
-                SubjectMarksDetail(subject)
+                SubjectMarksDetail(subject) { id -> selectedMarkId = id }
             }
             mode == "subject" -> {
                 if (subjects.isEmpty()) {
@@ -249,8 +250,18 @@ fun MarksScreen(
                     }
                 }
             }
-            else -> DateMarksList(marks, loadedFrom, loadedTo, Modifier.weight(1f), listState, loadingOlder, noMoreOlder, ::loadOlderMarks)
+            else -> DateMarksList(marks, loadedFrom, loadedTo, Modifier.weight(1f), listState, loadingOlder, noMoreOlder, ::loadOlderMarks) { id -> selectedMarkId = id }
         }
+    }
+
+    selectedMarkId?.let { id ->
+        MarkDetailDialog(
+            markId = id,
+            personId = effectivePersonId,
+            client = client,
+            store = store,
+            onDismiss = { selectedMarkId = null }
+        )
     }
 }
 
@@ -263,7 +274,8 @@ private fun DateMarksList(
     listState: androidx.compose.foundation.lazy.LazyListState,
     loadingOlder: Boolean,
     noMoreOlder: Boolean,
-    onLoadOlder: () -> Unit
+    onLoadOlder: () -> Unit,
+    onMarkClick: (String) -> Unit = {}
 ) {
     val grouped = remember(marks) {
         marks.groupBy { it.optString("date") }.entries.sortedByDescending { it.key }
@@ -314,7 +326,7 @@ private fun DateMarksList(
                     )
                 }
                 items(dayMarks) { mark ->
-                    MarkCard(mark, showSubject = true, showDate = false)
+                    MarkCard(mark, showSubject = true, showDate = false, onClick = { onMarkClick(mark.optString("id")) })
                 }
             }
         }
@@ -725,7 +737,7 @@ private fun JSONObject.periods(): List<JSONObject> =
 // ------------------------------------------------------------------ предметы --
 
 @Composable
-private fun SubjectMarksDetail(subject: JSONObject?) {
+private fun SubjectMarksDetail(subject: JSONObject?, onMarkClick: (String) -> Unit = {}) {
     if (subject == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Предмет не найден")
@@ -749,7 +761,7 @@ private fun SubjectMarksDetail(subject: JSONObject?) {
                     Spacer(Modifier.height(6.dp))
                 }
                 items(subjectMarks) { mark ->
-                    MarkCard(mark, showSubject = false, showDate = true)
+                    MarkCard(mark, showSubject = false, showDate = true, onClick = { onMarkClick(mark.optString("id")) })
                 }
             }
         }
@@ -845,31 +857,7 @@ private fun SummaryStat(label: String, value: String) {
 }
 
 @Composable
-private fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
-    val nonUnit = weight > 1.0
-    Box(
-        modifier = if (nonUnit) Modifier.border(1.dp, Color.Red, RoundedCornerShape(10.dp)) else Modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Box {
-            GradeBadge(markText, value)
-            if (nonUnit) {
-                Text(
-                    text = formatWeight(weight),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = Color.Red,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp)
-                )
-            }
-        }
-    }
-}
-
-private fun formatWeight(weight: Double): String =
-    if (weight == Math.floor(weight)) weight.toInt().toString() else String.format(Locale.US, "%.1f", weight)
-
-@Composable
-private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean) {
+private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean, onClick: () -> Unit = {}) {
     val value = mark.nullableDouble("value")
     val markText = mark.optString("markText").takeIf { it.isNotBlank() } ?: formatMark(value)
     val weight = mark.nullableDouble("weight") ?: 1.0
@@ -889,7 +877,12 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean) 
         }
     }.joinToString(" · ")
 
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .clickable(onClick = onClick)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically

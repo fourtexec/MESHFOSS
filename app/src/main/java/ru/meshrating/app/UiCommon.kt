@@ -1,6 +1,7 @@
 package ru.meshrating.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
@@ -92,6 +94,31 @@ fun DaySelector(
         }
     }
 }
+
+/** Оценка с учётом коэффициента: при weight>1 — красная рамка и цифра коэффициента. */
+@Composable
+fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
+    val nonUnit = weight > 1.0
+    Box(
+        modifier = if (nonUnit) Modifier.border(1.dp, Color.Red, RoundedCornerShape(10.dp)) else Modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Box {
+            GradeBadge(markText, value)
+            if (nonUnit) {
+                Text(
+                    text = formatWeight(weight),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    color = Color.Red,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+fun formatWeight(weight: Double): String =
+    if (weight == Math.floor(weight)) weight.toInt().toString() else String.format(Locale.US, "%.1f", weight)
 
 /** Подпись относительного дня: «Сегодня», «Завтра», «Послезавтра» и т.п. (±2 дня), иначе null. */
 private fun relativeDayLabel(date: String): String? {

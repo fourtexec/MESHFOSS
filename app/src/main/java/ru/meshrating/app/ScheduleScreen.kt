@@ -16,11 +16,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+private fun JSONObject.nullableDouble(key: String): Double? =
+    if (isNull(key)) null else optDouble(key).takeUnless { it.isNaN() || it.isInfinite() }
+
 @Composable
 fun ScheduleScreen(
     store: SessionStore,
     client: MeshClient,
     studentId: String?,
+    personId: String? = null,
     onHomeworkClick: (HomeworkTarget) -> Unit = {},
     onFoodClick: () -> Unit = {}
 ) {
@@ -29,6 +33,8 @@ fun ScheduleScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var lessons by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selectedDate by remember { mutableStateOf(MeshCore.today()) }
+    var selectedMarkId by remember { mutableStateOf<String?>(null) }
+    val effectivePersonId = personId?.takeIf { it.isNotBlank() } ?: store.personId
 
     fun load() {
         if (studentId.isNullOrBlank()) {
@@ -91,7 +97,6 @@ fun ScheduleScreen(
                     val begin = lesson.optString("begin").takeIf { it.isNotBlank() && it != "null" }
                     val end = lesson.optString("end").takeIf { it.isNotBlank() && it != "null" }
                     val number = if (lesson.isNull("number")) null else lesson.optInt("number")
-                    val mark = if (lesson.isNull("mark")) null else lesson.optDouble("mark")
                     val teacher = lesson.optString("teacher")
                     val room = lesson.optString("room")
                     val homework = lesson.optString("homework")
@@ -157,14 +162,40 @@ fun ScheduleScreen(
                                     )
                                 }
                             }
-                            if (mark != null) {
+                            val marks = lesson.optJSONArray("marks")
+                            if (marks != null && marks.length() > 0) {
                                 Spacer(Modifier.width(8.dp))
-                                GradeBadge(formatMark(mark), mark)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    for (i in 0 until marks.length()) {
+                                        val m = marks.optJSONObject(i) ?: continue
+                                        val v = m.nullableDouble("value")
+                                        val mt = m.optString("markText").takeIf { it.isNotBlank() } ?: formatMark(v)
+                                        val w = m.nullableDouble("weight") ?: 1.0
+                                        Box(
+                                            modifier = Modifier.clickable {
+                                                val id = m.optString("id")
+                                                if (id.isNotBlank()) selectedMarkId = id
+                                            }
+                                        ) {
+                                            WeightedGradeBadge(mt, v, w)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    selectedMarkId?.let { id ->
+        MarkDetailDialog(
+            markId = id,
+            personId = effectivePersonId,
+            client = client,
+            store = store,
+            onDismiss = { selectedMarkId = null }
+        )
     }
 }
