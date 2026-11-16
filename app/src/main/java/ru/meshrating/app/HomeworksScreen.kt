@@ -193,7 +193,7 @@ fun HomeworksScreen(
                 }
             }
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
+                CircularProgressIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {

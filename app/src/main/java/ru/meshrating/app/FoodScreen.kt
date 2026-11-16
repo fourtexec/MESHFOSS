@@ -103,7 +103,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                 }
             }
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
+                CircularProgressIndicator()
             }
             error != null -> Column(
                 modifier = Modifier.fillMaxSize(),
