@@ -89,7 +89,6 @@ fun DaySelector(
     onDateSelected: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val view = LocalView.current
     var showPicker by remember { mutableStateOf(false) }
     val pickerState = rememberDatePickerState(initialSelectedDateMillis = isoToMillisUtc(date))
 
@@ -118,7 +117,6 @@ fun DaySelector(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconButton(onClick = {
-            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             onPrev()
         }) {
             Text("‹", style = MaterialTheme.typography.headlineMedium)
@@ -126,7 +124,6 @@ fun DaySelector(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.clickable {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 showPicker = true
             }
         ) {
@@ -137,7 +134,6 @@ fun DaySelector(
             }
         }
         IconButton(onClick = {
-            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             onNext()
         }) {
             Text("›", style = MaterialTheme.typography.headlineMedium)

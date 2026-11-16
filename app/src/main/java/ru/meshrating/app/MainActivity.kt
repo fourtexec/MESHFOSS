@@ -17,6 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.clickable
@@ -333,7 +338,6 @@ fun MainScaffold(
 
     fun navigateTo(next: NavState) {
         if (next == currentState()) return
-        hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         backStack.add(currentState())
         currentTab = next.tab
         rankingSubjectId = next.rankingSubjectId
@@ -374,6 +378,34 @@ fun MainScaffold(
     }
 
     Scaffold(
+        modifier = Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val downEvent = awaitPointerEvent(PointerEventPass.Initial)
+                    if (downEvent.type != PointerEventType.Press) continue
+                    val downPos = downEvent.changes.firstOrNull()?.position ?: continue
+                    var isTap = true
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        when (event.type) {
+                            PointerEventType.Release -> {
+                                if (isTap) {
+                                    hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                }
+                                break
+                            }
+                            PointerEventType.Move -> {
+                                val pos = event.changes.firstOrNull()?.position
+                                if (pos != null && (pos - downPos).getDistance() > 24f) {
+                                    isTap = false
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {

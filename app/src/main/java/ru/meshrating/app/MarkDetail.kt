@@ -23,13 +23,11 @@ fun MarkDetailDialog(
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val view = LocalView.current
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<JSONObject?>(null) }
 
     LaunchedEffect(markId) {
-        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         loading = true
         error = null
         try {
