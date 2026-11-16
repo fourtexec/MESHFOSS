@@ -845,7 +845,6 @@ private fun SummaryStat(label: String, value: String) {
 }
 
 @Composable
-@Composable
 private fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
     val nonUnit = weight > 1.0
     Box(
@@ -869,6 +868,7 @@ private fun WeightedGradeBadge(markText: String, value: Double?, weight: Double)
 private fun formatWeight(weight: Double): String =
     if (weight == Math.floor(weight)) weight.toInt().toString() else String.format(Locale.US, "%.1f", weight)
 
+@Composable
 private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean) {
     val value = mark.nullableDouble("value")
     val markText = mark.optString("markText").takeIf { it.isNotBlank() } ?: formatMark(value)
