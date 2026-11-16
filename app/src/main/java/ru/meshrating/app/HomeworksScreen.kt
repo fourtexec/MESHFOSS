@@ -413,6 +413,7 @@ private fun HomeworkCard(
         }
     }
 }
+}
 
 private fun findHomeworkIndex(items: List<JSONObject>, target: HomeworkTarget): Int {
     fun normalize(value: String): String =

@@ -384,12 +384,12 @@ fun MainScaffold(
                     if (downEvent.type != PointerEventType.Press) continue
                     val downPos = downEvent.changes.firstOrNull()?.position ?: continue
                     var isTap = true
-                    var consumed = downEvent.changes.any { it.isConsumed() }
+                    var consumed = downEvent.changes.any { it.isConsumed }
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Final)
                         when (event.type) {
                             PointerEventType.Release -> {
-                                if (isTap && (consumed || event.changes.any { it.isConsumed() })) {
+                                if (isTap && (consumed || event.changes.any { it.isConsumed })) {
                                     hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 }
                                 break
@@ -399,7 +399,7 @@ fun MainScaffold(
                                 if (pos != null && (pos - downPos).getDistance() > 24f) {
                                     isTap = false
                                 }
-                                if (event.changes.any { it.isConsumed() }) consumed = true
+                                if (event.changes.any { it.isConsumed }) consumed = true
                             }
                             else -> {}
                         }
