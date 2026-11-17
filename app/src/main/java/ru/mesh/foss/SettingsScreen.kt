@@ -48,6 +48,11 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
+    var updateChannel by remember {
+        mutableStateOf(
+            prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
+        )
+    }
     val currentLanguage = LocalAppLanguage.current
     var language by remember(currentLanguage) { mutableStateOf(currentLanguage) }
     val noUpdatesText = tr("Обновлений нет", "No updates")
@@ -197,6 +202,44 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                         }
                     )
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    tr("Канал обновлений", "Update channel"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(4.dp))
+                ButtonGroup(
+                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    toggleableItem(
+                        checked = updateChannel == UpdateChecker.CHANNEL_RELEASES,
+                        label = tr("Релизы", "Releases"),
+                        onCheckedChange = {
+                            updateChannel = UpdateChecker.CHANNEL_RELEASES
+                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_RELEASES).apply()
+                        },
+                        weight = 1f
+                    )
+                    toggleableItem(
+                        checked = updateChannel == UpdateChecker.CHANNEL_PRERELEASES,
+                        label = tr("Пререлизы", "Prereleases"),
+                        onCheckedChange = {
+                            updateChannel = UpdateChecker.CHANNEL_PRERELEASES
+                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_PRERELEASES).apply()
+                        },
+                        weight = 1f
+                    )
+                }
+                Text(
+                    tr(
+                        "Пререлизы — beta/rc-версии; nightly из main не предлагается.",
+                        "Prereleases are beta/rc builds; nightly from main is never offered."
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = {

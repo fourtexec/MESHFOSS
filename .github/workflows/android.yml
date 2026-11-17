@@ -1,7 +1,10 @@
 name: Android
 
 # Сборка APK: JVM-тесты ядра и подписанная release-сборка.
-# При push в main создаётся GitHub Release с APK и автоматически растущей версией.
+# Публикация:
+#   - тег v*      → новый релиз (alpha/beta/rc — prerelease-флаг);
+#   - push в main → скользящий prerelease `nightly`, в приложении не предлагается;
+#   - ветки и PR  → только сборка, без публикации.
 
 on:
   push:
@@ -34,6 +37,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Полная история с тегами — для git describe в версии nightly-сборок.
+          fetch-depth: 0
 
       - name: Версия сборки
         id: version
@@ -42,14 +48,21 @@ jobs:
         run: |
           set -eu
           VERSION_CODE="${RUN_NUMBER}"
+          PUBLISH="none"
           case "${GITHUB_REF}" in
             refs/tags/v*)
+              # Релиз: версия берётся из тэга (v2.0.0 → 2.0.0).
               VERSION_NAME="${GITHUB_REF_NAME#v}"
-              RELEASE_TAG="${GITHUB_REF_NAME}"
+              if [ "${GITHUB_EVENT_NAME}" = "push" ]; then PUBLISH="release"; fi
               ;;
             *)
-              VERSION_NAME="1.0.${VERSION_CODE}"
-              RELEASE_TAG="v${VERSION_NAME}"
+              # База версии — ближайший тег vX.Y.Z (суффиксы -beta и т.п. отрезаем).
+              BASE="$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+              if [ -z "${BASE}" ]; then BASE="2.0.0"; fi
+              VERSION_NAME="${BASE}-dev.${VERSION_CODE}"
+              if [ "${GITHUB_REF}" = "refs/heads/main" ] && [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+                PUBLISH="nightly"
+              fi
               ;;
           esac
           {
@@ -59,9 +72,9 @@ jobs:
           {
             echo "version_code=${VERSION_CODE}"
             echo "version_name=${VERSION_NAME}"
-            echo "release_tag=${RELEASE_TAG}"
+            echo "publish=${PUBLISH}"
           } >> "$GITHUB_OUTPUT"
-          echo "Сборка ${VERSION_NAME} (versionCode ${VERSION_CODE}), тег ${RELEASE_TAG}"
+          echo "Сборка ${VERSION_NAME} (versionCode ${VERSION_CODE}), публикация: ${PUBLISH}"
 
       - name: Подготовить release-подпись
         env:
@@ -113,14 +126,14 @@ jobs:
       - name: Подготовить APK для релиза
         run: cp app/build/outputs/apk/release/app-release.apk "mesh-ranker-${VERSION_NAME}.apk"
 
-      - name: GitHub Release
-        # Только push в main или на тег v*; PR и workflow_dispatch релиз не создают.
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      - name: Релиз по тэгу
+        # Новая версия создаётся только по тэгу v*.
+        if: steps.version.outputs.publish == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.release_tag }}
+          tag_name: ${{ github.ref_name }}
           name: MESHFOSS ${{ steps.version.outputs.version_name }}
-          prerelease: ${{ contains(steps.version.outputs.release_tag, 'alpha') || contains(steps.version.outputs.release_tag, 'beta') || contains(steps.version.outputs.release_tag, 'rc') }}
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           body: |
             Автоматическая подписанная release-сборка.
 
@@ -130,3 +143,20 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nightly-пререлиз (main)
+        # Каждый push в main обновляет скользящий prerelease `nightly`.
+        # В приложении он не предлагается как обновление.
+        if: steps.version.outputs.publish == 'nightly'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "MESHFOSS Nightly ${VERSION_NAME}" \
+            --notes "Сборка из main, commit ${GITHUB_SHA}. Скользящий prerelease без автообновления в приложении." \
+            "mesh-ranker-${VERSION_NAME}.apk"

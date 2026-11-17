@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,12 +33,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
@@ -130,11 +135,16 @@ fun DaySelector(
         }) {
             Text("‹", style = MaterialTheme.typography.headlineMedium)
         }
+        // Средняя колонка занимает остаток строки: стрелки всегда остаются
+        // в зоне видимости даже на длинной дате («понедельник, 17 ноября»).
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable {
-                showPicker = true
-            }
+            modifier = Modifier
+                .weight(1f)
+                .clickable {
+                    showPicker = true
+                }
+                .padding(horizontal = 4.dp)
         ) {
             val motion = MaterialTheme.motionScheme
             AnimatedContent(
@@ -156,9 +166,11 @@ fun DaySelector(
             ) { shownDate ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        MeshCore.dateRu(shownDate, weekday = true),
+                        dayLabel(shownDate),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     val relative = remember(shownDate) { relativeDayLabel(shownDate) }
                     if (relative != null) {
@@ -173,6 +185,41 @@ fun DaySelector(
             Text("›", style = MaterialTheme.typography.headlineMedium)
         }
     }
+}
+
+/**
+ * Горизонтальный свайп для листания дней: влево — следующий день, вправо —
+ * предыдущий. Вешается на корневую колонку экрана: вертикальный скролл и
+ * pull-to-refresh потребляют только свою ось, поэтому горизонтальный жест
+ * доходит сюда. Смена дня анимируется тем же AnimatedContent, что и стрелки.
+ */
+fun Modifier.swipeDays(onPrev: () -> Unit, onNext: () -> Unit): Modifier = composed {
+    val prev by rememberUpdatedState(onPrev)
+    val next by rememberUpdatedState(onNext)
+    pointerInput(Unit) {
+        var total = 0f
+        var fired = false
+        val threshold = 48.dp.toPx()
+        detectHorizontalDragGestures(
+            onDragEnd = { total = 0f; fired = false },
+            onDragCancel = { total = 0f; fired = false }
+        ) { change, dragAmount ->
+            change.consume()
+            if (fired) return@detectHorizontalDragGestures
+            total += dragAmount
+            when {
+                total <= -threshold -> { fired = true; next() }
+                total >= threshold -> { fired = true; prev() }
+            }
+        }
+    }
+}
+
+/** Дата в DaySelector: без года, если он текущий — строка короче и не обрезается. */
+private fun dayLabel(iso: String): String {
+    val full = MeshCore.dateRu(iso, weekday = true)
+    val year = Calendar.getInstance().get(Calendar.YEAR)
+    return if (iso.take(4).toIntOrNull() == year) full.removeSuffix(" $year") else full
 }
 
 private fun isoToMillisUtc(iso: String): Long {

@@ -89,7 +89,21 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
 
     LaunchedEffect(personId, selectedDate) { load() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .swipeDays(
+                onPrev = {
+                    val week = state?.optJSONObject("feedingWeek")
+                    selectedDate = MeshCore.nextFeedingDate(selectedDate, week, -1)
+                },
+                onNext = {
+                    val week = state?.optJSONObject("feedingWeek")
+                    selectedDate = MeshCore.nextFeedingDate(selectedDate, week, 1)
+                }
+            )
+    ) {
         DaySelector(
             date = selectedDate,
             onPrev = {

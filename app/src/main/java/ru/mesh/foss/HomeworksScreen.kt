@@ -176,7 +176,15 @@ fun HomeworksScreen(
     }
 
     SelectionContainer {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .swipeDays(
+                    onPrev = { selectedDate = MeshCore.addDays(selectedDate, -1) },
+                    onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) }
+                )
+        ) {
             DaySelector(
             date = selectedDate,
             onPrev = { selectedDate = MeshCore.addDays(selectedDate, -1) },
