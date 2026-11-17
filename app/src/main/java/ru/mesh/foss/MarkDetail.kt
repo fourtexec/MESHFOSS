@@ -9,7 +9,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,10 +35,12 @@ fun MarkDetailDialog(
         try {
             val pid = personId?.takeIf { it.isNotBlank() } ?: store.personId
             detail = withContext(Dispatchers.IO) { client.getMark(markId, pid) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = MeshCore.describeError(e)
         } finally {
-            loading = false
+            if (isActive) loading = false
         }
     }
 

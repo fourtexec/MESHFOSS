@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,6 +48,8 @@ fun ProfileBody(
         scope.launch {
             try {
                 profile = withContext(Dispatchers.IO) { client.fetchProfile() }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = MeshCore.describeError(e)
             } finally {

@@ -35,7 +35,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -208,6 +210,8 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
             } else {
                 bootError = null
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val meshError = e as? MeshCore.MeshError
             if (meshError?.code == "unauthorized") {
@@ -216,7 +220,7 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
             }
             if (!hasIds) bootError = MeshCore.describeError(e)
         } finally {
-            booting = false
+            if (isActive) booting = false
         }
     }
 
@@ -272,10 +276,12 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
                         }
                         bootError = null
                         screen = "main"
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         loginError = MeshCore.describeError(e)
                     } finally {
-                        loginLoading = false
+                        if (isActive) loginLoading = false
                     }
                 }
             },
@@ -353,6 +359,17 @@ fun MainScaffold(
 ) {
     var currentTab by remember { mutableStateOf("ranking") }
     val hapticView = LocalView.current
+    // Вибрация при нажатиях: общий переключатель в Настройках (mesh_settings),
+    // читается при каждом событии — применяется сразу после переключения.
+    val hapticContext = LocalContext.current
+    val hapticPrefs = remember(hapticContext) {
+        hapticContext.getSharedPreferences("mesh_settings", android.content.Context.MODE_PRIVATE)
+    }
+    fun hapticTap() {
+        if (hapticPrefs.getBoolean("haptics_enabled", true)) {
+            hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+    }
     var rankingSubjectId by remember { mutableStateOf<String?>(null) }
     var marksSubjectId by remember { mutableStateOf<String?>(null) }
     var marksSubjectName by remember { mutableStateOf<String?>(null) }
@@ -382,7 +399,7 @@ fun MainScaffold(
 
     // Жест/кнопка «назад» сначала проходят по истории экранов, а не сворачивают приложение.
     BackHandler(enabled = hasContext) {
-        hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        hapticTap()
         if (backStack.isNotEmpty()) {
             val previous = backStack.removeAt(backStack.lastIndex)
             currentTab = previous.tab
@@ -422,7 +439,7 @@ fun MainScaffold(
                         when (event.type) {
                             PointerEventType.Release -> {
                                 if (isTap && (consumed || event.changes.any { it.isConsumed })) {
-                                    hapticView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                    hapticTap()
                                 }
                                 break
                             }

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +54,8 @@ fun ScheduleScreen(
             try {
                 val arr = withContext(Dispatchers.IO) { client.getSchedule(studentId, selectedDate) }
                 lessons = (0 until arr.length()).map { arr.getJSONObject(it) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = MeshCore.describeError(e)
             } finally {

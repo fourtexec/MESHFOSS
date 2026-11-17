@@ -28,7 +28,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -100,10 +102,12 @@ fun MarksScreen(
                     marks = (marks + newMarks).sortedByDescending { it.optString("date") }
                     loadedFrom = newFrom
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = MeshCore.describeError(e)
             } finally {
-                loadingOlder = false
+                if (isActive) loadingOlder = false
             }
         }
     }
@@ -132,10 +136,12 @@ fun MarksScreen(
                 loadingOlder = false
                 noMoreOlder = false
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = MeshCore.describeError(e)
         } finally {
-            loading = false
+            if (isActive) loading = false
         }
     }
 
@@ -150,6 +156,8 @@ fun MarksScreen(
                     ?: years.maxByOrNull { it.optString("beginDate") }
                 selectedYearId = current?.optString("id")?.takeIf { it.isNotBlank() }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             finalError = MeshCore.describeError(e)
         }
@@ -174,10 +182,12 @@ fun MarksScreen(
                     yearOnly = yearOnly
                 ).toObjectList()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             finalError = MeshCore.describeError(e)
         } finally {
-            finalLoading = false
+            if (isActive) finalLoading = false
         }
     }
 

@@ -79,6 +79,8 @@ fun HomeworksScreen(
         scope.launch {
             try {
                 homeworks = withContext(Dispatchers.IO) { client.getHomeworks(studentId, from, to) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = MeshCore.describeError(e)
             } finally {
@@ -107,6 +109,8 @@ fun HomeworksScreen(
                 openUrl(uriHandler, url, context)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Toast.makeText(context, MeshCore.describeError(e), Toast.LENGTH_LONG).show()
             } finally {
@@ -128,6 +132,8 @@ fun HomeworksScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { client.setHomeworkDone(entryId, type, target) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

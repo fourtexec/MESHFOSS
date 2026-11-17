@@ -47,6 +47,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
     var customColors by remember {
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
+    var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
     val currentLanguage = LocalAppLanguage.current
     var language by remember(currentLanguage) { mutableStateOf(currentLanguage) }
     val noUpdatesText = tr("Обновлений нет", "No updates")
@@ -179,6 +180,23 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                     if (store.isEncrypted()) tr("зашифровано", "encrypted") else tr("приватное", "private")
                 )
                 SettingsRow(tr("Кэш имён", "Name cache"), tr("включён", "on"))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        tr("Вибрация", "Vibration"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = hapticsEnabled,
+                        onCheckedChange = { value ->
+                            hapticsEnabled = value
+                            prefs.edit().putBoolean("haptics_enabled", value).apply()
+                        }
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = {
