@@ -1,10 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package ru.meshrating.app
+package ru.mesh.foss
 
 import android.content.Context
 import android.widget.Toast
-import ru.meshrating.app.R
+import ru.mesh.foss.R
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable

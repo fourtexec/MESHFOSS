@@ -1,14 +1,15 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package ru.meshrating.app
+package ru.mesh.foss
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -67,15 +68,17 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                 Spacer(Modifier.height(4.dp))
                 AppTheme.ids.forEach { id ->
                     val selected = theme == id
-                    val shapeProgress by animateFloatAsState(
-                        targetValue = if (selected) 1f else 0f,
+                    // Как и в ДЗ: обычные скругления (16dp) с пружинистым ростом до 22dp
+                    // у выбранной темы — без полигонного морфинга, который резал контент.
+                    val cornerRadius by animateDpAsState(
+                        targetValue = if (selected) 22.dp else 16.dp,
                         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "themeShape"
                     )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(MaterialMorphShape(MaterialShapes.Square, MaterialShapes.Pill, shapeProgress))
+                            .clip(RoundedCornerShape(cornerRadius))
                             .background(
                                 if (selected) MaterialTheme.colorScheme.secondaryContainer
                                 else Color.Transparent

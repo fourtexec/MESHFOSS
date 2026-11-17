@@ -1,4 +1,4 @@
-package ru.meshrating.app
+package ru.mesh.foss
 
 import android.content.Context
 import android.content.SharedPreferences

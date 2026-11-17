@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package ru.meshrating.app
+package ru.mesh.foss
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -200,7 +200,7 @@ private fun millisToIsoUtc(millis: Long): String {
     )
 }
 
-/** Оценка с учётом коэффициента: при weight>1 — красная рамка и цифра коэффициента. */
+/** Оценка с учётом коэффициента: при weight>1 — красная рамка, цифра — цветом самой оценки. */
 @Composable
 fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
     val nonUnit = weight > 1.0
@@ -214,7 +214,7 @@ fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
                 Text(
                     text = formatWeight(weight),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = Color.Red,
+                    color = markColor(value),
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp)
                 )
             }

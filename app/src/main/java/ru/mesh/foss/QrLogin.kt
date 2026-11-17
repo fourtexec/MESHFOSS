@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
-package ru.meshrating.app
+package ru.mesh.foss
 
 import android.content.Intent
 import android.net.Uri

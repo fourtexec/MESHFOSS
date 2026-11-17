@@ -27,11 +27,11 @@ val hasEnvironmentSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "ru.meshrating.app"
+    namespace = "ru.mesh.foss"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ru.meshrating.app.m3e"
+        applicationId = "ru.mesh.foss"
         minSdk = 24
         targetSdk = 35
         versionCode = buildVersionCode

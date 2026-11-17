@@ -1,4 +1,4 @@
-package ru.meshrating.app
+package ru.mesh.foss
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
