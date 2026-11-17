@@ -5,11 +5,12 @@ package ru.meshrating.app
 import android.content.Context
 import android.widget.Toast
 import ru.meshrating.app.R
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -272,9 +273,10 @@ private fun HomeworkCard(
     val attachments = h.optJSONArray("attachments")
     val homeworkEntryId = h.optString("homeworkEntryId").ifBlank { h.optString("id") }
     val cardAlpha = if (dimmed) 0.45f else 1f
-    // M3E-морфинг: отмеченное «выполненным» ДЗ пружинисто превращается в пилюлю.
-    val shapeProgress by animateFloatAsState(
-        targetValue = if (isDone) 1f else 0f,
+    // M3E-морфинг: у выполненного ДЗ углы пружинисто дорастают от medium (16dp,
+    // как у обычной карточки) до 30dp — предел, при котором текст не обрезается.
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isDone) 30.dp else 16.dp,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "homeworkDoneShape"
     )
@@ -284,7 +286,7 @@ private fun HomeworkCard(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .alpha(cardAlpha),
-        shape = MaterialMorphShape(MaterialShapes.Square, MaterialShapes.Pill, shapeProgress),
+        shape = RoundedCornerShape(cornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
