@@ -1,4 +1,4 @@
-package ru.meshrating.app
+package ru.mesh.foss
 
 import org.junit.After
 import org.junit.Assert.assertEquals

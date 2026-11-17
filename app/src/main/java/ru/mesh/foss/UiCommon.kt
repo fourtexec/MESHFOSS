@@ -1,5 +1,13 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
+package ru.mesh.foss
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import java.util.Calendar
@@ -127,10 +136,35 @@ fun DaySelector(
                 showPicker = true
             }
         ) {
-            Text(MeshCore.dateRu(date, weekday = true), style = MaterialTheme.typography.titleMedium)
-            val relative = remember(date) { relativeDayLabel(date) }
-            if (relative != null) {
-                Text(relative, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            val motion = MaterialTheme.motionScheme
+            AnimatedContent(
+                targetState = date,
+                transitionSpec = {
+                    val forward = targetState >= initialState
+                    val slide = motion.defaultSpatialSpec<IntOffset>()
+                    val fade = motion.defaultEffectsSpec<Float>()
+                    val enterX: (Int) -> Int = { w -> (if (forward) w else -w) / 3 }
+                    val exitX: (Int) -> Int = { w -> (if (forward) -w else w) / 3 }
+                    (
+                        slideInHorizontally(animationSpec = slide, initialOffsetX = enterX) +
+                            fadeIn(animationSpec = fade)
+                    ) togetherWith (
+                        slideOutHorizontally(animationSpec = slide, targetOffsetX = exitX) +
+                            fadeOut(animationSpec = fade)
+                    )
+                }
+            ) { shownDate ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        MeshCore.dateRu(shownDate, weekday = true),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    val relative = remember(shownDate) { relativeDayLabel(shownDate) }
+                    if (relative != null) {
+                        Text(relative, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
         }
         IconButton(onClick = {
@@ -166,7 +200,7 @@ private fun millisToIsoUtc(millis: Long): String {
     )
 }
 
-/** Оценка с учётом коэффициента: при weight>1 — красная рамка и цифра коэффициента. */
+/** Оценка с учётом коэффициента: при weight>1 — красная рамка, цифра — цветом самой оценки. */
 @Composable
 fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
     val nonUnit = weight > 1.0
@@ -180,7 +214,7 @@ fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
                 Text(
                     text = formatWeight(weight),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = Color.Red,
+                    color = markColor(value),
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp)
                 )
             }

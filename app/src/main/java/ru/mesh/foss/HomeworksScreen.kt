@@ -1,17 +1,22 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
+package ru.mesh.foss
 
 import android.content.Context
 import android.widget.Toast
-import ru.meshrating.app.R
+import ru.mesh.foss.R
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +51,8 @@ fun HomeworksScreen(
     val uriHandler = LocalUriHandler.current
     val listState = rememberLazyListState()
     var loading by remember { mutableStateOf(studentId != null) }
+    // Идёт обновление свайпом «потянуть» — список не прячем, показываем индикатор в шапке.
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var homeworks by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     // По умолчанию — ДЗ на завтра; в пятницу/субботу/воскресенье — на понедельник.
@@ -64,6 +71,7 @@ fun HomeworksScreen(
     fun load() {
         if (studentId.isNullOrBlank()) {
             loading = false
+            refreshing = false
             return
         }
         loading = true
@@ -75,6 +83,7 @@ fun HomeworksScreen(
                 error = MeshCore.describeError(e)
             } finally {
                 loading = false
+                refreshing = false
             }
         }
     }
@@ -168,16 +177,22 @@ fun HomeworksScreen(
             onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) },
             onDateSelected = { selectedDate = it }
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(
-                selected = mode == "due",
-                onClick = { mode = "due" },
-                label = { Text("На день") }
+        // M3E: connected-группа переключателей вместо SegmentedButton.
+        ButtonGroup(
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            toggleableItem(
+                checked = mode == "due",
+                label = "На день",
+                onCheckedChange = { mode = "due" },
+                weight = 1f
             )
-            FilterChip(
-                selected = mode == "assigned",
-                onClick = { mode = "assigned" },
-                label = { Text("Задано") }
+            toggleableItem(
+                checked = mode == "assigned",
+                label = "Задано",
+                onCheckedChange = { mode = "assigned" },
+                weight = 1f
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -186,14 +201,14 @@ fun HomeworksScreen(
             studentId.isNullOrBlank() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
                         Text("Загружаем профиль ученика…")
                     }
                 }
             }
-            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            loading && !refreshing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                LoadingIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -208,7 +223,12 @@ fun HomeworksScreen(
                 }
             }
             else -> {
-                LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = { refreshing = true; load() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(filtered) { index, h ->
                         val entryId = h.optString("entryStudentId").ifBlank { h.optString("id") }
                         HomeworkCard(
@@ -224,6 +244,7 @@ fun HomeworksScreen(
                             onToggleDone = { target -> toggleDone(h, target) }
                         )
                     }
+                }
                 }
             }
         }
@@ -252,17 +273,25 @@ private fun HomeworkCard(
     val attachments = h.optJSONArray("attachments")
     val homeworkEntryId = h.optString("homeworkEntryId").ifBlank { h.optString("id") }
     val cardAlpha = if (dimmed) 0.45f else 1f
+    // M3E-морфинг: у выполненного ДЗ углы пружинисто дорастают от medium (16dp,
+    // как у обычной карточки) до 30dp — предел, при котором текст не обрезается.
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isDone) 30.dp else 16.dp,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "homeworkDoneShape"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .alpha(cardAlpha),
+        shape = RoundedCornerShape(cornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
             } else {
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceContainerLow
             }
         ),
         border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
@@ -281,7 +310,7 @@ private fun HomeworkCard(
                     modifier = Modifier.weight(1f)
                 )
                 if (savingDone) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    LoadingIndicator(modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
                 }
                 if (due != null) {

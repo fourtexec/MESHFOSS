@@ -1,4 +1,6 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
+package ru.mesh.foss
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,8 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
     val scope = rememberCoroutineScope()
     var selectedDate by remember { mutableStateOf(MeshCore.today()) }
     var loading by remember { mutableStateOf(personId != null) }
+    // Обновление свайпом «потянуть»: контент остаётся, крутится индикатор.
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var state by remember { mutableStateOf<JSONObject?>(null) }
     var balances by remember { mutableStateOf(JSONArray()) }
@@ -51,6 +56,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
     fun load() {
         if (personId.isNullOrBlank()) {
             loading = false
+            refreshing = false
             return
         }
         loading = true
@@ -73,6 +79,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                 error = MeshCore.describeError(e)
             } finally {
                 loading = false
+                refreshing = false
             }
         }
     }
@@ -97,13 +104,13 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
         when {
             personId.isNullOrBlank() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                     Spacer(Modifier.height(8.dp))
                     Text(tr("Загружаем профиль ученика...", "Loading student profile..."))
                 }
             }
-            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            loading && !refreshing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                LoadingIndicator()
             }
             error != null -> Column(
                 modifier = Modifier.fillMaxSize(),
@@ -128,37 +135,54 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                 val mealList = (0 until complexes.length())
                     .map { complexes.getJSONObject(it) }
                     .filter { it.optInt("kind", -1) == activeKind }
-                LazyColumn(modifier = Modifier.weight(1f)) {
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = { refreshing = true; load() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item { BalanceCard(balances) }
                     item { StateCard(state) }
 
                     item {
                         SectionTitle(tr("Меню на день", "Menu for the day"))
                     }
-                    // Платное / льготное питание.
+                    // Платное / льготное питание: M3E connected-переключатель.
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilterChip(
-                                selected = !freeMeal,
-                                onClick = { freeMeal = false },
-                                label = { Text(tr("Платное", "Paid")) }
+                        val paidLabel = tr("Платное", "Paid")
+                        val freeLabel = tr("Льготное", "Free")
+                        ButtonGroup(
+                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            toggleableItem(
+                                checked = !freeMeal,
+                                label = paidLabel,
+                                onCheckedChange = { freeMeal = false },
+                                weight = 1f
                             )
-                            FilterChip(
-                                selected = freeMeal,
-                                onClick = { freeMeal = true },
-                                label = { Text(tr("Льготное", "Free")) }
+                            toggleableItem(
+                                checked = freeMeal,
+                                label = freeLabel,
+                                onCheckedChange = { freeMeal = true },
+                                weight = 1f
                             )
                         }
                     }
                     // Приёмы пищи, доступные в выбранном режиме.
                     if (kinds.size > 1) {
                         item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val labels = kinds.associateWith { mealLabel(it) }
+                            ButtonGroup(
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 kinds.forEach { kind ->
-                                    FilterChip(
-                                        selected = kind == activeKind,
-                                        onClick = { selectedKind = kind },
-                                        label = { Text(mealLabel(kind)) }
+                                    toggleableItem(
+                                        checked = kind == activeKind,
+                                        label = labels[kind] ?: "",
+                                        onCheckedChange = { selectedKind = kind },
+                                        weight = 1f
                                     )
                                 }
                             }
@@ -192,6 +216,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                         }
                     }
                     item { Spacer(Modifier.height(12.dp)) }
+                    }
                 }
             }
         }
@@ -222,7 +247,11 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun BalanceCard(balances: JSONArray) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        // Ключевая цифра экрана — самый светлый контейнер (M3E: containment).
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 tr("Баланс лицевого счёта", "Account balance"),
@@ -267,7 +296,10 @@ private fun StateCard(state: JSONObject?) {
     val first = addresses.optJSONObject(0)
     val name = first?.optString("organizationName").orEmpty()
     val address = first?.optString("text").orEmpty()
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             if (name.isNotBlank()) {
                 Text(name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
@@ -339,7 +371,10 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
     val mealLabel = tr("Приём пищи", "Meal")
     val gramLabel = tr("г", "g")
     val kcalLabel = tr("ккал", "kcal")
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -401,7 +436,10 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
 
 @Composable
 private fun OrderRow(order: JSONObject) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 val id = order.opt("id")

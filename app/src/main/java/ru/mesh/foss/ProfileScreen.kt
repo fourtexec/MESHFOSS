@@ -1,4 +1,6 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
+package ru.mesh.foss
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -68,7 +70,7 @@ fun ProfileBody(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 contentAlignment = androidx.compose.ui.Alignment.Center
             ) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             error != null -> {
                 Text(error!!, color = MaterialTheme.colorScheme.error)

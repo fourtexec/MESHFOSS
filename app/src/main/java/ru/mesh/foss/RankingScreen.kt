@@ -1,10 +1,13 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
+package ru.mesh.foss
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +31,8 @@ fun RankingScreen(
 ) {
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(personId != null) }
+    // Обновление свайпом «потянуть»: список остаётся на месте, крутится индикатор.
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var subjects by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     val selectedSubject = selectedSubjectId ?: "all"
@@ -46,6 +51,7 @@ fun RankingScreen(
     fun load(monthlyMode: Boolean, force: Boolean = false) {
         if (personId.isNullOrBlank()) {
             loading = false
+            refreshing = false
             return
         }
         val subjectKey = if (selectedSubject == "all") "all" else selectedSubject
@@ -61,6 +67,7 @@ fun RankingScreen(
             subjects = cachedSubjects
             board = cachedBoard
             loading = false
+            refreshing = false
             error = null
             return
         }
@@ -84,18 +91,31 @@ fun RankingScreen(
                 }
                 subjects = result.first
                 board = result.second
-                val saved = if (validDay) existing else JSONObject().put("day", dayKey)
-                val subjectsCache = saved.optJSONObject("subjects") ?: JSONObject()
-                subjectsCache.put(personId, JSONArray(result.first))
-                val boardsCache = saved.optJSONObject("boards") ?: JSONObject()
-                boardsCache.put(boardKey, result.second)
-                saved.put("subjects", subjectsCache)
-                saved.put("boards", boardsCache)
-                store.saveRankingCache(saved)
+                // Ночной сбой МЭШ может ответить 200 с пустым payload: такое «пустое»
+                // не кэшируем, иначе «Нет данных» продержится до 05:00 и заслонит
+                // данные после восстановления сервера. Ошибки/таймауты и так не
+                // кэшируются — ветка catch записи не делает.
+                val newRows = result.second.optJSONArray("rows")
+                val hasRows = newRows != null && newRows.length() > 0
+                if (result.first.isNotEmpty() || hasRows) {
+                    val saved = if (validDay) existing else JSONObject().put("day", dayKey)
+                    if (result.first.isNotEmpty()) {
+                        val subjectsCache = saved.optJSONObject("subjects") ?: JSONObject()
+                        subjectsCache.put(personId, JSONArray(result.first))
+                        saved.put("subjects", subjectsCache)
+                    }
+                    if (hasRows) {
+                        val boardsCache = saved.optJSONObject("boards") ?: JSONObject()
+                        boardsCache.put(boardKey, result.second)
+                        saved.put("boards", boardsCache)
+                    }
+                    store.saveRankingCache(saved)
+                }
             } catch (e: Exception) {
                 error = MeshCore.describeError(e)
             } finally {
                 loading = false
+                refreshing = false
             }
         }
     }
@@ -104,16 +124,22 @@ fun RankingScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
         if (isGeneral) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(
-                    selected = period == "year",
-                    onClick = { period = "year" },
-                    label = { Text("Год") }
+            // M3E: период — connected-переключатель, выделение меняет форму и цвет.
+            ButtonGroup(
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                toggleableItem(
+                    checked = period == "year",
+                    label = "Год",
+                    onCheckedChange = { period = "year" },
+                    weight = 1f
                 )
-                FilterChip(
-                    selected = period == "month",
-                    onClick = { period = "month" },
-                    label = { Text("Месяц") }
+                toggleableItem(
+                    checked = period == "month",
+                    label = "Месяц",
+                    onCheckedChange = { period = "month" },
+                    weight = 1f
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -125,7 +151,8 @@ fun RankingScreen(
                     label = "Моё место",
                     value = if (s.optInt("myPlace", 0) > 0) "#${s.optInt("myPlace")}" else "—",
                     sub = if (s.optInt("total", 0) > 0) "из ${s.optInt("total")}" else "",
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    accent = true
                 )
                 KpiCard(
                     label = "Мой балл",
@@ -175,14 +202,14 @@ fun RankingScreen(
             personId.isNullOrBlank() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
                         Text("Загружаем профиль ученика…")
                     }
                 }
             }
-            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            loading && !refreshing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                LoadingIndicator()
             }
             error != null -> {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -198,7 +225,12 @@ fun RankingScreen(
                         Text("Нет данных за эту дату")
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
+                    PullToRefreshBox(
+                        isRefreshing = refreshing,
+                        onRefresh = { refreshing = true; load(monthlyMode, force = true) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items((0 until rows.length()).map { rows.getJSONObject(it) }) { row ->
                             val average = if (row.isNull("average")) null else row.optDouble("average")
                             val isMe = row.optBoolean("isMe")
@@ -206,7 +238,7 @@ fun RankingScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                                    else MaterialTheme.colorScheme.surface
+                                    else MaterialTheme.colorScheme.surfaceContainerLow
                                 )
                             ) {
                                 Row(
@@ -263,6 +295,7 @@ fun RankingScreen(
                             }
                         }
                     }
+                    }
                 }
             }
         }
@@ -270,13 +303,38 @@ fun RankingScreen(
 }
 
 @Composable
-fun KpiCard(label: String, value: String, sub: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
+fun KpiCard(label: String, value: String, sub: String, modifier: Modifier = Modifier, accent: Boolean = false) {
+    // M3E: ключевая цифра экрана — самый светлый контейнер и выразительный размер шрифта.
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = if (accent) MaterialTheme.colorScheme.surfaceContainerHigh
+            else MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
         Column(modifier = Modifier.padding(10.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             if (sub.isNotBlank()) {
-                Text(sub, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

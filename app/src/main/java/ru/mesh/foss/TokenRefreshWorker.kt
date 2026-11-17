@@ -1,4 +1,4 @@
-package ru.meshrating.app
+package ru.mesh.foss
 
 import android.Manifest
 import android.app.NotificationManager

@@ -5,7 +5,7 @@ name: Android
 
 on:
   push:
-    branches: [main, 'arena/**']
+    branches: [main, 'arena/**', 'design/**']
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -119,7 +119,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.release_tag }}
-          name: MESH Ranker ${{ steps.version.outputs.version_name }}
+          name: MESHFOSS ${{ steps.version.outputs.version_name }}
+          prerelease: ${{ contains(steps.version.outputs.release_tag, 'alpha') || contains(steps.version.outputs.release_tag, 'beta') || contains(steps.version.outputs.release_tag, 'rc') }}
           body: |
             Автоматическая подписанная release-сборка.
 

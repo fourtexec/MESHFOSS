@@ -1,14 +1,19 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
+package ru.mesh.foss
 
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +33,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,7 +59,28 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     var themeId by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var themeColors by remember { mutableStateOf(prefs.getString("theme_colors", null)) }
     var language by remember { mutableStateOf(prefs.getString("language", "ru") ?: "ru") }
-    val colors = remember(themeId, themeColors) { AppTheme.colors(themeId, themeColors) }
+    val dark = isSystemInDarkTheme()
+    val colors = remember(themeId, themeColors, dark) {
+        if (themeId == "dynamic") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            } else {
+                // Material You (динамические цвета) есть только на Android 12+.
+                AppTheme.colors(if (dark) AppTheme.DEFAULT_ID else "light", null)
+            }
+        } else {
+            AppTheme.colors(themeId, themeColors)
+        }
+    }
+    val shapes = remember {
+        Shapes(
+            extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+            small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+            large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
+        )
+    }
 
     val applyTheme: (String) -> Unit = { id ->
         themeId = id
@@ -71,7 +98,12 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         LocalAppLanguage provides language,
         LocalAppLanguageSetter provides applyLanguage
     ) {
-        MaterialTheme(colorScheme = colors, content = content)
+        MaterialTheme(
+            colorScheme = colors,
+            motionScheme = MotionScheme.expressive(),
+            shapes = shapes,
+            content = content
+        )
     }
 }
 
@@ -277,7 +309,7 @@ fun BootScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CircularProgressIndicator()
+        LoadingIndicator()
         Spacer(Modifier.height(16.dp))
         Text("Загружаем профиль МЭШ…")
     }
@@ -432,7 +464,7 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            NavigationBar {
+            ShortNavigationBar {
                 val items = listOf(
                     Triple("ranking", tr("Рейтинг", "Rating"), R.drawable.ic_nav_ranking),
                     Triple("marks", tr("Оценки", "Marks"), R.drawable.ic_nav_marks),
@@ -440,7 +472,7 @@ fun MainScaffold(
                     Triple("schedule", tr("Расписание", "Schedule"), R.drawable.ic_nav_schedule)
                 )
                 items.forEach { (key, label, iconRes) ->
-                    NavigationBarItem(
+                    ShortNavigationBarItem(
                         selected = currentTab == key,
                         onClick = { navigateTo(NavState(tab = key)) },
                         label = { Text(label) },
@@ -453,53 +485,97 @@ fun MainScaffold(
                     )
                 }
             }
+        },
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = currentTab == "schedule",
+                enter = scaleIn(MaterialTheme.motionScheme.defaultSpatialSpec(), initialScale = 0.6f) +
+                    fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+                exit = scaleOut(MaterialTheme.motionScheme.defaultSpatialSpec(), targetScale = 0.6f) +
+                    fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
+            ) {
+                ExtendedFloatingActionButton(
+                    text = { Text(tr("Еда", "Food")) },
+                    icon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_nav_food),
+                            contentDescription = null
+                        )
+                    },
+                    onClick = { navigateTo(NavState(tab = "food")) }
+                )
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            when (currentTab) {
-                "ranking" -> RankingScreen(
-                    store,
-                    client,
-                    personId,
-                    onLogout,
-                    selectedSubjectId = rankingSubjectId,
-                    onSubjectChange = { rankingSubjectId = it }
-                )
-                "marks" -> MarksScreen(
-                    store,
-                    client,
-                    studentId,
-                    personId = personId,
-                    subjectId = marksSubjectId,
-                    onOpenSubject = { id, name ->
-                        if (id.isNotBlank()) {
-                            navigateTo(
-                                NavState(
-                                    tab = "marks",
-                                    marksSubjectId = id,
-                                    marksSubjectName = name
+            val motion = MaterialTheme.motionScheme
+            val tabOrder = listOf("ranking", "marks", "homeworks", "schedule", "food", "settings")
+            AnimatedContent(
+                targetState = currentTab,
+                transitionSpec = {
+                    val forward = tabOrder.indexOf(targetState) >= tabOrder.indexOf(initialState)
+                    val slide = motion.defaultSpatialSpec<IntOffset>()
+                    val fade = motion.defaultEffectsSpec<Float>()
+                    val scale = motion.defaultSpatialSpec<Float>()
+                    val enterX: (Int) -> Int = { w -> (if (forward) w else -w) / 4 }
+                    val exitX: (Int) -> Int = { w -> (if (forward) -w else w) / 4 }
+                    (
+                        slideInHorizontally(animationSpec = slide, initialOffsetX = enterX) +
+                            fadeIn(animationSpec = fade) +
+                            scaleIn(animationSpec = scale, initialScale = 0.96f)
+                    ) togetherWith (
+                        slideOutHorizontally(animationSpec = slide, targetOffsetX = exitX) +
+                            fadeOut(animationSpec = fade) +
+                            scaleOut(animationSpec = scale, targetScale = 0.96f)
+                    )
+                },
+                modifier = Modifier.fillMaxSize()
+            ) { tab ->
+                when (tab) {
+                    "ranking" -> RankingScreen(
+                        store,
+                        client,
+                        personId,
+                        onLogout,
+                        selectedSubjectId = rankingSubjectId,
+                        onSubjectChange = { rankingSubjectId = it }
+                    )
+                    "marks" -> MarksScreen(
+                        store,
+                        client,
+                        studentId,
+                        personId = personId,
+                        subjectId = marksSubjectId,
+                        onOpenSubject = { id, name ->
+                            if (id.isNotBlank()) {
+                                navigateTo(
+                                    NavState(
+                                        tab = "marks",
+                                        marksSubjectId = id,
+                                        marksSubjectName = name
+                                    )
                                 )
-                            )
+                            }
                         }
-                    }
-                )
-                "homeworks" -> HomeworksScreen(
-                    store,
-                    client,
-                    studentId,
-                    target = homeworkTarget,
-                    onTargetConsumed = { homeworkTarget = null }
-                )
-                "schedule" -> ScheduleScreen(
-                    store,
-                    client,
-                    studentId,
-                    personId = personId,
-                    onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
-                    onFoodClick = { navigateTo(NavState(tab = "food")) }
-                )
-                "food" -> FoodScreen(store, client, personId)
-                "settings" -> SettingsScreen(store, client, profile, onLogout)
+                    )
+                    "homeworks" -> HomeworksScreen(
+                        store,
+                        client,
+                        studentId,
+                        target = homeworkTarget,
+                        onTargetConsumed = { homeworkTarget = null }
+                    )
+                    "schedule" -> ScheduleScreen(
+                        store,
+                        client,
+                        studentId,
+                        personId = personId,
+                        onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
+                        onFoodClick = { navigateTo(NavState(tab = "food")) }
+                    )
+                    "food" -> FoodScreen(store, client, personId)
+                    "settings" -> SettingsScreen(store, client, profile, onLogout)
+                }
             }
         }
     }

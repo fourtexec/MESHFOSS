@@ -1,17 +1,17 @@
 # Mesh Ranker — правила ProGuard/R8 для релизной сборки
 
 # Классы, к которым обращаются по имени из WebView (@JavascriptInterface)
--keepclassmembers class ru.meshrating.app.MeshLoginActivity$LoginBridge {
+-keepclassmembers class ru.mesh.foss.MeshLoginActivity$LoginBridge {
     @android.webkit.JavascriptInterface <methods>;
 }
 
 # Ядро и клиент работают с org.json по строковым ключам — сужаем оптимизации
--keep class ru.meshrating.app.MeshCore { *; }
--keep class ru.meshrating.app.MeshClient { *; }
+-keep class ru.mesh.foss.MeshCore { *; }
+-keep class ru.mesh.foss.MeshClient { *; }
 -keep class org.json.** { *; }
 
 # WorkManager создаёт воркер по имени класса
--keep class ru.meshrating.app.TokenRefreshWorker { *; }
+-keep class ru.mesh.foss.TokenRefreshWorker { *; }
 -keepclassmembers class * extends androidx.work.Worker {
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }

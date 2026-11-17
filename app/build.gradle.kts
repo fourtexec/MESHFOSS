@@ -27,11 +27,11 @@ val hasEnvironmentSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "ru.meshrating.app"
+    namespace = "ru.mesh.foss"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ru.meshrating.app"
+        applicationId = "ru.mesh.foss"
         minSdk = 24
         targetSdk = 35
         versionCode = buildVersionCode
@@ -74,6 +74,13 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+    }
+
+    lint {
+        // AGP 8.7: детектор NonNullableMutableLiveDataDetector (issue NullSafeMutableLiveData)
+        // несовместим с Kotlin 2.1 Analysis API и роняет lintVitalRelease
+        // (IncompatibleClassChangeError: KaCallableMemberCall). К проекту не относится.
+        disable += "NullSafeMutableLiveData"
     }
 
     compileOptions {

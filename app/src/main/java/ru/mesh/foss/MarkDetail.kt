@@ -1,12 +1,12 @@
-package ru.meshrating.app
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
+package ru.mesh.foss
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +51,7 @@ fun MarkDetailDialog(
         text = {
             if (loading) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                 }
             } else if (error != null) {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -118,7 +118,8 @@ fun MarkDetailDialog(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.width(24.dp)
                                 )
-                                LinearProgressIndicator(
+                                // M3E: «волосяной» индикатор — прогресс живёт волной.
+                                LinearWavyProgressIndicator(
                                     progress = { (percent / 100f).coerceIn(0f, 1f) },
                                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                                 )
