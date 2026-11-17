@@ -145,8 +145,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Nightly-пререлиз (main)
-        # Каждый push в main обновляет скользящий prerelease `nightly`.
-        # В приложении он не предлагается как обновление.
+        # Каждый push в main обновляет скользящий prerelease `nightly` —
+        # это и есть канал «Пререлизы» в приложении; авто-предупреждений
+        # из него нет, предлагается только при ручной проверке.
         if: steps.version.outputs.publish == 'nightly'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -158,5 +159,8 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "MESHFOSS Nightly ${VERSION_NAME}" \
-            --notes "Сборка из main, commit ${GITHUB_SHA}. Скользящий prerelease без автообновления в приложении." \
+            --notes "Ночная сборка из main. Скользящий prerelease: авто-обновления из него нет, ставится при ручной проверке на канале «Пререлизы».
+
+          - versionCode: \`${VERSION_CODE}\`
+          - commit: \`${GITHUB_SHA}\`" \
             "mesh-ranker-${VERSION_NAME}.apk"

@@ -9,7 +9,8 @@ import org.junit.Test
 
 /**
  * JVM-тесты проверки обновлений: сравнение семантических версий и выбор
- * релиза по каналу (releases / prereleases, без nightly).
+ * релиза по каналу (releases / prereleases, nightly — только при ручной
+ * проверке).
  */
 class UpdateCheckerTest {
 
@@ -39,40 +40,64 @@ class UpdateCheckerTest {
         assertNull(compare("2.0.0", "dev.42"))
     }
 
+    private fun release(tag: String, prerelease: Boolean, draft: Boolean = false, code: Long? = null): String {
+        // \\n — экранированные переносы: JSON-строка не может содержать настоящие переводы строк.
+        val body = if (code != null) " notes\\n\\n- versionCode: `$code`\\n- commit: `abc`" else "notes"
+        return """{"tag_name":"$tag","prerelease":$prerelease,"draft":$draft,"html_url":"https://x/$tag","body":"$body",
+            "assets":[{"name":"app.apk","browser_download_url":"https://x/a.apk"}]}"""
+    }
+
     @Test
-    fun pickUpdateSkipsNightlyAndDrafts() {
+    fun pickUpdateSkipsDraftsAndOlder() {
         val releases = JSONArray(
-            """
-            [
-              {"tag_name":"nightly","prerelease":true,"draft":false,"html_url":"https://x/n"},
-              {"tag_name":"v1.0.50","prerelease":false,"draft":true,"html_url":"https://x/d"},
-              {"tag_name":"v2.0.0","prerelease":false,"draft":false,"html_url":"https://x/r",
-               "assets":[{"name":"app.apk","browser_download_url":"https://x/a.apk"}]}
-            ]
-            """.trimIndent()
+            "[${release("v1.0.50", prerelease = false, draft = true)}," +
+                "${release("v1.0.52", prerelease = false)}," +
+                "${release("v2.0.0", prerelease = false)}]"
         )
-        val found = UpdateChecker.pickUpdate(releases, installed = "1.0.93", withPrereleases = false)
+        val found = UpdateChecker.pickUpdate(releases, "1.0.93", 93, withPrereleases = false, includeNightly = false)
         assertNotNull(found)
         assertEquals("2.0.0", found!!.versionName)
-        assertEquals("https://x/a.apk", found.downloadUrl)
     }
 
     @Test
     fun releasesChannelHidesPrereleases() {
-        val releases = JSONArray(
-            """[{"tag_name":"v2.0.1-beta.1","prerelease":true,"draft":false,"html_url":"https://x/b"}]"""
-        )
-        assertNull(UpdateChecker.pickUpdate(releases, "2.0.0", withPrereleases = false))
-        val found = UpdateChecker.pickUpdate(releases, "2.0.0", withPrereleases = true)
+        val releases = JSONArray("[${release("v2.0.1-beta.1", prerelease = true)}]")
+        assertNull(UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = false, includeNightly = true))
+        val found = UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = false)
         assertNotNull(found)
         assertEquals("2.0.1-beta.1", found!!.versionName)
     }
 
     @Test
-    fun noUpdateWhenInstalledIsNewer() {
+    fun nightlyOnlyOnManualCheckWithPrereleaseChannel() {
         val releases = JSONArray(
-            """[{"tag_name":"v2.0.0","prerelease":false,"draft":false,"html_url":"https://x/r"}]"""
+            "[${release("v2.0.0", prerelease = false, code = 96)}," +
+                "${release("nightly", prerelease = true, code = 97)}]"
         )
-        assertNull(UpdateChecker.pickUpdate(releases, "2.0.1", withPrereleases = true))
+        // Авто-предупреждение: nightly не предлагается, стабильный релиз не новее.
+        assertNull(UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = false))
+        // Ручная проверка на канале «Пререлизы»: nightly из main (versionCode растёт).
+        val found = UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = true)
+        assertNotNull(found)
+        assertEquals("nightly", found!!.versionName)
+        assertEquals("https://x/a.apk", found.downloadUrl)
+    }
+
+    @Test
+    fun versionCodeBeatsSemverForNightly() {
+        // Семантически 2.0.0-dev.97 младше 2.0.0, но versionCode новее —
+        // на канале «Пререлизы» nightly всё равно предлагается.
+        val releases = JSONArray("[${release("nightly", prerelease = true, code = 97)}]")
+        val found = UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = true)
+        assertNotNull(found)
+        assertEquals("nightly", found!!.versionName)
+        // Обратная сторона: старый nightly (меньше код) не предлагается.
+        assertNull(UpdateChecker.pickUpdate(releases, "2.0.0", 98, withPrereleases = true, includeNightly = true))
+    }
+
+    @Test
+    fun noUpdateWhenInstalledIsNewer() {
+        val releases = JSONArray("[${release("v2.0.0", prerelease = false)}]")
+        assertNull(UpdateChecker.pickUpdate(releases, "2.0.1", 100, withPrereleases = true, includeNightly = true))
     }
 }

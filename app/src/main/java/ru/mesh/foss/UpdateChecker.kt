@@ -1,6 +1,7 @@
 package ru.mesh.foss
 
 import android.content.Context
+import androidx.core.content.pm.PackageInfoCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -18,12 +19,13 @@ data class UpdateInfo(
  *
  * Каналы (переключаются в Настройках → Приложение):
  *  - `releases` — только стабильные релизы (теги `vX.Y.Z`);
- *  - `prereleases` — плюс пререлизы (beta/rc-теги).
+ *  - `prereleases` — плюс пререлизы: nightly из main и beta/rc-теги.
  *
- * Nightly-сборка (скользящий prerelease `nightly` из main) в проверки не
- * попадает: из неё нет автообновления, её ставят вручную со страницы релизов.
- * Сравнение версий — по семантике версий X.Y.Z[-pre], поэтому теги вида
- * `v2.0.0` обрабатываются корректно.
+ * Nightly (скользящий prerelease `nightly`, собирается из main) не выдаётся
+ * авто-предупреждением — только при ручной проверке на канале «Пререлизы».
+ *
+ * Сравнение: если в теле релиза есть versionCode (run_number CI, он растёт
+ * монотонно) — сравниваются коды; иначе — семантика версий X.Y.Z[-pre].
  */
 object UpdateChecker {
 
@@ -33,19 +35,29 @@ object UpdateChecker {
     const val CHANNEL_RELEASES = "releases"
     const val CHANNEL_PRERELEASES = "prereleases"
 
-    /** Скользящий prerelease из main: никогда не предлагается как обновление. */
+    /** Скользящий prerelease из main. */
     const val NIGHTLY_TAG = "nightly"
 
     private const val RELEASES_API = "https://api.github.com/repos/mesh-ranker/app/releases?per_page=30"
     private const val RELEASES_PAGE = "https://github.com/mesh-ranker/app/releases"
+    private val VERSION_CODE_IN_BODY = Regex("- versionCode:\\s*`(\\d+)`")
 
     /** Канал обновлений из настроек приложения. */
     fun channel(context: Context): String =
         context.getSharedPreferences("mesh_settings", Context.MODE_PRIVATE)
             .getString("update_channel", CHANNEL_RELEASES) ?: CHANNEL_RELEASES
 
-    /** Возвращает обновление, если на GitHub лежит релиз новее установленного. */
-    fun check(context: Context): UpdateInfo? {
+    fun installedVersionCode(context: Context): Long {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        return PackageInfoCompat.getLongVersionCode(info)
+    }
+
+    /**
+     * Возвращает обновление, если на GitHub лежит релиз новее установленного.
+     * [includeNightly] — ручная проверка: на канале «Пререлизы» можно предложить
+     * nightly из main; авто-предупреждение его не выдаёт.
+     */
+    fun check(context: Context, includeNightly: Boolean = false): UpdateInfo? {
         return try {
             val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -60,7 +72,9 @@ object UpdateChecker {
                 pickUpdate(
                     JSONArray(body),
                     installedVersionName(context),
-                    channel(context) == CHANNEL_PRERELEASES
+                    installedVersionCode(context),
+                    channel(context) == CHANNEL_PRERELEASES,
+                    includeNightly
                 )
             } finally {
                 connection.disconnect()
@@ -72,34 +86,50 @@ object UpdateChecker {
 
     /**
      * Выбирает лучшее обновление из списка релизов: отбрасывает черновики,
-     * nightly и (если канал — только релизы) пререлизы, затем берёт самую
-     * новую по семантике версии версию новее установленной.
+     * nightly (если он не разрешён) и (если канал — только релизы) пререлизы.
+     * Сравнение с установленным: versionCode из тела релиза, иначе семантика
+     * версий.
      */
     internal fun pickUpdate(
         releases: JSONArray,
         installed: String,
-        withPrereleases: Boolean
+        installedCode: Long,
+        withPrereleases: Boolean,
+        includeNightly: Boolean
     ): UpdateInfo? {
         var best: UpdateInfo? = null
+        var bestCode: Long? = null
         for (index in 0 until releases.length()) {
             val json = releases.optJSONObject(index) ?: continue
             if (json.optBoolean("draft")) continue
             val tag = json.optString("tag_name").trim()
-            if (tag.equals(NIGHTLY_TAG, ignoreCase = true)) continue
+            val isNightly = tag.equals(NIGHTLY_TAG, ignoreCase = true)
+            if (isNightly && !includeNightly) continue
             if (json.optBoolean("prerelease") && !withPrereleases) continue
             val version = tag.removePrefix("v")
-            // Мусорный тег не предлагаем; если установленная версия не
-            // разбирается — считаем кандидат новее.
-            if (parseVersion(version) == null) continue
-            val cmp = compareVersions(version, installed) ?: 1
-            if (cmp <= 0) continue
-            if (best != null && (compareVersions(version, best.versionName) ?: 0) <= 0) continue
+            val code = versionCodeFromBody(json)
+
+            val newer = if (code != null) {
+                code > installedCode
+            } else {
+                if (parseVersion(version) == null) continue
+                (compareVersions(version, installed) ?: 1) > 0
+            }
+            if (!newer) continue
 
             val releaseUrl = json.optString("html_url")
                 .takeIf { it.isNotBlank() }
                 ?: RELEASES_PAGE
             val apkUrl = firstApkUrl(json) ?: releaseUrl
-            best = UpdateInfo(versionName = version, downloadUrl = apkUrl, releaseUrl = releaseUrl)
+            val take = when {
+                best == null -> true
+                code != null && bestCode != null -> code > bestCode
+                else -> (compareVersions(version, best.versionName) ?: 0) > 0
+            }
+            if (take) {
+                best = UpdateInfo(versionName = version, downloadUrl = apkUrl, releaseUrl = releaseUrl)
+                bestCode = code
+            }
         }
         return best
     }
@@ -108,6 +138,10 @@ object UpdateChecker {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         return info.versionName ?: ""
     }
+
+    /** versionCode из тела релиза (`- versionCode: `96``); null, если нет. */
+    private fun versionCodeFromBody(json: JSONObject): Long? =
+        VERSION_CODE_IN_BODY.find(json.optString("body"))?.groupValues?.get(1)?.toLongOrNull()
 
     /** "2.0.0-beta.5" → ([2, 0, 0], ["beta", "5"]); null — если не разбирается. */
     private fun parseVersion(raw: String): Pair<List<Int>, List<String>>? {

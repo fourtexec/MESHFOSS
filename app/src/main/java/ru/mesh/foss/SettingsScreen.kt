@@ -237,8 +237,8 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                 }
                 Text(
                     tr(
-                        "Пререлизы — beta/rc-версии; nightly из main не предлагается.",
-                        "Prereleases are beta/rc builds; nightly from main is never offered."
+                        "Пререлизы — nightly из main и beta/rc. Nightly без авто-предупреждений.",
+                        "Prereleases — nightly from main and beta/rc. Nightly has no auto-prompts."
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -250,7 +250,9 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                             checkingUpdates = true
                             updateMessage = null
                             scope.launch {
-                                val found = withContext(Dispatchers.IO) { UpdateChecker.check(context) }
+                                val found = withContext(Dispatchers.IO) {
+                                    UpdateChecker.check(context, includeNightly = true)
+                                }
                                 store.lastUpdateCheck = System.currentTimeMillis()
                                 updateInfo = found
                                 updateMessage = if (found == null) noUpdatesText else null
