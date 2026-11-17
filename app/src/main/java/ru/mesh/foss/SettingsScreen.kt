@@ -209,13 +209,16 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.height(4.dp))
+                // Content-lambda ButtonGroup не @Composable — переводим заранее.
+                val releasesLabel = tr("Релизы", "Releases")
+                val prereleasesLabel = tr("Пререлизы", "Prereleases")
                 ButtonGroup(
                     overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     toggleableItem(
                         checked = updateChannel == UpdateChecker.CHANNEL_RELEASES,
-                        label = tr("Релизы", "Releases"),
+                        label = releasesLabel,
                         onCheckedChange = {
                             updateChannel = UpdateChecker.CHANNEL_RELEASES
                             prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_RELEASES).apply()
@@ -224,7 +227,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                     )
                     toggleableItem(
                         checked = updateChannel == UpdateChecker.CHANNEL_PRERELEASES,
-                        label = tr("Пререлизы", "Prereleases"),
+                        label = prereleasesLabel,
                         onCheckedChange = {
                             updateChannel = UpdateChecker.CHANNEL_PRERELEASES
                             prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_PRERELEASES).apply()
