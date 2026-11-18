@@ -19,13 +19,13 @@ import org.json.JSONObject
 @Composable
 fun ProfileScreen(store: SessionStore, client: MeshClient, initialProfile: JSONObject?, onLogout: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text("Профиль", style = MaterialTheme.typography.headlineMedium)
+        Text(Words.Profile.text, style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         ProfileBody(store, client, initialProfile)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text("Выйти") }
+        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text(Words.SignOut.text) }
     }
 }
 
@@ -78,7 +78,7 @@ fun ProfileBody(
             error != null -> {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text("Повторить") }
+                Button(onClick = { load() }) { Text(Words.Retry.text) }
             }
             profile != null -> {
                 val p = profile!!
@@ -87,58 +87,58 @@ fun ProfileBody(
                 val child = p.optJSONObject("defaultChild") ?: children.firstOrNull()
                 val parent = p.optJSONObject("parent")
 
-                ProfileSection("Ученик") {
-                    ProfileRow("ФИО", child?.optString("name").orEmpty().ifBlank { "—" })
-                    ProfileRow("Класс", child?.optString("className").orEmpty().ifBlank { "—" })
+                ProfileSection(Words.Student.text) {
+                    ProfileRow(Words.FullName.text, child?.optString("name").orEmpty().ifBlank { "—" })
+                    ProfileRow(Words.Class.text, child?.optString("className").orEmpty().ifBlank { "—" })
                     val school = child?.optString("schoolName").orEmpty().ifBlank {
                         child?.optString("schoolShort").orEmpty()
                     }
-                    ProfileRow("Школа", school.ifBlank { "—" })
+                    ProfileRow(Words.School.text, school.ifBlank { "—" })
                     val studentEmail = child?.optString("email").orEmpty()
                     val studentPhone = MeshCore.formatPhone(child?.optString("phone"))
-                    if (studentEmail.isNotBlank()) ProfileRow("Email", studentEmail)
-                    if (studentPhone.isNotBlank()) ProfileRow("Телефон", studentPhone)
+                    if (studentEmail.isNotBlank()) ProfileRow(Words.Email.text, studentEmail)
+                    if (studentPhone.isNotBlank()) ProfileRow(Words.Phone.text, studentPhone)
                 }
 
                 if (children.size > 1) {
                     Spacer(Modifier.height(8.dp))
-                    ProfileSection("Дети") {
+                    ProfileSection(Words.Children.text) {
                         children.forEach { c ->
-                            ProfileRow(c.optString("name").ifBlank { "Ученик" }, c.optString("className"))
+                            ProfileRow(c.optString("name").ifBlank { Words.Student.text }, c.optString("className"))
                         }
                     }
                 }
 
                 Spacer(Modifier.height(8.dp))
-                ProfileSection("Родитель") {
-                    ProfileRow("ФИО", parent?.optString("name").orEmpty().ifBlank { "—" })
+                ProfileSection(Words.Parent.text) {
+                    ProfileRow(Words.FullName.text, parent?.optString("name").orEmpty().ifBlank { "—" })
                     val email = parent?.optString("email").orEmpty()
                     val phone = MeshCore.formatPhone(parent?.optString("phone"))
-                    if (email.isNotBlank()) ProfileRow("Email", email)
-                    if (phone.isNotBlank()) ProfileRow("Телефон", phone)
+                    if (email.isNotBlank()) ProfileRow(Words.Email.text, email)
+                    if (phone.isNotBlank()) ProfileRow(Words.Phone.text, phone)
                 }
 
                 if (showToken) {
                     Spacer(Modifier.height(8.dp))
-                    ProfileSection("Токен МЭШ") {
+                    ProfileSection(Words.MeshToken.text) {
                         val info = MeshCore.describeToken(store.token)
-                        ProfileRow("Маска", info.optString("mask").ifBlank { "—" })
+                        ProfileRow(Words.MaskedToken.text, info.optString("mask").ifBlank { "—" })
                         ProfileRow(
-                            "Тип",
+                            Words.Type.text,
                             when (info.optString("kind")) {
                                 "jwt" -> "JWT"
-                                "opaque" -> "opaque"
+                                "opaque" -> Words.OpaqueToken.text
                                 else -> "—"
                             }
                         )
                         if (info.has("expiresAt")) {
                             val expired = info.optBoolean("expired")
                             ProfileRow(
-                                "Истекает",
+                                Words.Expires.text,
                                 MeshCore.dateShort(
                                     java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
                                         .format(java.util.Date(info.optLong("expiresAt")))
-                                ) + if (expired) " (истёк)" else ""
+                                ) + if (expired) Words.Expired.text else ""
                             )
                         }
                     }

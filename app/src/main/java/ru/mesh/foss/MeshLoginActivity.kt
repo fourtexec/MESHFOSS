@@ -23,6 +23,9 @@ import org.json.JSONObject
  * найден — окно закрывается и токен уходит в MainActivity.
  */
 class MeshLoginActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(UiLanguage.context(newBase))
+    }
 
     /** Мост для страницы входа: сюда приходят «сигналы» о токене. */
     private inner class LoginBridge {
@@ -98,7 +101,7 @@ class MeshLoginActivity : AppCompatActivity() {
     private fun finishWithToken(token: String, source: String) {
         if (finished) return
         finished = true
-        Toast.makeText(this, "Токен МЭШ получен", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, Words.MeshTokenReceived.text, Toast.LENGTH_SHORT).show()
         setResult(
             Activity.RESULT_OK,
             Intent().putExtra(EXTRA_TOKEN, token).putExtra(EXTRA_SOURCE, source)

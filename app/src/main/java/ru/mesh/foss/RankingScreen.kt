@@ -125,7 +125,7 @@ fun RankingScreen(
 
     LaunchedEffect(personId, date, selectedSubject, period) { load(monthlyMode) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (isGeneral) {
             // M3E: период — connected-переключатель, выделение меняет форму и цвет.
             ButtonGroup(
@@ -134,13 +134,13 @@ fun RankingScreen(
             ) {
                 toggleableItem(
                     checked = period == "year",
-                    label = "Год",
+                    label = Words.Year.text,
                     onCheckedChange = { period = "year" },
                     weight = 1f
                 )
                 toggleableItem(
                     checked = period == "month",
-                    label = "Месяц",
+                    label = Words.Month.text,
                     onCheckedChange = { period = "month" },
                     weight = 1f
                 )
@@ -149,25 +149,25 @@ fun RankingScreen(
         }
 
         board?.optJSONObject("summary")?.let { s ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                 KpiCard(
-                    label = "Моё место",
+                    label = Words.MyRank.text,
                     value = if (s.optInt("myPlace", 0) > 0) "#${s.optInt("myPlace")}" else "—",
-                    sub = if (s.optInt("total", 0) > 0) "из ${s.optInt("total")}" else "",
-                    modifier = Modifier.weight(1f),
+                    sub = if (s.optInt("total", 0) > 0) Words.Of(s.optInt("total")) else "",
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     accent = true
                 )
                 KpiCard(
-                    label = "Мой балл",
+                    label = Words.MyScore.text,
                     value = formatMark(if (s.isNull("myAverage")) null else s.optDouble("myAverage")),
                     sub = "",
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).fillMaxHeight()
                 )
                 KpiCard(
-                    label = "Класс",
+                    label = Words.Class.text,
                     value = formatMark(if (s.isNull("classAverage")) null else s.optDouble("classAverage")),
-                    sub = "медиана ${formatMark(if (s.isNull("classMedian")) null else s.optDouble("classMedian"))}",
-                    modifier = Modifier.weight(1f)
+                    sub = Words.Median(formatMark(if (s.isNull("classMedian")) null else s.optDouble("classMedian"))),
+                    modifier = Modifier.weight(1f).fillMaxHeight()
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -178,7 +178,7 @@ fun RankingScreen(
                 FilterChip(
                     selected = selectedSubject == "all",
                     onClick = { onSubjectChange(null) },
-                    label = { Text("Общий", maxLines = 1) }
+                    label = { Text(Words.Overall.text, maxLines = 1) }
                 )
             }
             items(subjects) { s ->
@@ -207,7 +207,7 @@ fun RankingScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Загружаем профиль ученика…")
+                        Text(Words.LoadingStudentProfile.text)
                     }
                 }
             }
@@ -218,14 +218,14 @@ fun RankingScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load(monthlyMode, force = true) }) { Text("Повторить") }
+                    Button(onClick = { load(monthlyMode, force = true) }) { Text(Words.Retry.text) }
                 }
             }
             else -> {
                 val rows = board?.optJSONArray("rows")
                 if (rows == null || rows.length() == 0) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Нет данных за эту дату")
+                        Text(Words.NoDataForThisDate.text)
                     }
                 } else {
                     PullToRefreshBox(
@@ -238,7 +238,7 @@ fun RankingScreen(
                             val average = if (row.isNull("average")) null else row.optDouble("average")
                             val isMe = row.optBoolean("isMe")
                             GlassCard(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                 tint = if (isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                                     else MaterialTheme.colorScheme.surfaceContainerLow
                             ) {
@@ -253,7 +253,7 @@ fun RankingScreen(
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            row.optString("name").ifBlank { "Без имени" },
+                                            row.optString("name").ifBlank { Words.Unnamed.text },
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                             fontWeight = if (isMe) FontWeight.Bold else FontWeight.Normal
@@ -261,17 +261,17 @@ fun RankingScreen(
                                         val status = row.optString("status")
                                         val delta = if (row.isNull("averageDelta")) null else row.optDouble("averageDelta")
                                         val sub = buildString {
-                                            if (isMe) append("это я")
+                                            if (isMe) append(Words.Me.text)
                                             if (status.isNotBlank()) {
                                                 if (isNotEmpty()) append(" · ")
                                                 append(
                                                     when (status) {
-                                                        "TOP" -> "сильный"
-                                                        "MIDDLE" -> "средний"
-                                                        "up" -> "рост"
-                                                        "down" -> "снижение"
-                                                        "stable" -> "стабильно"
-                                                        "NO_DATA" -> "нет данных"
+                                                        "TOP" -> Words.High.text
+                                                        "MIDDLE" -> Words.AverageRank.text
+                                                        "up" -> Words.Rising.text
+                                                        "down" -> Words.Falling.text
+                                                        "stable" -> Words.StableLabel.text
+                                                        "NO_DATA" -> Words.NoData.text
                                                         else -> status
                                                     }
                                                 )

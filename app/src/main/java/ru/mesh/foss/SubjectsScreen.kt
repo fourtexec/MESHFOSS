@@ -54,8 +54,8 @@ fun SubjectsScreen(
 
     LaunchedEffect(personId) { load() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Text("Предметы", style = MaterialTheme.typography.headlineMedium)
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(Words.Subjects.text, style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
 
         when {
@@ -64,7 +64,7 @@ fun SubjectsScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Загружаем профиль ученика…")
+                        Text(Words.LoadingStudentProfile.text)
                     }
                 }
             }
@@ -75,11 +75,11 @@ fun SubjectsScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load() }) { Text("Повторить") }
+                    Button(onClick = { load() }) { Text(Words.Retry.text) }
                 }
             }
             subjects.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Предметы не найдены")
+                Text(Words.NoSubjectsFound.text)
             }
             else -> LazyColumn(modifier = Modifier.weight(1f)) {
                 items(subjects) { s ->
@@ -90,7 +90,7 @@ fun SubjectsScreen(
                     GlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp)
+                            .padding(vertical = 4.dp)
                             .then(
                                 if (subjectId.isNotBlank()) {
                                     Modifier.clickable { onOpenSubject(subjectId, subjectName) }
@@ -105,16 +105,16 @@ fun SubjectsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    s.optString("name").ifBlank { "Предмет" },
+                                    s.optString("name").ifBlank { Words.Subject.text },
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     fontWeight = FontWeight.Medium
                                 )
                                 val sub = buildString {
-                                    if (place != null) append("место #$place")
+                                    if (place != null) append(Words.Rank(place))
                                     if (s.optBoolean("isExam")) {
                                         if (isNotEmpty()) append(" · ")
-                                        append("экзамен")
+                                        append(Words.Exam.text)
                                     }
                                 }
                                 if (sub.isNotBlank()) {

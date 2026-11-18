@@ -61,7 +61,9 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     val prefs = remember { context.getSharedPreferences("mesh_settings", android.content.Context.MODE_PRIVATE) }
     var themeId by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var themeColors by remember { mutableStateOf(prefs.getString("theme_colors", null)) }
-    var language by remember { mutableStateOf(prefs.getString("language", "ru") ?: "ru") }
+    val language = UiLanguage.code
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val localized = remember(context, configuration, language) { UiLanguage.context(context) }
     val dark = isSystemInDarkTheme()
     val colors = remember(themeId, themeColors, dark) {
         if (themeId == "dynamic") {
@@ -92,13 +94,15 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         themeColors = prefs.getString("theme_colors", null)
     }
     val applyLanguage: (String) -> Unit = { code ->
-        language = code
+        UiLanguage.select(code)
+        (context.applicationContext as MeshApp).createNotificationChannel()
         prefs.edit().putString("language", code).apply()
     }
 
     CompositionLocalProvider(
+        LocalContext provides localized,
+        androidx.compose.ui.platform.LocalConfiguration provides localized.resources.configuration,
         LocalAppTheme provides applyTheme,
-        LocalAppLanguage provides language,
         LocalAppLanguageSetter provides applyLanguage
     ) {
         MaterialTheme(
@@ -207,7 +211,7 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
         try {
             val prof = withContext(Dispatchers.IO) { client.fetchProfile() }
             if (!applyProfile(prof)) {
-                bootError = "В профиле МЭШ не найден ученик. Войдите заново."
+                bootError = Words.NoStudentInThisProfileSignInAgain.text
             } else {
                 bootError = null
             }
@@ -234,11 +238,10 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
             modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
             containerColor = Color.Transparent,
             onDismissRequest = { updateInfo = null },
-            title = { Text("Доступно обновление") },
+            title = { Text(Words.UpdateAvailable.text) },
             text = {
                 Text(
-                    "На GitHub уже есть версия ${info.versionName}. " +
-                        "Можно скачать и установить её по ссылке."
+                    Words.UpdateVersionAvailable(info.versionName)
                 )
             },
             confirmButton = {
@@ -250,12 +253,12 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
                         }
                     }
                 ) {
-                    Text("Скачать")
+                    Text(Words.Download.text)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { updateInfo = null }) {
-                    Text("Позже")
+                    Text(Words.Later.text)
                 }
             }
         )
@@ -277,7 +280,7 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
                         token = tokenValue
                         if (!applyProfile(prof)) {
                             throw MeshCore.MeshError(
-                                "В профиле МЭШ не найден ученик. Проверьте, что вы вошли как родитель.",
+                                Words.NoStudentFoundSignInAsAParent.text,
                                 "no-student"
                             )
                         }
@@ -299,7 +302,7 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
         booting -> BootScreen()
 
         bootError != null && (activePersonId == null || activeStudentId == null) -> BootErrorScreen(
-            message = bootError ?: "Не удалось загрузить профиль",
+            message = bootError ?: Words.CouldNotLoadProfile.text,
             onRetry = { retryKey++ },
             onLogout = { logout() }
         )
@@ -324,7 +327,7 @@ fun BootScreen() {
     ) {
         LoadingIndicator()
         Spacer(Modifier.height(16.dp))
-        Text("Загружаем профиль МЭШ…")
+        Text(Words.LoadingMeshProfile.text)
     }
 }
 
@@ -335,13 +338,13 @@ fun BootErrorScreen(message: String, onRetry: () -> Unit, onLogout: () -> Unit) 
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Не удалось открыть профиль", style = MaterialTheme.typography.headlineSmall)
+        Text(Words.CouldNotOpenProfile.text, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text(message, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text("Повторить") }
+        Button(onClick = onRetry) { Text(Words.Retry.text) }
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = onLogout) { Text("Войти заново") }
+        TextButton(onClick = onLogout) { Text(Words.SignInAgain.text) }
     }
 }
 
@@ -423,13 +426,13 @@ fun MainScaffold(
     }
 
     val screenTitle = when (currentTab) {
-        "ranking" -> tr("Рейтинг", "Ranking")
-        "marks" -> if (marksSubjectName.isNullOrBlank()) tr("Оценки", "Marks") else "${tr("Оценки", "Marks")} · $marksSubjectName"
-        "homeworks" -> tr("Домашние задания", "Homework")
-        "schedule" -> tr("Расписание", "Schedule")
-        "food" -> tr("Еда и баланс", "Food & balance")
-        "settings" -> tr("Настройки", "Settings")
-        else -> tr("МЭШ Рейтинг", "MESH Ranking")
+        "ranking" -> Words.Ranking.text
+        "marks" -> if (marksSubjectName.isNullOrBlank()) Words.GradesTab.text else "${Words.GradesTab.text} · $marksSubjectName"
+        "homeworks" -> Words.HomeworkLabel.text
+        "schedule" -> Words.Schedule.text
+        "food" -> Words.MealsAndBalance.text
+        "settings" -> Words.Settings.text
+        else -> Words.MeshRanking.text
     }
 
     Scaffold(
@@ -477,13 +480,13 @@ fun MainScaffold(
                                 navigateTo(NavState(tab = "ranking", rankingSubjectId = marksSubjectId))
                             }
                         ) {
-                            Text("Рейтинг")
+                            Text(Words.Ranking.text)
                         }
                     }
                     IconButton(onClick = { navigateTo(NavState(tab = "settings")) }) {
                         Icon(
                             painter = painterResource(R.drawable.ic_settings),
-                            contentDescription = "Настройки и профиль"
+                            contentDescription = Words.SettingsAndProfile.text
                         )
                     }
                 }
@@ -496,16 +499,16 @@ fun MainScaffold(
                 containerColor = Color.Transparent
             ) {
                 val items = listOf(
-                    Triple("ranking", tr("Рейтинг", "Rating"), R.drawable.ic_nav_ranking),
-                    Triple("marks", tr("Оценки", "Marks"), R.drawable.ic_nav_marks),
-                    Triple("homeworks", tr("ДЗ", "Homework"), R.drawable.ic_nav_homeworks),
-                    Triple("schedule", tr("Расписание", "Schedule"), R.drawable.ic_nav_schedule)
+                    Triple("ranking", Words.Ranking.text, R.drawable.ic_nav_ranking),
+                    Triple("marks", Words.GradesTab.text, R.drawable.ic_nav_marks),
+                    Triple("homeworks", Words.Tasks.text, R.drawable.ic_nav_homeworks),
+                    Triple("schedule", Words.ScheduleTab.text, R.drawable.ic_nav_schedule)
                 )
                 items.forEach { (key, label, iconRes) ->
                     ShortNavigationBarItem(
                         selected = currentTab == key,
                         onClick = { navigateTo(NavState(tab = key)) },
-                        label = { Text(label) },
+                        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         icon = {
                             Icon(
                                 painter = painterResource(iconRes),
@@ -525,7 +528,7 @@ fun MainScaffold(
                     fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
             ) {
                 ExtendedFloatingActionButton(
-                    text = { Text(tr("Еда", "Food")) },
+                    text = { Text(Words.Meals.text) },
                     icon = {
                         Icon(
                             painter = painterResource(R.drawable.ic_nav_food),
@@ -627,7 +630,8 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Вход в МЭШ", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+        Box(Modifier.align(Alignment.End)) { LanguagePicker() }
+        Text(Words.SignInToMesh.text, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(8.dp))
 
         // Способ 1 — QR: панель сама чинит устаревший токен по сохранённым кукам
@@ -637,13 +641,13 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
         Spacer(Modifier.height(24.dp))
         Column(Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
             Text(
-                "Способ 2. Войти через сайт МЭШ",
+                Words.SignInOnTheMeshWebsite.text,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Откроется school.mos.ru. После входа приложение перехватит Authorization-токен и само закроет окно.",
+                Words.SignInAtSchoolMosRuThisWindow.text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -655,20 +659,20 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
                 enabled = !loading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Открыть school.mos.ru")
+                Text(Words.OpenSchoolMosRu.text)
             }
         }
 
         Spacer(Modifier.height(24.dp))
         Column(Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
             Text(
-                "Способ 3. Вставить токен вручную",
+                Words.EnterATokenManually.text,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Откройте: $url",
+                text = Words.Open(url),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable {
@@ -676,7 +680,7 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
                 }
             )
             Text(
-                "Скопируйте токен со страницы и вставьте сюда",
+                Words.CopyTheTokenFromThePageAndPaste.text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -684,7 +688,7 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
             OutlinedTextField(
                 value = tokenInput,
                 onValueChange = { tokenInput = it },
-                label = { Text("Токен МЭШ") },
+                label = { Text(Words.MeshToken.text) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3
             )
@@ -695,7 +699,7 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                else Text("Войти с токеном")
+                else Text(Words.SignInWithToken.text)
             }
         }
 

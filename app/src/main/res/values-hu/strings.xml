@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_title">MESH-bejelentkezés</string>
+    <string name="notif_channel_name">MESH-adatfrissítések</string>
+    <string name="notif_channel_description">A token és a naplóadatok időszakos frissítése</string>
+    <string name="notif_token_title">A MESH-token megújult</string>
+    <string name="notif_token_text">A munkamenet automatikusan megújult</string>
+    <string name="notif_error_title">Jelentkezzen be újra a MESH-be</string>
+    <string name="notif_error_text">A token nem újítható meg. Nyissa meg az alkalmazást és jelentkezzen be újra.</string>
+</resources>

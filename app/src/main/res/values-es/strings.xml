@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_title">Acceder a MESH</string>
+    <string name="notif_channel_name">Actualizaciones de MESH</string>
+    <string name="notif_channel_description">Renovación periódica del token y de los datos del diario escolar</string>
+    <string name="notif_token_title">Token de MESH renovado</string>
+    <string name="notif_token_text">Sesión renovada automáticamente</string>
+    <string name="notif_error_title">Vuelve a acceder a MESH</string>
+    <string name="notif_error_text">No se pudo renovar el token. Abre la aplicación y vuelve a acceder.</string>
+</resources>

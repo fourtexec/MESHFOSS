@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_title">Connexion à MESH</string>
+    <string name="notif_channel_name">Mises à jour MESH</string>
+    <string name="notif_channel_description">Renouvellement périodique du jeton et des données du carnet scolaire</string>
+    <string name="notif_token_title">Jeton MESH renouvelé</string>
+    <string name="notif_token_text">Session prolongée automatiquement</string>
+    <string name="notif_error_title">Reconnectez-vous à MESH</string>
+    <string name="notif_error_text">Impossible de renouveler le jeton. Ouvrez l’application et reconnectez-vous.</string>
+</resources>

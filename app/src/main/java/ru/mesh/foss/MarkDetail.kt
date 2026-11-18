@@ -50,10 +50,10 @@ fun MarkDetailDialog(
         containerColor = Color.Transparent,
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
+            TextButton(onClick = onDismiss) { Text(Words.Close.text) }
         },
         title = {
-            Text(detail?.optString("subject_name")?.takeIf { it.isNotBlank() } ?: "Оценка")
+            Text(detail?.optString("subject_name")?.takeIf { it.isNotBlank() } ?: Words.Grade.text)
         },
         text = {
             if (loading) {
@@ -91,15 +91,15 @@ fun MarkDetailDialog(
                         teacher?.optString("first_name")?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" "); append(it) }
                         teacher?.optString("middle_name")?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" "); append(it) }
                     }
-                    if (teacherName.isNotBlank()) InfoRow("Учитель", teacherName)
+                    if (teacherName.isNotBlank()) InfoRow(Words.Teacher.text, teacherName)
 
                     val activity = d.optJSONObject("activity")
                     val topic = activity?.optString("lesson_topic")
-                    if (!topic.isNullOrBlank()) InfoRow("Тема", topic)
+                    if (!topic.isNullOrBlank()) InfoRow(Words.Topic.text, topic)
 
                     val comment = d.optString("comment")
                     if (comment.isNotBlank()) {
-                        Text("Комментарий", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(Words.Comment.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         Text(comment, style = MaterialTheme.typography.bodyMedium)
                     }
 
@@ -107,7 +107,7 @@ fun MarkDetailDialog(
                     if (classResults != null) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Результаты по классу (${classResults.optInt("total_students")} учеников)",
+                            Words.ClassResultsStudents(classResults.optInt("total_students")),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Medium
                         )

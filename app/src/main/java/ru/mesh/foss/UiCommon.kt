@@ -64,7 +64,10 @@ fun formatMark(value: Double?): String {
     if (value == null || value.isNaN() || value.isInfinite()) return "—"
     val rounded = Math.round(value * 100.0) / 100.0
     if (rounded == Math.floor(rounded)) return rounded.toInt().toString()
-    return String.format(Locale.US, "%.2f", rounded).trimEnd('0').trimEnd('.')
+    return java.text.NumberFormat.getNumberInstance(UiLanguage.locale).apply {
+        maximumFractionDigits = 2
+        isGroupingUsed = false
+    }.format(rounded)
 }
 
 @Composable
@@ -123,7 +126,7 @@ fun DaySelector(
                 }) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("Отмена") }
+                TextButton(onClick = { showPicker = false }) { Text(Words.Cancel.text) }
             }
         ) {
             DatePicker(state = pickerState)
@@ -177,7 +180,7 @@ fun DaySelector(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    val relative = remember(shownDate) { relativeDayLabel(shownDate) }
+                    val relative = relativeDayLabel(shownDate)
                     if (relative != null) {
                         Text(relative, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
@@ -222,9 +225,11 @@ fun Modifier.swipeDays(onPrev: () -> Unit, onNext: () -> Unit): Modifier = compo
 
 /** Дата в DaySelector: без года, если он текущий — строка короче и не обрезается. */
 private fun dayLabel(iso: String): String {
-    val full = MeshCore.dateRu(iso, weekday = true)
-    val year = Calendar.getInstance().get(Calendar.YEAR)
-    return if (iso.take(4).toIntOrNull() == year) full.removeSuffix(" $year") else full
+    val locale = UiLanguage.locale
+    val calendar = MeshCore.parseIso(iso)
+    val skeleton = if (calendar.get(Calendar.YEAR) == Calendar.getInstance().get(Calendar.YEAR)) "EEEE d MMMM" else "EEEE y d MMMM"
+    val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, skeleton)
+    return java.text.SimpleDateFormat(pattern, locale).format(calendar.time)
 }
 
 private fun isoToMillisUtc(iso: String): Long {
@@ -275,17 +280,17 @@ fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
 }
 
 fun formatWeight(weight: Double): String =
-    if (weight == Math.floor(weight)) weight.toInt().toString() else String.format(Locale.US, "%.1f", weight)
+    if (weight == Math.floor(weight)) weight.toInt().toString() else String.format(UiLanguage.locale, "%.1f", weight)
 
 /** Подпись относительного дня: «Сегодня», «Завтра», «Послезавтра» и т.п. (±2 дня), иначе null. */
 private fun relativeDayLabel(date: String): String? {
     val today = MeshCore.today()
     return when (date) {
-        today -> "Сегодня"
-        MeshCore.addDays(today, 1) -> "Завтра"
-        MeshCore.addDays(today, -1) -> "Вчера"
-        MeshCore.addDays(today, 2) -> "Послезавтра"
-        MeshCore.addDays(today, -2) -> "Позавчера"
+        today -> Words.Today.text
+        MeshCore.addDays(today, 1) -> Words.Tomorrow.text
+        MeshCore.addDays(today, -1) -> Words.Yesterday.text
+        MeshCore.addDays(today, 2) -> Words.DayAfterTomorrow.text
+        MeshCore.addDays(today, -2) -> Words.DayBeforeYesterday.text
         else -> null
     }
 }

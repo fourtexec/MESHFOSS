@@ -66,15 +66,15 @@ object MeshCore {
     /** Человеческое описание ошибки для интерфейса (те же формулировки, что в desktop-версии). */
     fun describeError(error: Throwable): String = when {
         error !is MeshError -> error.message ?: error.toString()
-        error.code == "network" -> "Нет связи с school.mos.ru. Проверьте интернет и попробуйте ещё раз."
-        error.code == "timeout" -> "Сервер МЭШ не ответил вовремя. Попробуйте ещё раз."
-        error.code == "unauthorized" -> "Токен недействителен или истёк. Выполните вход в МЭШ заново."
-        error.code == "forbidden" -> "Нет доступа к данным (403). Возможно, нужен вход под ролью родителя."
-        error.code == "not-found" -> "Метод недоступен для вашего региона (404)."
-        error.code == "bad-token" -> "Значение не похоже на токен МЭШ."
-        error.code == "invalid-json" -> "МЭШ вернул неожиданный ответ. Возможно, требуется повторный вход."
-        error.code.startsWith("http-") -> "Ошибка сервера МЭШ (${error.status}). Попробуйте позже."
-        else -> error.message ?: "Неизвестная ошибка"
+        error.code == "network" -> Words.CannotReachSchoolMosRuCheckYourConnection.text
+        error.code == "timeout" -> Words.MeshTimedOutTryAgain.text
+        error.code == "unauthorized" -> Words.InvalidOrExpiredTokenSignInAgain.text
+        error.code == "forbidden" -> Words.AccessDeniedTrySigningInAsAParent.text
+        error.code == "not-found" -> Words.UnavailableInYourRegion.text
+        error.code == "bad-token" -> Words.InvalidMeshTokenFormat.text
+        error.code == "invalid-json" -> Words.UnexpectedMeshResponseTrySigningInAgain.text
+        error.code.startsWith("http-") -> Words.MeshServerErrorTryLater(error.status)
+        else -> error.message ?: Words.UnknownError.text
     }
 
     // --------------------------------------------------------------- заголовки --
@@ -385,7 +385,7 @@ object MeshCore {
         val last = asString(firstDefined(child.opt("last_name"), child.opt("lastName")))
         val first = asString(firstDefined(child.opt("first_name"), child.opt("firstName")))
         val middle = asString(firstDefined(child.opt("middle_name"), child.opt("middleName")))
-        val name = personName(last, first, middle).ifBlank { asString(firstDefined(child.opt("name"), "Ученик")) }
+        val name = personName(last, first, middle).ifBlank { asString(firstDefined(child.opt("name"), Words.Student.text)) }
         val school = child.optJSONObject("school")
         val schoolName = asString(
             firstDefined(
@@ -451,7 +451,7 @@ object MeshCore {
                     asString(representative.opt("last_name")),
                     repFirst,
                     if (repMiddle.isNotBlank() && repFirst.contains(repMiddle, ignoreCase = true)) "" else repMiddle
-                ).ifBlank { "Родитель" }
+                ).ifBlank { Words.Parent.text }
             )
             .put("type", asString(representative.opt("type")))
             .put("email", asString(representative.opt("email")))
@@ -468,7 +468,7 @@ object MeshCore {
         val rank = subject.optJSONObject("rank") ?: JSONObject()
         return JSONObject()
             .put("id", asString(firstDefined(subject.opt("subjectId"), subject.opt("subject_id"), subject.opt("id"))))
-            .put("name", asString(firstDefined(subject.opt("subjectName"), subject.opt("subject_name"), subject.opt("name"), "Предмет")))
+            .put("name", asString(firstDefined(subject.opt("subjectName"), subject.opt("subject_name"), subject.opt("name"), Words.Subject.text)))
             .put("average", asNullableDouble(firstDefined(rank.opt("averageMarkFive"), subject.opt("averageMarkFive"))) ?: JSONObject.NULL)
             .put("average30", asNullableDouble(firstDefined(rank.opt("averageMarkFive30"), subject.opt("averageMarkFive30"))) ?: JSONObject.NULL)
             .put("place", asNullableInt(firstDefined(rank.opt("rankPlace"), rank.opt("place"))) ?: JSONObject.NULL)
@@ -566,7 +566,7 @@ object MeshCore {
                     .put("previousAverage", previousAverage ?: JSONObject.NULL)
                     .put("placeDelta", placeDelta ?: JSONObject.NULL)
                     .put("averageDelta", averageDelta ?: JSONObject.NULL)
-                    .put("name", names[personId] ?: "Без имени")
+                    .put("name", names[personId] ?: Words.Unnamed.text)
                     .put("isMe", !meId.isNullOrBlank() && personId == meId)
                     .put("color", gradeColor(average))
                     .put("trendDirection", trend)
@@ -797,7 +797,7 @@ object MeshCore {
                 periods.put(
                     JSONObject()
                         .put("id", asString(period.opt("id")))
-                        .put("name", asString(firstDefined(period.opt("name"), "Период")))
+                        .put("name", asString(firstDefined(period.opt("name"), Words.Period.text)))
                         .put("ordinal", asString(period.opt("ordinal")))
                         .put("value", value ?: JSONObject.NULL)
                         .put("start", asString(period.opt("start_date")))
@@ -1040,7 +1040,7 @@ object MeshCore {
                 when {
                     clean.startsWith("каб", true) || clean.contains("зал", true) ||
                         clean.contains("спорт", true) -> clean
-                    else -> "каб. $clean"
+                    else -> Words.Room(clean)
                 }
             } else {
                 roomName
@@ -1256,6 +1256,10 @@ object MeshCore {
 
     /** "2026-10-12" → "12 октября 2026". */
     fun dateRu(iso: String, weekday: Boolean = false): String {
+        if (UiLanguage.code != "ru") {
+            val style = if (weekday) java.text.DateFormat.FULL else java.text.DateFormat.LONG
+            return java.text.DateFormat.getDateInstance(style, UiLanguage.locale).format(parseIso(iso).time)
+        }
         val calendar = parseIso(iso)
         val text = "${calendar.get(Calendar.DAY_OF_MONTH)} ${MONTHS[calendar.get(Calendar.MONTH)]} ${calendar.get(Calendar.YEAR)}"
         if (!weekday) return text
@@ -1266,6 +1270,9 @@ object MeshCore {
     /** "2026-10-12" → "12.10.2026". */
     fun dateShort(iso: String?): String {
         if (iso.isNullOrBlank()) return "—"
+        if (UiLanguage.code != "ru") {
+            return java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT, UiLanguage.locale).format(parseIso(iso).time)
+        }
         val normalized = toIso(iso)
         return "${normalized.substring(8, 10)}.${normalized.substring(5, 7)}.${normalized.substring(0, 4)}"
     }
@@ -1299,16 +1306,23 @@ object MeshCore {
 
     /** Приём пищи по коду `kind` из меню. */
     fun foodKindLabel(kind: Int): String = when (kind) {
-        0 -> "Завтрак"
-        1 -> "Второй завтрак"
-        2 -> "Обед"
-        3 -> "Полдник"
-        4 -> "Ужин"
-        else -> "Приём пищи"
+        0 -> Words.Breakfast.text
+        1 -> Words.MorningSnack.text
+        2 -> Words.Lunch.text
+        3 -> Words.AfternoonSnack.text
+        4 -> Words.Dinner.text
+        else -> Words.Meal.text
     }
 
     /** Копейки → «193,58 ₽». */
     fun formatMoney(kopecks: Long): String {
+        if (UiLanguage.code != "ru") {
+            return java.text.NumberFormat.getCurrencyInstance(UiLanguage.locale).apply {
+                currency = java.util.Currency.getInstance("RUB")
+                minimumFractionDigits = 2
+                maximumFractionDigits = 2
+            }.format(java.math.BigDecimal.valueOf(kopecks, 2))
+        }
         val sign = if (kopecks < 0) "-" else ""
         val abs = kotlin.math.abs(kopecks)
         return String.format(Locale.US, "%s%d,%02d ₽", sign, abs / 100, abs % 100)

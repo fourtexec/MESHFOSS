@@ -70,7 +70,7 @@ fun ScheduleScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .swipeDays(
                 onPrev = { selectedDate = MeshCore.addDays(selectedDate, -1) },
                 onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) }
@@ -90,7 +90,7 @@ fun ScheduleScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Загружаем профиль ученика…")
+                        Text(Words.LoadingStudentProfile.text)
                     }
                 }
             }
@@ -101,12 +101,12 @@ fun ScheduleScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load() }) { Text("Повторить") }
+                    Button(onClick = { load() }) { Text(Words.Retry.text) }
                 }
             }
             lessons.none { it.optString("subject").let { s -> s.isNotBlank() && s != "—" } } ->
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Нет уроков")
+                    Text(Words.NoLessons.text)
                 }
             else -> PullToRefreshBox(
                 isRefreshing = refreshing,
@@ -123,7 +123,7 @@ fun ScheduleScreen(
                     val homework = lesson.optString("homework")
 
                     GlassCard(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         tint = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         Row(
@@ -141,7 +141,7 @@ fun ScheduleScreen(
                                 }
                                 if (number != null) {
                                     Text(
-                                        "$number урок",
+                                        Words.Lesson(number),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -149,7 +149,7 @@ fun ScheduleScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    lesson.optString("subject").ifBlank { "Урок" },
+                                    lesson.optString("subject").ifBlank { Words.LessonLabel.text },
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
@@ -168,7 +168,7 @@ fun ScheduleScreen(
                                 if (homework.isNotBlank()) {
                                     Spacer(Modifier.height(3.dp))
                                     Text(
-                                        "ДЗ: $homework",
+                                        Words.Homework(homework),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         maxLines = 2,

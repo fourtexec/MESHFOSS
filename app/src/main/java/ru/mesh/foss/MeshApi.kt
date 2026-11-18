@@ -65,7 +65,7 @@ class MeshApi(private val context: Context) {
             // Автосохранение: МЭШ обновил токен в фоне — пользователю ничего делать не нужно
             store.save(fresh, client?.profileId, activeStudentId, store.personId, store.parentName)
             onTokenRefreshed?.invoke(MeshCore.maskToken(fresh))
-            Log.i(TAG, "Токен МЭШ обновлён автоматически")
+            Log.i(TAG, Words.MeshTokenRenewedAutomatically.text)
         }
     )
 
@@ -83,7 +83,7 @@ class MeshApi(private val context: Context) {
 
     fun demoToken(): JSONObject {
         setDemo(true)
-        return JSONObject().put("token", DemoMeshServer.DEMO_TOKEN).put("hint", "Демо-токен локального сервера")
+        return JSONObject().put("token", DemoMeshServer.DEMO_TOKEN).put("hint", Words.LocalDemoToken.text)
     }
 
     fun dispose() {
@@ -104,7 +104,7 @@ class MeshApi(private val context: Context) {
             .put("activeStudentId", activeStudentId ?: JSONObject.NULL)
             .put("lastRefresh", if (store.lastRefresh > 0) store.lastRefresh else JSONObject.NULL)
             .put("storage", if (store.isEncrypted()) "encrypted-shared-preferences" else "shared-preferences")
-            .put("host", if (demo) "демо-режим (локальные данные)" else MeshCore.HOST)
+            .put("host", if (demo) Words.DemoModeLocalData.text else MeshCore.HOST)
             .put("settings", settingsJson())
             .put("error", lastError ?: JSONObject.NULL)
         state.put("profile", profile ?: JSONObject.NULL)
@@ -148,14 +148,14 @@ class MeshApi(private val context: Context) {
 
     fun refreshToken(): JSONObject {
         val fresh = ensureClient().refreshToken()
-            ?: throw MeshCore.MeshError("МЭШ не выдал новый токен — войдите заново", "refresh-failed")
+            ?: throw MeshCore.MeshError(Words.NoNewTokenSignInAgain.text, "refresh-failed")
         store.save(fresh, client?.profileId, activeStudentId, store.personId, store.parentName)
         return stateJson()
     }
 
     fun selectStudent(studentId: String): JSONObject {
         val child = children.firstOrNull { it.optString("id") == studentId }
-            ?: throw MeshCore.MeshError("Ученик не найден", "not-found")
+            ?: throw MeshCore.MeshError(Words.StudentNotFound.text, "not-found")
         activeStudentId = child.optString("id")
         client?.profileId = activeStudentId
         store.studentId = activeStudentId
@@ -290,7 +290,7 @@ class MeshApi(private val context: Context) {
                 false
             }
         } catch (error: Exception) {
-            Log.w(TAG, "Не удалось обновить токен в фоне: ${error.message}")
+            Log.w(TAG, Words.BackgroundTokenRenewalFailed(error.message))
             false
         }
     }
@@ -303,7 +303,7 @@ class MeshApi(private val context: Context) {
     private fun ensureClient(): MeshClient {
         val existing = client
         if (existing != null) return existing
-        val token = store.token ?: throw MeshCore.MeshError("Требуется вход в МЭШ", "unauthorized", 401)
+        val token = store.token ?: throw MeshCore.MeshError(Words.MeshSignInRequired.text, "unauthorized", 401)
         val created = buildClient(token, store.profileId)
         client = created
         return created
@@ -322,7 +322,7 @@ class MeshApi(private val context: Context) {
         if (requested != null) {
             children.firstOrNull { it.optString("id") == requested }?.let { return it }
         }
-        return studentOrNull() ?: throw MeshCore.MeshError("Не выбран ученик", "no-student")
+        return studentOrNull() ?: throw MeshCore.MeshError(Words.NoStudentSelected.text, "no-student")
     }
 
     /**
@@ -357,7 +357,7 @@ class MeshApi(private val context: Context) {
                 "saveFile" -> saveFile(payload.optString("fileName"), payload.optString("text"))
                 "ping" -> ping()
                 "loginUrl" -> JSONObject().put("url", MeshCore.loginUrl())
-                else -> throw MeshCore.MeshError("Неизвестный метод: $method", "not-found")
+                else -> throw MeshCore.MeshError(Words.UnknownMethod(method), "not-found")
             }
             JSONObject().put("ok", true).put("data", data)
         } catch (error: Exception) {
