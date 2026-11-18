@@ -265,6 +265,7 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun BalanceCard(balances: JSONArray) {
     Card(
+        border = glassBorder(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         // Ключевая цифра экрана — самый светлый контейнер (M3E: containment).
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -314,6 +315,7 @@ private fun StateCard(state: JSONObject?) {
     val name = first?.optString("organizationName").orEmpty()
     val address = first?.optString("text").orEmpty()
     Card(
+        border = glassBorder(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
@@ -389,6 +391,7 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
     val gramLabel = tr("г", "g")
     val kcalLabel = tr("ккал", "kcal")
     Card(
+        border = glassBorder(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
@@ -454,6 +457,7 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
 @Composable
 private fun OrderRow(order: JSONObject) {
     Card(
+        border = glassBorder(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {

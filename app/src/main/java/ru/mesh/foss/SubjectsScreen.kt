@@ -88,6 +88,7 @@ fun SubjectsScreen(
                     val subjectId = s.optString("id")
                     val subjectName = s.optString("name")
                     Card(
+                        border = glassBorder(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 3.dp)
