@@ -238,7 +238,6 @@ fun RankingScreen(
                             val average = if (row.isNull("average")) null else row.optDouble("average")
                             val isMe = row.optBoolean("isMe")
                             Card(
-                                border = glassBorder(),
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
@@ -310,7 +309,6 @@ fun RankingScreen(
 fun KpiCard(label: String, value: String, sub: String, modifier: Modifier = Modifier, accent: Boolean = false) {
     // M3E: ключевая цифра экрана — самый светлый контейнер и выразительный размер шрифта.
     Card(
-        border = glassBorder(),
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = if (accent) MaterialTheme.colorScheme.surfaceContainerHigh

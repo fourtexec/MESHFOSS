@@ -61,10 +61,9 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     var themeId by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var themeColors by remember { mutableStateOf(prefs.getString("theme_colors", null)) }
     var language by remember { mutableStateOf(prefs.getString("language", "ru") ?: "ru") }
-    var glass by remember { mutableStateOf(prefs.getBoolean(Glass.PREF_KEY, Glass.DEFAULT)) }
     val dark = isSystemInDarkTheme()
-    val colors = remember(themeId, themeColors, dark, glass) {
-        val base = if (themeId == "dynamic") {
+    val colors = remember(themeId, themeColors, dark) {
+        if (themeId == "dynamic") {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             } else {
@@ -74,7 +73,6 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         } else {
             AppTheme.colors(themeId, themeColors)
         }
-        if (glass) Glass.glassify(base) else base
     }
     val shapes = remember {
         Shapes(
@@ -96,32 +94,18 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         language = code
         prefs.edit().putString("language", code).apply()
     }
-    val applyGlass: (Boolean) -> Unit = { enabled ->
-        glass = enabled
-        prefs.edit().putBoolean(Glass.PREF_KEY, enabled).apply()
-    }
 
     CompositionLocalProvider(
         LocalAppTheme provides applyTheme,
         LocalAppLanguage provides language,
-        LocalAppLanguageSetter provides applyLanguage,
-        LocalGlass provides glass,
-        LocalGlassSetter provides applyGlass
+        LocalAppLanguageSetter provides applyLanguage
     ) {
         MaterialTheme(
             colorScheme = colors,
             motionScheme = MotionScheme.expressive(),
-            shapes = shapes
-        ) {
-            if (glass) {
-                GlassBackdrop {
-                    // Фон рисует GlassBackdrop: прозрачная Surface только задаёт цвет текста.
-                    Surface(color = androidx.compose.ui.graphics.Color.Transparent, content = content)
-                }
-            } else {
-                Surface(color = MaterialTheme.colorScheme.background, content = content)
-            }
-        }
+            shapes = shapes,
+            content = content
+        )
     }
 }
 
@@ -441,9 +425,7 @@ fun MainScaffold(
         else -> tr("МЭШ Рейтинг", "MESH Ranking")
     }
 
-    val glass = LocalGlass.current
     Scaffold(
-        containerColor = if (glass) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         modifier = Modifier.pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
