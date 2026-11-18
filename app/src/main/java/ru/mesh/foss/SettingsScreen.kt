@@ -48,6 +48,8 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
+    val glassEnabled = LocalGlass.current
+    val setGlass = LocalGlassSetter.current
     var updateChannel by remember {
         mutableStateOf(
             prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
@@ -64,7 +66,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         ProfileBody(store, client, profile, showToken = false)
         Spacer(Modifier.height(8.dp))
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth(), border = glassBorder()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Оформление", "Appearance"),
@@ -137,7 +139,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth(), border = glassBorder()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Язык", "Language"),
@@ -171,7 +173,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth(), border = glassBorder()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Приложение", "Application"),
@@ -201,6 +203,17 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                             prefs.edit().putBoolean("haptics_enabled", value).apply()
                         }
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        tr("Матовое стекло", "Frosted glass"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(checked = glassEnabled, onCheckedChange = { setGlass(it) })
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -278,7 +291,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth(), border = glassBorder()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(tr("Токен МЭШ", "MESH token"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))
@@ -334,7 +347,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth(), border = glassBorder()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(tr("Аккаунт", "Account"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))

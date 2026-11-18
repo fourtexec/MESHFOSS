@@ -308,7 +308,7 @@ private fun HomeworkCard(
                 MaterialTheme.colorScheme.surfaceContainerLow
             }
         ),
-        border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+        border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else glassBorder()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
