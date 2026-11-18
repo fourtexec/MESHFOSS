@@ -46,7 +46,7 @@ fun MarkDetailDialog(
     }
 
     AlertDialog(
-        modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
+        modifier = Modifier.dialogGlass(),
         containerColor = Color.Transparent,
         onDismissRequest = onDismiss,
         confirmButton = {

@@ -235,7 +235,7 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
 
     updateInfo?.let { info ->
         AlertDialog(
-            modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
+            modifier = Modifier.dialogGlass(),
             containerColor = Color.Transparent,
             onDismissRequest = { updateInfo = null },
             title = { Text(Words.UpdateAvailable.text) },

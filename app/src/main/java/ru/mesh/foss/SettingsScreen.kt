@@ -333,7 +333,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
 
     updateInfo?.let { info ->
         AlertDialog(
-            modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
+            modifier = Modifier.dialogGlass(),
             containerColor = Color.Transparent,
             onDismissRequest = { updateInfo = null },
             title = { Text(Words.UpdateAvailable.text) },

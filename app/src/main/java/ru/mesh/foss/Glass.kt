@@ -112,6 +112,13 @@ fun Modifier.glassPane(
 }
 
 @Composable
+internal fun Modifier.dialogGlass(): Modifier {
+    val shape = MaterialTheme.shapes.extraLarge
+    return background(MaterialTheme.colorScheme.surface.copy(alpha = 1f), shape)
+        .glassPane(shape, MaterialTheme.colorScheme.surfaceContainerHigh)
+}
+
+@Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = MaterialTheme.shapes.large,
