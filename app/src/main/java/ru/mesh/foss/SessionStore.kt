@@ -25,6 +25,7 @@ class SessionStore(context: Context) {
         private const val SETTINGS_FILE = "mesh_settings"
 
         private const val KEY_TOKEN = "token"
+        private const val KEY_AUTH_COOKIES = "auth_cookies"
         private const val KEY_PROFILE_ID = "profileId"
         private const val KEY_STUDENT_ID = "studentId"
         private const val KEY_PERSON_ID = "personId"
@@ -71,6 +72,20 @@ class SessionStore(context: Context) {
         set(value) {
             session.edit().apply {
                 if (value.isNullOrBlank()) remove(KEY_TOKEN) else putString(KEY_TOKEN, value)
+            }.apply()
+        }
+
+    /**
+     * Cookie jar от QR-входа (Ltpatoken2, session-cookie и т.п.) в JSON.
+     * По этим кукам [CookieRefresh] обновляет устаревший токен без повторного
+     * QR-входа. Хранится в зашифрованном файле сессии; при выходе стирается.
+     */
+    var authCookies: String?
+        get() = session.getString(KEY_AUTH_COOKIES, null)
+        set(value) {
+            session.edit().apply {
+                if (value.isNullOrBlank()) remove(KEY_AUTH_COOKIES)
+                else putString(KEY_AUTH_COOKIES, value)
             }.apply()
         }
 

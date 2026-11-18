@@ -215,7 +215,11 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
         } catch (e: Exception) {
             val meshError = e as? MeshCore.MeshError
             if (meshError?.code == "unauthorized") {
-                logout()
+                // Токен устарел: уходим на экран входа, но куки НЕ чистим —
+                // QR-панель восстановит по ним сессию без повторного QR.
+                screen = "login"
+                booting = false
+                bootError = null
                 return@LaunchedEffect
             }
             if (!hasIds) bootError = MeshCore.describeError(e)
@@ -617,8 +621,36 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
         Text("Вход в МЭШ", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(8.dp))
 
+        // Способ 1 — QR: панель сама чинит устаревший токен по сохранённым кукам
+        // и только при неудаче показывает QR-ссылку.
+        QrLoginPanel(onLogin = onLogin)
+
+        Spacer(Modifier.height(24.dp))
         Text(
-            "Способ 1. Вставить токен вручную",
+            "Способ 2. Войти через сайт МЭШ",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Откроется school.mos.ru. После входа приложение перехватит Authorization-токен и само закроет окно.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(
+            onClick = {
+                webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
+            },
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Открыть school.mos.ru")
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Способ 3. Вставить токен вручную",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -653,32 +685,6 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
             if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
             else Text("Войти с токеном")
         }
-
-        Spacer(Modifier.height(24.dp))
-        Text(
-            "Способ 2. Войти через сайт МЭШ",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Откроется school.mos.ru. После входа приложение перехватит Authorization-токен и само закроет окно.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = {
-                webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
-            },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Открыть school.mos.ru")
-        }
-
-        Spacer(Modifier.height(24.dp))
-        QrLoginPanel(onLogin = onLogin)
 
         error?.let {
             Spacer(Modifier.height(12.dp))

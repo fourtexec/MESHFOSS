@@ -262,6 +262,9 @@ private class QrLoginClient {
 
     private fun hasToken(): Boolean = !cookies["aupd_token"].isNullOrBlank()
 
+    /** Снимок cookie jar — панель сохраняет его после успешного QR-входа. */
+    fun snapshotCookies(): Map<String, String> = cookies.toMap()
+
     suspend fun run(
         timeoutMs: Long,
         onLink: (String) -> Unit,
@@ -414,7 +417,7 @@ private class QrLoginClient {
 }
 
 /**
- * UI «Способа 3»: получить ссылку, открыть её, дождаться токена.
+ * UI «Способа 1»: восстановить сессию по кукам либо получить ссылку, открыть её, дождаться токена.
  */
 @Composable
 fun QrLoginPanel(onLogin: (String) -> Unit) {
@@ -428,6 +431,9 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
     var emailInput by remember { mutableStateOf("") }
     val emailDeferred = remember { mutableStateOf<CompletableDeferred<String?>?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
+    val store = remember { SessionStore(context) }
+    var restoring by remember { mutableStateOf(false) }
+    var restoreHint by remember { mutableStateOf<String?>(null) }
 
     fun cancel() {
         job?.cancel()
@@ -464,6 +470,14 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                         result
                     },
                     onToken = { token ->
+                        // Куки от QR-входа — на долгую жизнь: по ним панель
+                        // восстановит сессию, когда токен устареет.
+                        runCatching {
+                            val snapshot = client.snapshotCookies()
+                            if (snapshot.isNotEmpty()) {
+                                store.authCookies = JSONObject(snapshot).toString()
+                            }
+                        }
                         running = false
                         link = null
                         status = ""
@@ -481,27 +495,68 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
         }
     }
 
+    // Восстановление по сохранённым кукам: токен устарел, но куки от прошлого
+    // QR-входа ещё живы — новый токен получаем без повторного QR (refresh.sh).
+    // QR остаётся запасным путём, когда кук нет или МЭШ их не принял.
+    LaunchedEffect(Unit) {
+        val raw = store.authCookies
+        if (raw.isNullOrBlank()) return@LaunchedEffect
+        restoring = true
+        restoreHint = "Восстанавливаем сессию по сохранённым кукам..."
+        try {
+            val json = JSONObject(raw)
+            val jar = mutableMapOf<String, String>()
+            json.keys().forEach { key -> jar[key] = json.optString(key) }
+            val result = withContext(Dispatchers.IO) { CookieRefresh.refresh(jar) }
+            if (result != null) {
+                // Ротация кук (Ltpatoken2/session-cookie) — сохраняем обратно.
+                store.authCookies = JSONObject(result.jar).toString()
+                restoreHint = null
+                onLogin(result.token)
+            } else {
+                restoreHint = "Сохранённая сессия истекла — войдите по QR."
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            restoreHint = "Не удалось восстановить сессию — войдите по QR."
+        } finally {
+            restoring = false
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            "Способ 3. Вход по QR-ссылке",
+            "Способ 1. Вход по QR-ссылке",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Нажмите «Получить ссылку», откройте её и подтвердите вход. Приложение получит токен автоматически.",
+            "Приложение войдёт само по сохранённой сессии, если куки от прошлого входа ещё живы. " +
+                "Иначе нажмите «Получить ссылку», откройте её и подтвердите вход.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        restoreHint?.let { hint ->
+            Spacer(Modifier.height(4.dp))
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Spacer(Modifier.height(8.dp))
         var menuExpanded by remember { mutableStateOf(false) }
         SplitButtonLayout(
             leadingButton = {
                 SplitButtonDefaults.OutlinedLeadingButton(
                     onClick = { start() },
-                    enabled = !running
+                    enabled = !running && !restoring
                 ) {
-                    Text(if (running) "Ожидание подтверждения..." else "Получить ссылку")
+                    Text(
+                        when {
+                            restoring -> "Восстанавливаем сессию..."
+                            running -> "Ожидание подтверждения..."
+                            else -> "Получить ссылку"
+                        }
+                    )
                 }
             },
             trailingButton = {
