@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -104,7 +105,7 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
             colorScheme = colors,
             motionScheme = MotionScheme.expressive(),
             shapes = shapes,
-            content = content
+            content = { GlassBackdrop(content) }
         )
     }
 }
@@ -230,6 +231,8 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
 
     updateInfo?.let { info ->
         AlertDialog(
+            modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
+            containerColor = Color.Transparent,
             onDismissRequest = { updateInfo = null },
             title = { Text("Доступно обновление") },
             text = {
@@ -430,6 +433,7 @@ fun MainScaffold(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         modifier = Modifier.pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
@@ -462,6 +466,7 @@ fun MainScaffold(
         },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
@@ -485,7 +490,11 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            ShortNavigationBar {
+            ShortNavigationBar(
+                modifier = Modifier.navigationBarsPadding().padding(horizontal = 10.dp, vertical = 4.dp).glassPane(),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                containerColor = Color.Transparent
+            ) {
                 val items = listOf(
                     Triple("ranking", tr("Рейтинг", "Rating"), R.drawable.ic_nav_ranking),
                     Triple("marks", tr("Оценки", "Marks"), R.drawable.ic_nav_marks),
@@ -614,7 +623,7 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
         }
     }
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -626,64 +635,68 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
         QrLoginPanel(onLogin = onLogin)
 
         Spacer(Modifier.height(24.dp))
-        Text(
-            "Способ 2. Войти через сайт МЭШ",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Откроется school.mos.ru. После входа приложение перехватит Authorization-токен и само закроет окно.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = {
-                webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
-            },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Открыть school.mos.ru")
+        Column(Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
+            Text(
+                "Способ 2. Войти через сайт МЭШ",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Откроется school.mos.ru. После входа приложение перехватит Authorization-токен и само закроет окно.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
+                },
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Открыть school.mos.ru")
+            }
         }
 
         Spacer(Modifier.height(24.dp))
-        Text(
-            "Способ 3. Вставить токен вручную",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Откройте: $url",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        Column(Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
+            Text(
+                "Способ 3. Вставить токен вручную",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Откройте: $url",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }
+            )
+            Text(
+                "Скопируйте токен со страницы и вставьте сюда",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = tokenInput,
+                onValueChange = { tokenInput = it },
+                label = { Text("Токен МЭШ") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = { onLogin(tokenInput) },
+                enabled = !loading && tokenInput.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                else Text("Войти с токеном")
             }
-        )
-        Text(
-            "Скопируйте токен со страницы и вставьте сюда",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = tokenInput,
-            onValueChange = { tokenInput = it },
-            label = { Text("Токен МЭШ") },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 3
-        )
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { onLogin(tokenInput) },
-            enabled = !loading && tokenInput.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
-            else Text("Войти с токеном")
         }
 
         error?.let {

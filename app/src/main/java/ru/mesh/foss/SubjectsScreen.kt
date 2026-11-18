@@ -87,7 +87,7 @@ fun SubjectsScreen(
                     val place = if (s.isNull("place")) null else s.optInt("place")
                     val subjectId = s.optString("id")
                     val subjectName = s.optString("name")
-                    Card(
+                    GlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 3.dp)

@@ -237,12 +237,10 @@ fun RankingScreen(
                         items((0 until rows.length()).map { rows.getJSONObject(it) }) { row ->
                             val average = if (row.isNull("average")) null else row.optDouble("average")
                             val isMe = row.optBoolean("isMe")
-                            Card(
+                            GlassCard(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                                tint = if (isMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                                     else MaterialTheme.colorScheme.surfaceContainerLow
-                                )
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -308,12 +306,10 @@ fun RankingScreen(
 @Composable
 fun KpiCard(label: String, value: String, sub: String, modifier: Modifier = Modifier, accent: Boolean = false) {
     // M3E: ключевая цифра экрана — самый светлый контейнер и выразительный размер шрифта.
-    Card(
+    GlassCard(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = if (accent) MaterialTheme.colorScheme.surfaceContainerHigh
+        tint = if (accent) MaterialTheme.colorScheme.surfaceContainerHigh
             else MaterialTheme.colorScheme.surfaceContainerLow
-        )
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Text(

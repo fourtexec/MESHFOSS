@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
@@ -45,6 +46,8 @@ fun MarkDetailDialog(
     }
 
     AlertDialog(
+        modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
+        containerColor = Color.Transparent,
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Закрыть") }

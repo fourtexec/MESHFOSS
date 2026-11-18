@@ -525,7 +525,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
         Text(
             "Способ 1. Вход по QR-ссылке",
             style = MaterialTheme.typography.titleSmall,

@@ -5,6 +5,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -22,7 +24,7 @@ object AppTheme {
 
     /** Соответствие «встроенный id → тройка цветов (акцент, фон, поверхность)». */
     private val palettes = mapOf(
-        "midnight" to Triple(0xFFD1D5DB, 0xFF10131A, 0xFF1B2130),
+        "midnight" to Triple(0xFF92DEED, 0xFF0D1724, 0xFF213445),
         "ocean" to Triple(0xFF67E8F9, 0xFF071923, 0xFF102A3A),
         "forest" to Triple(0xFF86EFAC, 0xFF0D1B16, 0xFF183126),
         "sunset" to Triple(0xFFFDA4AF, 0xFF211318, 0xFF352027),
@@ -39,23 +41,26 @@ object AppTheme {
         val primary = Color(palette.first)
         val background = Color(palette.second)
         val surface = Color(palette.third)
-        return if (id == "light") {
-            lightColorScheme(primary = primary, background = background, surface = surface)
-        } else {
-            darkColorScheme(
-                primary = primary,
-                background = background,
-                surface = surface,
-                onPrimary = Color(0xFF111111),
-                onBackground = Color(0xFFE8EDF7),
-                onSurface = Color(0xFFE8EDF7)
-            )
-        }
+        fun ink(color: Color) = if (color.luminance() > .179f) Color.Black else Color.White
+        val base = if (background.luminance() > .179f) lightColorScheme() else darkColorScheme()
+        val container = lerp(surface, primary, .22f)
+        return base.copy(
+            primary = primary, onPrimary = ink(primary),
+            primaryContainer = container, onPrimaryContainer = ink(container),
+            secondaryContainer = container, onSecondaryContainer = ink(container),
+            background = background, onBackground = ink(background),
+            surface = surface, onSurface = ink(surface),
+            onSurfaceVariant = lerp(ink(surface), surface, .22f),
+            surfaceContainerLow = lerp(background, surface, .8f),
+            surfaceContainer = surface,
+            surfaceContainerHigh = lerp(surface, primary, .09f),
+            surfaceContainerHighest = lerp(surface, primary, .14f)
+        )
     }
 
     /** `"67E8F9,071923,102A3A"` → Triple. Неверный формат → null (палитра по умолчанию). */
     private fun parseCustom(value: String): Triple<Long, Long, Long>? = runCatching {
-        val parts = value.split(",").map { it.trim().removePrefix("#").toLong(16) }
+        val parts = value.split(",").map { it.trim().removePrefix("#").also { require(it.length == 6) }.toLong(16) or 0xFF000000L }
         if (parts.size < 3) null else Triple(parts[0], parts[1], parts[2])
     }.getOrNull()
 

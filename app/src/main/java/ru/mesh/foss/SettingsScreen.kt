@@ -64,7 +64,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         ProfileBody(store, client, profile, showToken = false)
         Spacer(Modifier.height(8.dp))
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Оформление", "Appearance"),
@@ -137,7 +137,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Язык", "Language"),
@@ -171,7 +171,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Приложение", "Application"),
@@ -278,7 +278,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(tr("Токен МЭШ", "MESH token"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))
@@ -334,7 +334,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(tr("Аккаунт", "Account"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))
@@ -353,6 +353,8 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
 
     updateInfo?.let { info ->
         AlertDialog(
+            modifier = Modifier.glassPane(MaterialTheme.shapes.extraLarge),
+            containerColor = Color.Transparent,
             onDismissRequest = { updateInfo = null },
             title = { Text("Доступно обновление") },
             text = {

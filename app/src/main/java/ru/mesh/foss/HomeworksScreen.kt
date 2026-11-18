@@ -295,19 +295,17 @@ private fun HomeworkCard(
         label = "homeworkDoneShape"
     )
 
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .alpha(cardAlpha),
         shape = RoundedCornerShape(cornerRadius),
-        colors = CardDefaults.cardColors(
-            containerColor = if (highlighted) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            }
-        ),
+        tint = if (highlighted) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
         border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

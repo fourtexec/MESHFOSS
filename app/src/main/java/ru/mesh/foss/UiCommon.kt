@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
@@ -66,11 +67,15 @@ fun formatMark(value: Double?): String {
     return String.format(Locale.US, "%.2f", rounded).trimEnd('0').trimEnd('.')
 }
 
-fun markColor(value: Double?): Color = when {
-    value == null -> Color(0xFF9AA7BD)
-    value >= 4.5 -> Color(0xFF34D399)
-    value >= 3.5 -> Color(0xFFFBBF24)
-    else -> Color(0xFFF87171)
+@Composable
+fun markColor(value: Double?): Color {
+    val light = MaterialTheme.colorScheme.surface.luminance() > .179f
+    return when {
+        value == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        value >= 4.5 -> if (light) Color(0xFF006342) else Color(0xFF64DFAD)
+        value >= 3.5 -> if (light) Color(0xFF794800) else Color(0xFFFFCD72)
+        else -> if (light) Color(0xFFA92938) else Color(0xFFFF939E)
+    }
 }
 
 /** Оценка/средний балл в аккуратном бейдже справа. */
@@ -126,7 +131,7 @@ fun DaySelector(
     }
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().glassPane(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -252,7 +257,7 @@ private fun millisToIsoUtc(millis: Long): String {
 fun WeightedGradeBadge(markText: String, value: Double?, weight: Double) {
     val nonUnit = weight > 1.0
     Box(
-        modifier = if (nonUnit) Modifier.border(1.dp, Color.Red, RoundedCornerShape(10.dp)) else Modifier,
+        modifier = if (nonUnit) Modifier.border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(10.dp)) else Modifier,
         contentAlignment = Alignment.Center
     ) {
         Box {

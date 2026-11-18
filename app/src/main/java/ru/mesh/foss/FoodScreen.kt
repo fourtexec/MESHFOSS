@@ -264,10 +264,10 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun BalanceCard(balances: JSONArray) {
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
         // Ключевая цифра экрана — самый светлый контейнер (M3E: containment).
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        tint = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -313,9 +313,9 @@ private fun StateCard(state: JSONObject?) {
     val first = addresses.optJSONObject(0)
     val name = first?.optString("organizationName").orEmpty()
     val address = first?.optString("text").orEmpty()
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             if (name.isNotBlank()) {
@@ -388,9 +388,9 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
     val mealLabel = tr("Приём пищи", "Meal")
     val gramLabel = tr("г", "g")
     val kcalLabel = tr("ккал", "kcal")
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
@@ -453,9 +453,9 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
 
 @Composable
 private fun OrderRow(order: JSONObject) {
-    Card(
+    GlassCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
