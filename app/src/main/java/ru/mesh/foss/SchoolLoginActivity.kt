@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
+import org.json.JSONObject
 
 /**
  * Второй способ входа: открывает настоящий https://school.mos.ru в WebView.
@@ -151,12 +152,44 @@ class SchoolLoginActivity : AppCompatActivity() {
     private fun finishWithToken(token: String, source: String) {
         if (finished) return
         finished = true
+        cacheWebCookies()
         Toast.makeText(this, Words.MeshTokenReceived.text, Toast.LENGTH_SHORT).show()
         setResult(
             Activity.RESULT_OK,
             Intent().putExtra(EXTRA_TOKEN, token).putExtra(EXTRA_SOURCE, source)
         )
         finish()
+    }
+
+    /**
+     * Куки WebView (school/login/id.mos.ru) — тот же jar, что сохраняет
+     * QR-вход в SessionStore.authCookies: CookieRefresh восстановит сессию
+     * по ним, а MoskvenokApi получит из них сессию id.mos.ru.
+     */
+    private fun cacheWebCookies() {
+        try {
+            val store = SessionStore(this)
+            val jar = linkedMapOf<String, String>()
+            store.authCookies?.takeIf { it.isNotBlank() }?.let { raw ->
+                runCatching {
+                    val existing = JSONObject(raw)
+                    existing.keys().forEach { key -> jar[key] = existing.optString(key) }
+                }
+            }
+            val manager = CookieManager.getInstance()
+            for (url in listOf("https://school.mos.ru", "https://login.mos.ru", "https://id.mos.ru")) {
+                manager.getCookie(url)?.split(";")?.forEach { part ->
+                    val separator = part.indexOf('=')
+                    if (separator > 0) {
+                        jar[part.substring(0, separator).trim()] =
+                            part.substring(separator + 1).trim()
+                    }
+                }
+            }
+            if (jar.isNotEmpty()) store.authCookies = JSONObject(jar).toString()
+        } catch (_: Exception) {
+            // Кэш кук — best-effort: не должен ломать вход.
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

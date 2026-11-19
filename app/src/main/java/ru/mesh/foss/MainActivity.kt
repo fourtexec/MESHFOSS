@@ -452,6 +452,7 @@ fun MainScaffold(
         "marks" -> if (marksSubjectName.isNullOrBlank()) Words.GradesTab.text else "${Words.GradesTab.text} · $marksSubjectName"
         "homeworks" -> Words.HomeworkLabel.text
         "schedule" -> Words.Schedule.text
+        "moskvenok" -> Words.Moskvenok.text
         "food" -> Words.MealsAndBalance.text
         "settings" -> Words.Settings.text
         else -> Words.MeshRanking.text
@@ -546,7 +547,8 @@ fun MainScaffold(
                     Triple("ranking", Words.Ranking.text, R.drawable.ic_nav_ranking),
                     Triple("marks", Words.GradesTab.text, R.drawable.ic_nav_marks),
                     Triple("homeworks", Words.Tasks.text, R.drawable.ic_nav_homeworks),
-                    Triple("schedule", Words.ScheduleTab.text, R.drawable.ic_nav_schedule)
+                    Triple("schedule", Words.ScheduleTab.text, R.drawable.ic_nav_schedule),
+                    Triple("moskvenok", Words.Moskvenok.text, R.drawable.ic_nav_moskvenok)
                 )
                 items.forEach { (key, label, iconRes) ->
                     ShortNavigationBarItem(
@@ -586,7 +588,7 @@ fun MainScaffold(
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             val motion = MaterialTheme.motionScheme
-            val tabOrder = listOf("ranking", "marks", "homeworks", "schedule", "food", "settings")
+            val tabOrder = listOf("ranking", "marks", "homeworks", "schedule", "moskvenok", "food", "settings")
             AnimatedContent(
                 targetState = currentTab,
                 transitionSpec = {
@@ -650,6 +652,7 @@ fun MainScaffold(
                         onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
                         onFoodClick = { navigateTo(NavState(tab = "food")) }
                     )
+                    "moskvenok" -> MoskvenokScreen(store, studentId)
                     "food" -> FoodScreen(store, client, personId)
                     "settings" -> SettingsScreen(store, client, profile, onLogout)
                 }

@@ -26,6 +26,7 @@ class SessionStore(context: Context) {
 
         private const val KEY_TOKEN = "token"
         private const val KEY_AUTH_COOKIES = "auth_cookies"
+        private const val KEY_MOS_ID_SESSION = "mos_id_session"
         private const val KEY_PROFILE_ID = "profileId"
         private const val KEY_STUDENT_ID = "studentId"
         private const val KEY_PERSON_ID = "personId"
@@ -86,6 +87,19 @@ class SessionStore(context: Context) {
             session.edit().apply {
                 if (value.isNullOrBlank()) remove(KEY_AUTH_COOKIES)
                 else putString(KEY_AUTH_COOKIES, value)
+            }.apply()
+        }
+
+    /**
+     * Сессия id.mos.ru («Моя ID») для карты «Москвёнок» — sessionid из
+     * MoskvenokApi.obtainSession. При выходе стирается вместе с куками.
+     */
+    var mosIdSession: String?
+        get() = session.getString(KEY_MOS_ID_SESSION, null)
+        set(value) {
+            session.edit().apply {
+                if (value.isNullOrBlank()) remove(KEY_MOS_ID_SESSION)
+                else putString(KEY_MOS_ID_SESSION, value)
             }.apply()
         }
 

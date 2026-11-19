@@ -1984,6 +1984,69 @@ internal enum class Words(
         "Ismeretlen metódus: %s",
         "Método desconocido: %s",
         "Méthode inconnue : %s"
+    ),
+    Moskvenok(
+        "Москвёнок",
+        "Moskvenok",
+        "Moskvenok",
+        "Moskvenok",
+        "Moskvenok"
+    ),
+    EnableMoskvenok(
+        "Включить Москвёнок",
+        "Enable Moskvenok",
+        "Moskvenok engedélyezése",
+        "Activar Moskvenok",
+        "Activer Moskvenok"
+    ),
+    MoskvenokAbout(
+        "Карта «Москвёнок» — баланс школьных документов и QR-код для прохода в школу.",
+        "The Moskvenok card — school document balance and a QR code for entering the school.",
+        "A Moskvenok kártya — iskolai dokumentumegyenleg és QR-kód az iskolába jutáshoz.",
+        "La tarjeta Moskvenok: saldo de documentos escolares y un código QR para entrar en el colegio.",
+        "La carte Moskvenok : solde des documents scolaires et un code QR pour entrer à l’école."
+    ),
+    MoskvenokLoading(
+        "Загружаем Москвёнок…",
+        "Loading Moskvenok…",
+        "Moskvenok betöltése…",
+        "Cargando Moskvenok…",
+        "Chargement de Moskvenok…"
+    ),
+    MoskvenokQrExpired(
+        "Код устарел",
+        "Code expired",
+        "Kód lejárt",
+        "Código caducado",
+        "Code expiré"
+    ),
+    MoskvenokRefreshQr(
+        "Обновить QR-код",
+        "Refresh QR code",
+        "QR-kód frissítése",
+        "Actualizar el código QR",
+        "Actualiser le code QR"
+    ),
+    MoskvenokValidFor(
+        "Действует ещё %s",
+        "Valid for %s more",
+        "Még %s érvényes",
+        "Válido otros %s",
+        "Valable encore %s"
+    ),
+    MoskvenokNoSession(
+        "Сессия «Моя ID» не получена. Войдите через QR или school.mos.ru и откройте экран заново.",
+        "The My ID session was not obtained. Sign in via QR or school.mos.ru and reopen this screen.",
+        "A „My ID” munkamenet nem szerzett be. Jelentkezzen be QR-n vagy a school.mos.ru oldalon, majd nyissa meg újra ezt a képernyőt.",
+        "No se obtuvo la sesión de «My ID». Inicie sesión con el QR o en school.mos.ru y vuelva a abrir esta pantalla.",
+        "La session «My ID » n’a pas été obtenue. Connectez-vous via QR ou school.mos.ru, puis rouvrez cet écran."
+    ),
+    MoskvenokError(
+        "Не удалось загрузить Москвёнок. Попробуйте позже.",
+        "Could not load Moskvenok. Try again later.",
+        "A Moskvenok nem tölthető be. Próbálja újra később.",
+        "No se pudo cargar Moskvenok. Inténtelo más tarde.",
+        "Impossible de charger Moskvenok. Réessayez plus tard."
     );
 
     val text: String

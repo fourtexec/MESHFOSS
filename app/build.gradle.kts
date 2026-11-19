@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.work)
     implementation(libs.coroutines.android)
+    implementation(libs.zxing)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
