@@ -4,9 +4,11 @@ package ru.mesh.foss
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,330 +42,329 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
     // глобально через CompositionLocal из MeshRankerTheme.
     val prefs = remember(context) { context.getSharedPreferences("mesh_settings", android.content.Context.MODE_PRIVATE) }
     val applyTheme = LocalAppTheme.current
-    val applyLanguage = LocalAppLanguageSetter.current
     var theme by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var customName by remember { mutableStateOf(prefs.getString("custom_theme_name", "") ?: "") }
     var customColors by remember {
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
-    val glassEnabled = LocalGlass.current
-    val setGlass = LocalGlassSetter.current
     var updateChannel by remember {
         mutableStateOf(
             prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
         )
     }
-    val currentLanguage = LocalAppLanguage.current
-    var language by remember(currentLanguage) { mutableStateOf(currentLanguage) }
-    val noUpdatesText = tr("Обновлений нет", "No updates")
-    val myThemeLabel = tr("Моя тема", "My theme")
+    var section by rememberSaveable { mutableStateOf("appearance") }
+    val noUpdatesText = Words.UpToDate.text
+    val myThemeLabel = Words.MyTheme.text
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        ProfileBody(store, client, profile, showToken = false)
+        val sections = listOf("appearance" to Words.Appearance.text, "app" to Words.Application.text, "account" to Words.Account.text)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            sections.forEach { (id, title) ->
+                item(key = id) {
+                    FilterChip(selected = section == id, onClick = { section = id }, label = { Text(title) })
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
-
-        Card(modifier = Modifier.fillMaxWidth().glass()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    tr("Оформление", "Appearance"),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(4.dp))
-                AppTheme.ids.forEach { id ->
-                    val selected = theme == id
-                    // Как и в ДЗ: обычные скругления (16dp) с пружинистым ростом до 22dp
-                    // у выбранной темы — без полигонного морфинга, который резал контент.
-                    val cornerRadius by animateDpAsState(
-                        targetValue = if (selected) 22.dp else 16.dp,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "themeShape"
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(cornerRadius))
-                            .background(
-                                if (selected) MaterialTheme.colorScheme.secondaryContainer
-                                else Color.Transparent
-                            )
-                            .clickable {
-                                theme = id
-                                prefs.edit().putString("theme_id", id).apply()
-                                applyTheme(id)
+        key(section) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                when (section) {
+                    "appearance" -> {
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(Words.Language.text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                LanguagePicker()
                             }
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = selected, onClick = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(AppTheme.label(id, customName.ifBlank { myThemeLabel }))
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(tr("Стеклянный стиль", "Glass style"), style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            tr(
-                                "Полупрозрачные карточки на фоне со свечением",
-                                "Translucent cards over a glowing backdrop"
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(checked = glassEnabled, onCheckedChange = setGlass)
-                }
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = customName,
-                    onValueChange = { customName = it; prefs.edit().putString("custom_theme_name", it).apply() },
-                    label = { Text(tr("Название своей темы", "Custom theme name")) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = customColors,
-                    onValueChange = { customColors = it; prefs.edit().putString("theme_colors", it).apply() },
-                    label = { Text(tr("Акцент, фон, поверхность (HEX)", "Accent, background, surface (HEX)")) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Text(
-                    tr("Пример: 67E8F9,071923,102A3A", "Example: 67E8F9,071923,102A3A"),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(6.dp))
-                OutlinedButton(
-                    onClick = {
-                        theme = "custom"
-                        prefs.edit().putString("theme_id", "custom").apply()
-                        applyTheme("custom")
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(tr("Применить свою тему", "Apply custom theme"))
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth().glass()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    tr("Язык", "Language"),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(4.dp))
-                listOf("ru" to "Русский", "en" to "English").forEach { (code, label) ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable {
-                            language = code
-                            prefs.edit().putString("language", code).apply()
-                            applyLanguage(code)
-                        },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = language == code, onClick = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(label)
-                    }
-                }
-                Text(
-                    tr(
-                        "Подписи навигации и настроек переключаются сразу.",
-                        "Navigation and settings labels update immediately."
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth().glass()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    tr("Приложение", "Application"),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(6.dp))
-                SettingsRow(tr("Сервер", "Server"), MeshCore.HOST.removePrefix("https://"))
-                SettingsRow(
-                    tr("Хранилище", "Storage"),
-                    if (store.isEncrypted()) tr("зашифровано", "encrypted") else tr("приватное", "private")
-                )
-                SettingsRow(tr("Кэш имён", "Name cache"), tr("включён", "on"))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        tr("Вибрация", "Vibration"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = hapticsEnabled,
-                        onCheckedChange = { value ->
-                            hapticsEnabled = value
-                            prefs.edit().putBoolean("haptics_enabled", value).apply()
                         }
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    tr("Канал обновлений", "Update channel"),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(4.dp))
-                // Content-lambda ButtonGroup не @Composable — переводим заранее.
-                val releasesLabel = tr("Релизы", "Releases")
-                val prereleasesLabel = tr("Пререлизы", "Prereleases")
-                ButtonGroup(
-                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    toggleableItem(
-                        checked = updateChannel == UpdateChecker.CHANNEL_RELEASES,
-                        label = releasesLabel,
-                        onCheckedChange = {
-                            updateChannel = UpdateChecker.CHANNEL_RELEASES
-                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_RELEASES).apply()
-                        },
-                        weight = 1f
-                    )
-                    toggleableItem(
-                        checked = updateChannel == UpdateChecker.CHANNEL_PRERELEASES,
-                        label = prereleasesLabel,
-                        onCheckedChange = {
-                            updateChannel = UpdateChecker.CHANNEL_PRERELEASES
-                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_PRERELEASES).apply()
-                        },
-                        weight = 1f
-                    )
-                }
-                Text(
-                    tr(
-                        "Пререлизы — nightly из main и beta/rc. Nightly без авто-предупреждений.",
-                        "Prereleases — nightly from main and beta/rc. Nightly has no auto-prompts."
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = {
-                        if (!checkingUpdates) {
-                            checkingUpdates = true
-                            updateMessage = null
-                            scope.launch {
-                                val found = withContext(Dispatchers.IO) {
-                                    UpdateChecker.check(context, includeNightly = true)
+                        Spacer(Modifier.height(8.dp))
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    Words.Design.text,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                val design = LocalDesign.current
+                                val setDesign = LocalDesignSetter.current
+                                listOf(
+                                    Triple(Design.PLAIN, Words.DesignPlain.text, Words.DesignPlainHint.text),
+                                    Triple(Design.GLASS, Words.DesignGlass.text, Words.DesignGlassHint.text),
+                                    Triple(Design.LIQUID, Words.DesignLiquid.text, Words.DesignLiquidHint.text)
+                                ).forEach { (id, title, hint) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .selectable(
+                                                selected = design == id,
+                                                role = Role.RadioButton
+                                            ) { setDesign(id) }
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(selected = design == id, onClick = null)
+                                        Spacer(Modifier.width(10.dp))
+                                        Column {
+                                            Text(title, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                hint,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
-                                store.lastUpdateCheck = System.currentTimeMillis()
-                                updateInfo = found
-                                updateMessage = if (found == null) noUpdatesText else null
-                                checkingUpdates = false
                             }
                         }
-                    },
-                    enabled = !checkingUpdates,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (checkingUpdates) LoadingIndicator(modifier = Modifier.size(20.dp))
-                    else Text(tr("Проверить обновления сейчас", "Check for updates now"))
-                }
-                updateMessage?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        it,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth().glass()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(tr("Токен МЭШ", "MESH token"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(6.dp))
-                SettingsRow(tr("Маска", "Mask"), tokenInfo.optString("mask").ifBlank { "—" })
-                SettingsRow(
-                    tr("Тип", "Type"),
-                    when (tokenInfo.optString("kind")) {
-                        "jwt" -> "JWT"
-                        "opaque" -> "opaque"
-                        else -> "—"
+                        Spacer(Modifier.height(8.dp))
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    Words.Appearance.text,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                AppTheme.ids.chunked(2).forEach { pair ->
+                                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        pair.forEach { id ->
+                                            val selected = theme == id
+                                            val palette = if (id == "dynamic") MaterialTheme.colorScheme else AppTheme.colors(id, customColors)
+                                            Row(
+                                                Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp)
+                                                    .selectionPane(MaterialTheme.shapes.medium, if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+                                                    .selectable(selected, role = Role.RadioButton) { theme = id; applyTheme(id) }
+                                                    .padding(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(Modifier.size(22.dp).background(palette.primary, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
+                                                    if (selected) Text("✓", color = palette.onPrimary, style = MaterialTheme.typography.labelSmall)
+                                                }
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(AppTheme.label(id, customName.ifBlank { myThemeLabel }), style = MaterialTheme.typography.labelLarge)
+                                            }
+                                        }
+                                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                }
+                                if (theme == "custom") {
+                                    OutlinedTextField(
+                                        value = customName,
+                                        onValueChange = { customName = it; prefs.edit().putString("custom_theme_name", it).apply() },
+                                        label = { Text(Words.ThemeName.text) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = customColors,
+                                        onValueChange = { customColors = it },
+                                        isError = !AppTheme.validCustom(customColors),
+                                        label = { Text(Words.AccentBackgroundSurfaceHex.text) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true
+                                    )
+                                    Text(
+                                        Words.CustomPaletteExample.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            prefs.edit().putString("theme_colors", customColors).apply()
+                                            applyTheme("custom")
+                                        },
+                                        enabled = AppTheme.validCustom(customColors),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(Words.ApplyTheme.text)
+                                    }
+                                }
+                            }
+                        }
                     }
-                )
-                if (tokenInfo.has("length")) SettingsRow(tr("Длина", "Length"), tokenInfo.optInt("length").toString())
-                if (tokenInfo.has("expiresAt")) {
-                    SettingsRow(tr("Истекает", "Expires"), MeshCore.dateShort(
-                        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                            .format(java.util.Date(tokenInfo.optLong("expiresAt")))
-                    ))
-                }
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        refreshing = true
-                        message = null
-                        error = null
-                        scope.launch {
-                            val fresh = withContext(Dispatchers.IO) { client.refreshToken() }
-                            if (fresh.isNullOrBlank()) {
-                                error = "МЭШ не выдал новый токен. Возможно, сессия завершена — войдите заново."
-                            } else {
-                                store.token = fresh
-                                client.token = fresh
-                                message = "Токен обновлён"
+                    "app" -> {
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    Words.Application.text,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                SettingsRow(Words.Server.text, MeshCore.HOST.removePrefix("https://"))
+                                SettingsRow(
+                                    Words.Storage.text,
+                                    if (store.isEncrypted()) Words.Encrypted.text else Words.Private.text
+                                )
+                                SettingsRow(Words.NameCache.text, Words.Enabled.text)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        Words.Vibration.text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Switch(
+                                        checked = hapticsEnabled,
+                                        onCheckedChange = { value ->
+                                            hapticsEnabled = value
+                                            prefs.edit().putBoolean("haptics_enabled", value).apply()
+                                        }
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    Words.UpdateChannel.text,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                // Content-lambda ButtonGroup не @Composable — переводим заранее.
+                                val releasesLabel = Words.Stable.text
+                                val prereleasesLabel = Words.PreReleases.text
+                                ButtonGroup(
+                                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    toggleableItem(
+                                        checked = updateChannel == UpdateChecker.CHANNEL_RELEASES,
+                                        label = releasesLabel,
+                                        onCheckedChange = {
+                                            updateChannel = UpdateChecker.CHANNEL_RELEASES
+                                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_RELEASES).apply()
+                                        },
+                                        weight = 1f
+                                    )
+                                    toggleableItem(
+                                        checked = updateChannel == UpdateChecker.CHANNEL_PRERELEASES,
+                                        label = prereleasesLabel,
+                                        onCheckedChange = {
+                                            updateChannel = UpdateChecker.CHANNEL_PRERELEASES
+                                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_PRERELEASES).apply()
+                                        },
+                                        weight = 1f
+                                    )
+                                }
+                                Text(
+                                    Words.IncludesBetaRcAndNightlyBuildsCheckManually.text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!checkingUpdates) {
+                                            checkingUpdates = true
+                                            updateMessage = null
+                                            scope.launch {
+                                                val found = withContext(Dispatchers.IO) {
+                                                    UpdateChecker.check(context, includeNightly = true)
+                                                }
+                                                store.lastUpdateCheck = System.currentTimeMillis()
+                                                updateInfo = found
+                                                updateMessage = if (found == null) noUpdatesText else null
+                                                checkingUpdates = false
+                                            }
+                                        }
+                                    },
+                                    enabled = !checkingUpdates,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (checkingUpdates) LoadingIndicator(modifier = Modifier.size(20.dp))
+                                    else Text(Words.CheckForUpdates.text)
+                                }
+                                updateMessage?.let {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        it,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
                             }
-                            refreshing = false
                         }
-                    },
-                    enabled = !refreshing,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (refreshing) LoadingIndicator(modifier = Modifier.size(20.dp))
-                    else Text(tr("Обновить токен", "Refresh token"))
-                }
-                message?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-                }
-                error?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
+                    }
+                    "account" -> {
+                        ProfileBody(store, client, profile, showToken = false)
+                        Spacer(Modifier.height(8.dp))
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(Words.MeshToken.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(6.dp))
+                                SettingsRow(Words.MaskedToken.text, tokenInfo.optString("mask").ifBlank { "—" })
+                                SettingsRow(
+                                    Words.Type.text,
+                                    when (tokenInfo.optString("kind")) {
+                                        "jwt" -> "JWT"
+                                        "opaque" -> Words.OpaqueToken.text
+                                        else -> "—"
+                                    }
+                                )
+                                if (tokenInfo.has("length")) SettingsRow(Words.Length.text, tokenInfo.optInt("length").toString())
+                                if (tokenInfo.has("expiresAt")) {
+                                    SettingsRow(Words.Expires.text, MeshCore.dateShort(
+                                        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                                            .format(java.util.Date(tokenInfo.optLong("expiresAt")))
+                                    ))
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        refreshing = true
+                                        message = null
+                                        error = null
+                                        scope.launch {
+                                            val fresh = withContext(Dispatchers.IO) { client.refreshToken() }
+                                            if (fresh.isNullOrBlank()) {
+                                                error = Words.MeshCouldNotRenewYourTokenSignIn.text
+                                            } else {
+                                                store.token = fresh
+                                                client.token = fresh
+                                                message = Words.TokenRefreshed.text
+                                            }
+                                            refreshing = false
+                                        }
+                                    },
+                                    enabled = !refreshing,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (refreshing) LoadingIndicator(modifier = Modifier.size(20.dp))
+                                    else Text(Words.RefreshToken.text)
+                                }
+                                message?.let {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                                }
+                                error?.let {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
 
-        Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth().glass()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(tr("Аккаунт", "Account"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    if (profile != null) tr("Профиль загружен", "Profile loaded")
-                    else tr("Профиль ещё не загружен", "Profile not loaded yet"),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
-                    Text(tr("Выйти и удалить токен", "Sign out and delete token"))
+                        Spacer(Modifier.height(8.dp))
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(Words.Account.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    if (profile != null) Words.ProfileLoaded.text
+                                    else Words.ProfileNotLoadedYet.text,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
+                                    Text(Words.SignOutAndDeleteToken.text)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -372,10 +372,12 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
 
     updateInfo?.let { info ->
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = Color.Transparent,
             onDismissRequest = { updateInfo = null },
-            title = { Text("Доступно обновление") },
+            title = { Text(Words.UpdateAvailable.text) },
             text = {
-                Text("На GitHub уже есть версия ${info.versionName}. Можно скачать и установить её.")
+                Text(Words.UpdateVersionAvailable(info.versionName))
             },
             confirmButton = {
                 TextButton(
@@ -386,12 +388,12 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                         }
                     }
                 ) {
-                    Text("Скачать")
+                    Text(Words.Download.text)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { updateInfo = null }) {
-                    Text("Позже")
+                    Text(Words.Later.text)
                 }
             }
         )
@@ -405,7 +407,7 @@ private fun SettingsRow(label: String, value: String) {
             label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(100.dp)
+            modifier = Modifier.weight(.8f)
         )
         Text(
             value,

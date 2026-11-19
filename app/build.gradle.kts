@@ -37,7 +37,7 @@ android {
         versionCode = buildVersionCode
         versionName = buildVersionName
 
-        resourceConfigurations += listOf("ru", "en")
+        resourceConfigurations += listOf("ru", "en", "hu", "es", "fr")
     }
 
     signingConfigs {

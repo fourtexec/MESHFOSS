@@ -73,7 +73,7 @@ class MeshClient(
                     headers(extraHeaders(), includeAuthToken).forEach { (key, value) -> setRequestProperty(key, value) }
                 }
             } catch (error: Exception) {
-                throw MeshCore.MeshError("Не удалось создать запрос: ${error.message}", "network", 0, error)
+                throw MeshCore.MeshError(Words.CouldNotCreateRequest(error.message), "network", 0, error)
             }
 
             requestCount++
@@ -85,13 +85,13 @@ class MeshClient(
                 body = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: ""
             } catch (error: SocketTimeoutException) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Таймаут запроса к МЭШ", "timeout", 0, error)
+                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
             } catch (error: UnknownHostException) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Нет связи с school.mos.ru", "network", 0, error)
+                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
             } catch (error: Exception) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Ошибка сети: ${error.message}", "network", 0, error)
+                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
             } finally {
                 connection.disconnect()
             }
@@ -100,12 +100,12 @@ class MeshClient(
                 status == 401 && attempt < maxAttempts -> {
                     val refreshed = refreshToken()
                     if (refreshed != null) continue
-                    throw MeshCore.MeshError("Токен истёк, обновить не удалось", "unauthorized", 401)
+                    throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
                 }
-                status == 401 -> throw MeshCore.MeshError("Не авторизован (401)", "unauthorized", 401)
-                status == 403 -> throw MeshCore.MeshError("Доступ запрещён (403)", "forbidden", 403)
-                status == 404 -> throw MeshCore.MeshError("Метод не найден (404): $path", "not-found", 404)
-                status !in 200..299 -> throw MeshCore.MeshError("Ошибка МЭШ: HTTP $status", "http-$status", status)
+                status == 401 -> throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
+                status == 403 -> throw MeshCore.MeshError(Words.AccessDenied.text, "forbidden", 403)
+                status == 404 -> throw MeshCore.MeshError(Words.MethodNotFound(path), "not-found", 404)
+                status !in 200..299 -> throw MeshCore.MeshError(Words.MeshErrorHttp(status), "http-$status", status)
             }
 
             if (body.isBlank()) return null
@@ -117,11 +117,11 @@ class MeshClient(
                     JSONObject().put("payload", JSONArray(body))
                 } catch (inner: Exception) {
                     MeshCore.extractTokenFromText(body)?.let { return JSONObject().put("token", it) }
-                    throw MeshCore.MeshError("Не удалось разобрать ответ МЭШ", "invalid-json", status, error)
+                    throw MeshCore.MeshError(Words.InvalidResponseFromMesh.text, "invalid-json", status, error)
                 }
             }
         }
-        throw MeshCore.MeshError("Запрос не выполнен: $path", "exhausted")
+        throw MeshCore.MeshError(Words.RequestFailed(path), "exhausted")
     }
 
     /**
@@ -177,7 +177,7 @@ class MeshClient(
 
     fun fetchProfile(): JSONObject {
         val json = request(MeshCore.Paths.PROFILE)
-            ?: throw MeshCore.MeshError("Пустой ответ профиля", "invalid-json")
+            ?: throw MeshCore.MeshError(Words.EmptyProfileResponse.text, "invalid-json")
         return MeshCore.normalizeProfile(json)
     }
 
@@ -187,12 +187,12 @@ class MeshClient(
      */
     fun signIn(rawToken: String?): JSONObject {
         val candidate = MeshCore.extractToken(rawToken) ?: rawToken?.trim() ?: ""
-        if (candidate.isEmpty()) throw MeshCore.MeshError("Пустой токен", "bad-token")
+        if (candidate.isEmpty()) throw MeshCore.MeshError(Words.EmptyToken.text, "bad-token")
         // Демо-режим работает с локальным сервером, где токены короткие
         val loose = Regex("^https?://(127\\.0\\.0\\.1|localhost|\\[::1\\])(:\\d+)?", RegexOption.IGNORE_CASE)
             .containsMatchIn(baseUrl)
         if (!MeshCore.looksLikeToken(candidate) && !loose) {
-            throw MeshCore.MeshError("Значение не похоже на токен МЭШ", "bad-token")
+            throw MeshCore.MeshError(Words.InvalidMeshToken.text, "bad-token")
         }
         token = candidate
         val profile = fetchProfile()
@@ -289,7 +289,7 @@ class MeshClient(
      */
     fun setHomeworkDone(entryStudentId: String?, type: String?, done: Boolean): Boolean {
         val entry = entryStudentId?.trim().orEmpty()
-        if (entry.isBlank()) throw MeshCore.MeshError("Не указано домашнее задание", "bad-homework")
+        if (entry.isBlank()) throw MeshCore.MeshError(Words.MissingHomework.text, "bad-homework")
         val kind = type?.trim().takeUnless { it.isNullOrBlank() }?.uppercase(Locale.US) ?: "OO"
         val url = buildUrl(MeshCore.Paths.homeworkDone(entry), mapOf("type" to kind))
         var attempt = 0
@@ -316,28 +316,28 @@ class MeshClient(
                 body = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: ""
             } catch (error: SocketTimeoutException) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Таймаут запроса к МЭШ", "timeout", 0, error)
+                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
             } catch (error: UnknownHostException) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Нет связи с school.mos.ru", "network", 0, error)
+                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
             } catch (error: Exception) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Ошибка сети: ${error.message}", "network", 0, error)
+                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
             } finally {
                 connection.disconnect()
             }
             when {
                 status == 401 && attempt < maxAttempts -> {
                     if (refreshToken() != null) continue
-                    throw MeshCore.MeshError("Токен истёк, обновить не удалось", "unauthorized", 401)
+                    throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
                 }
-                status == 401 -> throw MeshCore.MeshError("Не авторизован (401)", "unauthorized", 401)
-                status !in 200..299 -> throw MeshCore.MeshError("Не удалось отметить ДЗ: HTTP $status", "http-$status", status)
+                status == 401 -> throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
+                status !in 200..299 -> throw MeshCore.MeshError(Words.CouldNotMarkHomeworkHttp(status), "http-$status", status)
             }
             val json = runCatching { JSONObject(body) }.getOrNull()
             return json?.optBoolean("success", true) ?: true
         }
-        throw MeshCore.MeshError("Не удалось отметить ДЗ", "exhausted")
+        throw MeshCore.MeshError(Words.CouldNotMarkHomework.text, "exhausted")
     }
 
     /**
@@ -348,7 +348,7 @@ class MeshClient(
         val entry = homeworkEntryId?.trim().orEmpty()
         val material = materialId?.trim().orEmpty()
         if (entry.isBlank() || material.isBlank()) {
-            throw MeshCore.MeshError("Не указан материал домашнего задания", "bad-material")
+            throw MeshCore.MeshError(Words.MissingHomeworkMaterial.text, "bad-material")
         }
         val url = buildUrl(
             MeshCore.Paths.HOMEWORK_LAUNCH,
@@ -378,25 +378,25 @@ class MeshClient(
                 body = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: ""
             } catch (error: SocketTimeoutException) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Таймаут запроса к МЭШ", "timeout", 0, error)
+                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
             } catch (error: UnknownHostException) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Нет связи с school.mos.ru", "network", 0, error)
+                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
             } catch (error: Exception) {
                 connection.disconnect()
-                throw MeshCore.MeshError("Ошибка сети: ${error.message}", "network", 0, error)
+                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
             } finally {
                 connection.disconnect()
             }
 
             if (status == 401 && attempt < 2) {
                 if (refreshToken() != null) continue
-                throw MeshCore.MeshError("Токен истёк, обновить не удалось", "unauthorized", 401)
+                throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
             }
-            if (status == 401) throw MeshCore.MeshError("Не авторизован (401)", "unauthorized", 401)
-            if (status == 403) throw MeshCore.MeshError("Доступ запрещён (403)", "forbidden", 403)
+            if (status == 401) throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
+            if (status == 403) throw MeshCore.MeshError(Words.AccessDenied.text, "forbidden", 403)
             if (status !in 200..399) {
-                throw MeshCore.MeshError("Не удалось открыть материал (HTTP $status)", "http-$status", status)
+                throw MeshCore.MeshError(Words.CouldNotOpenMaterialHttp(status), "http-$status", status)
             }
 
             location?.takeIf { it.isNotBlank() }?.let { return MeshCore.absoluteUrl(it) }
@@ -407,9 +407,9 @@ class MeshClient(
                     json.optString(key).takeIf { it.isNotBlank() }?.let { return MeshCore.absoluteUrl(it) }
                 }
             }
-            throw MeshCore.MeshError("МЭШ не вернул ссылку на материал", "invalid-json", status)
+            throw MeshCore.MeshError(Words.NoMaterialLinkReceived.text, "invalid-json", status)
         }
-        throw MeshCore.MeshError("Не удалось открыть материал", "exhausted")
+        throw MeshCore.MeshError(Words.CouldNotOpenMaterial.text, "exhausted")
     }
 
     fun getSchedule(studentId: String?, date: String = MeshCore.today()): JSONArray =
@@ -432,7 +432,7 @@ class MeshClient(
 
     private fun requirePersonId(personId: String?): String {
         val id = personId?.trim().orEmpty()
-        if (id.isBlank()) throw MeshCore.MeshError("Не указан ученик для раздела питания", "bad-food")
+        if (id.isBlank()) throw MeshCore.MeshError(Words.SelectAStudentToViewMeals.text, "bad-food")
         return id
     }
 
@@ -498,13 +498,13 @@ class MeshClient(
     /** Имя ученика по personId (с кэшем — на класс обычно один запрос на человека). */
     fun getName(personId: String?): String {
         val key = personId?.trim().orEmpty()
-        if (key.isEmpty()) return "Неизвестный ученик"
+        if (key.isEmpty()) return Words.UnknownStudent.text
         synchronized(nameCache) {
             nameCache[key]?.takeIf { it.isNotBlank() }?.let { return it }
         }
         val name = try {
             val json = request(MeshCore.Paths.PROFILE_BY_ID, mapOf("personId" to key))
-                ?: throw MeshCore.MeshError("Пустой профиль", "invalid-json")
+                ?: throw MeshCore.MeshError(Words.EmptyProfile.text, "invalid-json")
             val first = MeshCore.asString(MeshCore.firstDefined(json.opt("firstName"), json.opt("first_name")))
             val last = MeshCore.asString(MeshCore.firstDefined(json.opt("lastName"), json.opt("last_name")))
             // Как в веб-версии: «Даниил Б», а не «Б Даниил».
@@ -519,7 +519,7 @@ class MeshClient(
             ""
         }
         // Ошибки и заглушки не кэшируем: иначе имя навсегда останется битым.
-        if (name.isBlank()) return "Без имени"
+        if (name.isBlank()) return Words.Unnamed.text
         synchronized(nameCache) { nameCache[key] = name }
         onName?.invoke(key, name)
         return name

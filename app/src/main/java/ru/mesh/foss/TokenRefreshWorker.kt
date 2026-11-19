@@ -47,14 +47,14 @@ class TokenRefreshWorker(
             val fresh = client.refreshToken()
             if (fresh != null) {
                 notify(
-                    applicationContext.getString(R.string.notif_token_title),
-                    applicationContext.getString(R.string.notif_token_text)
+                    UiLanguage.context(applicationContext).getString(R.string.notif_token_title),
+                    UiLanguage.context(applicationContext).getString(R.string.notif_token_text)
                 )
                 Result.success()
             } else {
                 notify(
-                    applicationContext.getString(R.string.notif_error_title),
-                    applicationContext.getString(R.string.notif_error_text)
+                    UiLanguage.context(applicationContext).getString(R.string.notif_error_title),
+                    UiLanguage.context(applicationContext).getString(R.string.notif_error_text)
                 )
                 Result.retry()
             }

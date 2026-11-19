@@ -278,12 +278,12 @@ private class QrLoginClient {
         } else {
             val pageUrl = page.ifBlank { "$LOGIN/sps/login/methods/password" }
             val confirmed = poll(pageUrl, timeoutMs, onLink, onStatus)
-            if (!confirmed) throw QrException("Время ожидания подтверждения истекло")
+            if (!confirmed) throw QrException(Words.ConfirmationTimedOut.text)
             finish(pageUrl, onStatus, onEmailCodeRequired)
         }
         val token = cookies["aupd_token"]
         if (token.isNullOrBlank()) {
-            throw QrException("МЭШ не выдал токен. Возможно, нужен код из письма или подтверждение доверия браузеру.")
+            throw QrException(Words.MeshDidNotIssueATokenCheckYour.text)
         }
         currentCoroutineContext().ensureActive()
         onToken(token)
@@ -317,7 +317,7 @@ private class QrLoginClient {
             if (data == null) {
                 failures++
                 if (failures >= 15 && lastLink.isBlank()) {
-                    throw QrException("МЭШ не выдал QR-ссылку. Попробуйте ещё раз.")
+                    throw QrException(Words.MeshDidNotReturnAQrLinkTry.text)
                 }
             } else {
                 failures = 0
@@ -329,8 +329,8 @@ private class QrLoginClient {
                 if (!known) {
                     unexpected++
                     if (unexpected >= 5 && lastLink.isBlank()) {
-                        val reason = data.optString("inquire").ifBlank { command.ifBlank { "нет command" } }
-                        throw QrException("МЭШ не включил QR-вход (ответ: $reason). Попробуйте ещё раз.")
+                        val reason = data.optString("inquire").ifBlank { command.ifBlank { Words.MissingCommand.text } }
+                        throw QrException(Words.QrSignInUnavailableTryAgain(reason))
                     }
                 } else {
                     unexpected = 0
@@ -341,20 +341,20 @@ private class QrLoginClient {
                         if (link.isNotBlank() && link != lastLink) {
                             lastLink = link
                             onLink(link)
-                            onStatus("Откройте ссылку и подтвердите вход в приложении МЭШ.")
+                            onStatus(Words.OpenTheLinkAndApproveSignInIn.text)
                         }
                     }
                     "askForConfirm" -> if (lastCommand != command) {
-                        onStatus("Код отсканирован — подтвердите вход в приложении МЭШ.")
+                        onStatus(Words.CodeScannedApproveSignInInMesh.text)
                     }
                     "needComplete" -> {
-                        onStatus("Подтверждено, завершаем вход...")
+                        onStatus(Words.ApprovedSigningIn.text)
                         return true
                     }
                     "needRefresh" -> {
                         if (System.currentTimeMillis() - lastRefresh >= 3_000) {
                             lastRefresh = System.currentTimeMillis()
-                            onStatus("Ссылка истекла, запрашиваем новую...")
+                            onStatus(Words.LinkExpiredRequestingAnother.text)
                             withContext(Dispatchers.IO) { runCatching { refreshQr(pageUrl) } }
                         }
                     }
@@ -374,7 +374,7 @@ private class QrLoginClient {
     ) {
         var response = withContext(Dispatchers.IO) { completeQr(pageUrl) }
         if (response.contentType?.contains("json", ignoreCase = true) == true) {
-            throw QrException("МЭШ ещё не подтвердил вход. Попробуйте ещё раз.")
+            throw QrException(Words.SignInNotConfirmedTryAgain.text)
         }
         var trustDone = false
         for (hop in 0 until 40) {
@@ -387,9 +387,9 @@ private class QrLoginClient {
 
             val html = response.body
             if (html.contains("verifyDiv") || html.contains("email-code")) {
-                onStatus("Нужен код из письма МЭШ")
+                onStatus(Words.EnterTheCodeEmailedByMesh.text)
                 val code = onEmailCodeRequired()
-                if (code.isNullOrBlank()) throw QrException("Ввод кода отменён")
+                if (code.isNullOrBlank()) throw QrException(Words.CodeEntryCancelled.text)
                 val action = formAction(html, "verifyDiv", "$LOGIN/sps/login/methods/email")
                 response = withContext(Dispatchers.IO) {
                     postPage(action, mapOf("email-code" to code.trim()), response.url)
@@ -397,9 +397,9 @@ private class QrLoginClient {
                 continue
             }
             if (response.url.contains("askToTrust") || html.contains("id=\"decision\"")) {
-                if (trustDone) throw QrException("МЭШ не принял подтверждение «доверять браузеру»")
+                if (trustDone) throw QrException(Words.BrowserTrustWasRejected.text)
                 trustDone = true
-                onStatus("Подтверждаем доверие браузеру...")
+                onStatus(Words.AuthorisingBrowser.text)
                 val action = formAction(html, "decision", "$LOGIN/sps/login/ur/askToTrust")
                 response = withContext(Dispatchers.IO) {
                     postPage(action, mapOf("action" to "trust"), response.url)
@@ -407,12 +407,12 @@ private class QrLoginClient {
                 continue
             }
             if (response.url.startsWith(SCHOOL)) {
-                throw QrException("school.mos.ru не выдал токен")
+                throw QrException(Words.NoTokenReceivedFromSchoolMosRu.text)
             }
-            throw QrException("Неожиданная страница МЭШ: ${response.url}")
+            throw QrException(Words.UnexpectedMeshPage(response.url))
         }
         if (hasToken()) return
-        throw QrException("Не удалось завершить вход по QR")
+        throw QrException(Words.CouldNotCompleteQrSignIn.text)
     }
 }
 
@@ -449,7 +449,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
         running = true
         error = null
         link = null
-        status = "Готовим QR-сессию..."
+        status = Words.PreparingQrSession.text
         awaitingEmail = false
         emailInput = ""
         val client = QrLoginClient()
@@ -461,7 +461,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                     onStatus = { status = it },
                     onEmailCodeRequired = {
                         awaitingEmail = true
-                        status = "Введите код из письма МЭШ"
+                        status = Words.EnterYourEmailCode.text
                         val deferred = CompletableDeferred<String?>()
                         emailDeferred.value = deferred
                         val result = deferred.await()
@@ -488,7 +488,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Не удалось выполнить QR-вход"
+                error = e.message ?: Words.QrSignInFailed.text
                 running = false
                 awaitingEmail = false
             }
@@ -502,7 +502,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
         val raw = store.authCookies
         if (raw.isNullOrBlank()) return@LaunchedEffect
         restoring = true
-        restoreHint = "Восстанавливаем сессию по сохранённым кукам..."
+        restoreHint = Words.RestoringSavedSession.text
         try {
             val json = JSONObject(raw)
             val jar = mutableMapOf<String, String>()
@@ -514,27 +514,27 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                 restoreHint = null
                 onLogin(result.token)
             } else {
-                restoreHint = "Сохранённая сессия истекла — войдите по QR."
+                restoreHint = Words.SessionExpiredSignInByQr.text
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            restoreHint = "Не удалось восстановить сессию — войдите по QR."
+            restoreHint = Words.CouldNotRestoreSessionSignInByQr.text
         } finally {
             restoring = false
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
         Text(
-            "Способ 1. Вход по QR-ссылке",
+            Words.SignInWithAQrLink.text,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Приложение войдёт само по сохранённой сессии, если куки от прошлого входа ещё живы. " +
-                "Иначе нажмите «Получить ссылку», откройте её и подтвердите вход.",
+            Words.ASavedSessionLetsYouSignInAutomatically.text +
+                Words.OtherwiseRequestALinkOpenItAndApprove.text,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -552,9 +552,9 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                 ) {
                     Text(
                         when {
-                            restoring -> "Восстанавливаем сессию..."
-                            running -> "Ожидание подтверждения..."
-                            else -> "Получить ссылку"
+                            restoring -> Words.RestoringSession.text
+                            running -> Words.WaitingForConfirmation.text
+                            else -> Words.GetLink.text
                         }
                     )
                 }
@@ -573,7 +573,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                         onDismissRequest = { menuExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Открыть ссылку") },
+                            text = { Text(Words.OpenLink.text) },
                             enabled = link != null,
                             onClick = {
                                 menuExpanded = false
@@ -585,7 +585,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Отменить QR-вход") },
+                            text = { Text(Words.CancelQrSignIn.text) },
                             enabled = running,
                             onClick = {
                                 menuExpanded = false
@@ -627,7 +627,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
             OutlinedTextField(
                 value = emailInput,
                 onValueChange = { emailInput = it },
-                label = { Text("Код из письма") },
+                label = { Text(Words.EmailCode.text) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
@@ -639,13 +639,13 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                     enabled = emailInput.isNotBlank(),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Подтвердить")
+                    Text(Words.Confirm.text)
                 }
                 OutlinedButton(
                     onClick = { emailDeferred.value?.complete(null) },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Отмена")
+                    Text(Words.Cancel.text)
                 }
             }
         }

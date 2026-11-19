@@ -19,20 +19,21 @@ class MeshApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        UiLanguage.select(getSharedPreferences("mesh_settings", MODE_PRIVATE).getString("language", "ru"))
         createNotificationChannel()
         scheduleTokenRefresh()
     }
 
-    private fun createNotificationChannel() {
+    internal fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        val localized = UiLanguage.context(this)
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.notif_channel_name),
+            localized.getString(R.string.notif_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = getString(R.string.notif_channel_description)
+            description = localized.getString(R.string.notif_channel_description)
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)

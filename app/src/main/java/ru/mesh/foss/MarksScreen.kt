@@ -191,7 +191,7 @@ fun MarksScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (subjectId == null) {
             // M3E: connected-группа переключателей — выделенный сегмент меняет и форму, и цвет.
             ButtonGroup(
@@ -200,19 +200,19 @@ fun MarksScreen(
             ) {
                 toggleableItem(
                     checked = mode == "date",
-                    label = "По дате",
+                    label = Words.ByDate.text,
                     onCheckedChange = { mode = "date" },
                     weight = 1f
                 )
                 toggleableItem(
                     checked = mode == "subject",
-                    label = "По предмету",
+                    label = Words.BySubject.text,
                     onCheckedChange = { mode = "subject" },
                     weight = 1f
                 )
                 toggleableItem(
                     checked = mode == "final",
-                    label = "Итоговые",
+                    label = Words.FinalGrades.text,
                     onCheckedChange = { mode = "final" },
                     weight = 1f
                 )
@@ -226,7 +226,7 @@ fun MarksScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Загружаем профиль ученика...")
+                        Text(Words.LoadingStudentProfile.text)
                     }
                 }
             }
@@ -245,7 +245,7 @@ fun MarksScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { retryKey++ }) { Text("Повторить") }
+                    Button(onClick = { retryKey++ }) { Text(Words.Retry.text) }
                 }
             }
             subjectId != null -> {
@@ -255,7 +255,7 @@ fun MarksScreen(
             mode == "subject" -> {
                 if (subjects.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Предметов с оценками нет")
+                        Text(Words.NoGradedSubjects.text)
                     }
                 } else {
                     LazyColumn(modifier = Modifier.weight(1f)) {
@@ -331,7 +331,7 @@ private fun DateMarksList(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Оценок за период нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(Words.NoGradesInThisPeriod.text, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -362,7 +362,7 @@ private fun DateMarksList(
         if (noMoreOlder && marks.isNotEmpty()) {
             item {
                 Text(
-                    "Больше оценок нет",
+                    Words.NoMoreGrades.text,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -387,21 +387,21 @@ private fun MarksCharts(marks: List<JSONObject>) {
 private fun GradeDistributionChart(summary: JSONObject) {
     val buckets = summary.optJSONArray("byValue")?.toObjectList().orEmpty()
     val maxCount = buckets.maxOfOrNull { it.optInt("count") } ?: 0
-    Card(modifier = Modifier.fillMaxWidth().glass()) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                "Распределение оценок",
+                Words.GradeDistribution.text,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                "Число оценок каждой отметки",
+                Words.NumberOfGradesByScore.text,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             if (maxCount == 0) {
-                ChartEmpty("Недостаточно данных для построения графика")
+                ChartEmpty(Words.NotEnoughDataForAChart.text)
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth().height(136.dp),
@@ -442,21 +442,21 @@ private data class TrendPoint(val week: String, val average: Double)
 @Composable
 private fun WeeklyTrendChart(marks: List<JSONObject>) {
     val points = remember(marks) { weeklyAverages(marks) }
-    Card(modifier = Modifier.fillMaxWidth().glass()) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                "Динамика по неделям",
+                Words.WeeklyTrend.text,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                "Средний балл за неделю · шкала от 2 до 5",
+                Words.WeeklyAverageScaleFromTo.text,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(6.dp))
             if (points.isEmpty()) {
-                ChartEmpty("За выбранный период нет оценок для графика")
+                ChartEmpty(Words.NoGradesToPlotForThisPeriod.text)
             } else {
                 val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
                 val lineColor = MaterialTheme.colorScheme.primary
@@ -595,12 +595,12 @@ private fun FinalMarksSection(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Итоговые оценки",
+                    Words.FinalResults.text,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "Четверти и годовая по предметам",
+                    Words.QuarterlyAndAnnualGradesBySubject.text,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -608,7 +608,7 @@ private fun FinalMarksSection(
             Box {
                 OutlinedButton(onClick = { menuOpen = true }, enabled = years.isNotEmpty()) {
                     Text(
-                        selectedYear?.optString("name")?.takeIf { it.isNotBlank() } ?: "Учебный год",
+                        selectedYear?.optString("name")?.takeIf { it.isNotBlank() } ?: Words.SchoolYear.text,
                         maxLines = 1
                     )
                     Text(" ▾")
@@ -617,7 +617,7 @@ private fun FinalMarksSection(
                     orderedYears.forEach { year ->
                         val name = year.optString("name").ifBlank { year.optString("id") }
                         DropdownMenuItem(
-                            text = { Text(if (year.optBoolean("currentYear")) "$name · текущий" else name) },
+                            text = { Text(if (year.optBoolean("currentYear")) Words.Current(name) else name) },
                             onClick = {
                                 menuOpen = false
                                 onYearChange(year.optString("id"))
@@ -639,7 +639,7 @@ private fun FinalMarksSection(
             )
             marks.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "Итоговых оценок за этот год нет",
+                    Words.NoFinalGradesForThisYear.text,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -648,7 +648,7 @@ private fun FinalMarksSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "За этот год итоговые оценки ещё не выставлены",
+                    Words.FinalGradesHaveYetToBePosted.text,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -671,7 +671,7 @@ private fun FinalMarksTable(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Предмет",
+                    Words.Subject.text,
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
@@ -688,7 +688,7 @@ private fun FinalMarksTable(
                 }
                 if (hasYear) {
                     Text(
-                        "Год",
+                        Words.Year.text,
                         modifier = Modifier.width(MARK_COLUMN_WIDTH),
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.labelMedium,
@@ -708,7 +708,7 @@ private fun FinalMarksTable(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    subject.optString("subjectName").ifBlank { "Предмет" },
+                    subject.optString("subjectName").ifBlank { Words.Subject.text },
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
@@ -759,7 +759,7 @@ private fun JSONObject.periods(): List<JSONObject> =
 private fun SubjectMarksDetail(subject: JSONObject?, onMarkClick: (String) -> Unit = {}) {
     if (subject == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Предмет не найден")
+            Text(Words.SubjectNotFound.text)
         }
         return
     }
@@ -771,7 +771,7 @@ private fun SubjectMarksDetail(subject: JSONObject?, onMarkClick: (String) -> Un
         Spacer(Modifier.height(6.dp))
         if (subjectMarks.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("Оценок по этому предмету нет")
+                Text(Words.NoGradesForThisSubject.text)
             }
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
@@ -789,7 +789,7 @@ private fun SubjectMarksDetail(subject: JSONObject?, onMarkClick: (String) -> Un
 
 @Composable
 private fun SubjectMarksCard(subject: JSONObject, onClick: () -> Unit) {
-    val name = subject.optString("subjectName").ifBlank { "Предмет" }
+    val name = subject.optString("subjectName").ifBlank { Words.Subject.text }
     val average = subject.nullableDouble("average")
     val yearMark = subject.nullableDouble("yearMark")
     val count = subject.optJSONArray("marks")?.length() ?: 0
@@ -799,17 +799,16 @@ private fun SubjectMarksCard(subject: JSONObject, onClick: () -> Unit) {
         else -> ""
     }
     val details = buildList {
-        average?.let { add("Средний: ${formatMark(it)}") }
-        if (count > 0) add("Оценок: $count")
-        yearMark?.let { add("Год: ${formatMark(it)}") }
+        average?.let { add(Words.Average(formatMark(it))) }
+        if (count > 0) add(Words.Grades(count))
+        yearMark?.let { add(Words.YearLabel(formatMark(it))) }
     }.joinToString(" · ") + trend
 
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
+            .padding(vertical = 4.dp)
             .clickable(onClick = onClick)
-            .glass()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -836,25 +835,25 @@ private fun SubjectMarksCard(subject: JSONObject, onClick: () -> Unit) {
 
 @Composable
 private fun SubjectSummaryCard(subject: JSONObject) {
-    val name = subject.optString("subjectName").ifBlank { "Предмет" }
+    val name = subject.optString("subjectName").ifBlank { Words.Subject.text }
     val average = subject.nullableDouble("average")
     val subjectYear = subject.nullableDouble("yearMark")
     val count = subject.optJSONArray("marks")?.length() ?: 0
     val dynamic = subject.optString("dynamic")
 
-    Card(modifier = Modifier.fillMaxWidth().glass()) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                SummaryStat("Средний", formatMark(average))
-                if (subjectYear != null) SummaryStat("Год", formatMark(subjectYear))
-                SummaryStat("Оценок", count.toString())
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryStat(Words.AverageScore.text, formatMark(average))
+                if (subjectYear != null) SummaryStat(Words.Year.text, formatMark(subjectYear))
+                SummaryStat(Words.GradeCount.text, count.toString())
             }
             if (dynamic == "UP" || dynamic == "DOWN") {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (dynamic == "UP") "Динамика: рост" else "Динамика: снижение",
+                    if (dynamic == "UP") Words.TrendRising.text else Words.TrendFalling.text,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (dynamic == "UP") MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.error
@@ -865,8 +864,8 @@ private fun SubjectSummaryCard(subject: JSONObject) {
 }
 
 @Composable
-private fun SummaryStat(label: String, value: String) {
-    Column {
+private fun RowScope.SummaryStat(label: String, value: String) {
+    Column(Modifier.weight(1f)) {
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
@@ -882,9 +881,9 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean, 
     val markText = mark.optString("markText").takeIf { it.isNotBlank() } ?: formatMark(value)
     val weight = mark.nullableDouble("weight") ?: 1.0
     val title = if (showSubject) {
-        mark.optString("subjectName").ifBlank { "Предмет" }
+        mark.optString("subjectName").ifBlank { Words.Subject.text }
     } else {
-        mark.optString("controlForm").ifBlank { "Оценка" }
+        mark.optString("controlForm").ifBlank { Words.Grade.text }
     }
     val details = buildList {
         if (showSubject) {
@@ -897,13 +896,12 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean, 
         }
     }.joinToString(" · ")
 
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
-            .clickable(onClick = onClick)
-            .glass(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),

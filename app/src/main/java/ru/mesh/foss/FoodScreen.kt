@@ -92,7 +92,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .swipeDays(
                 onPrev = {
                     val week = state?.optJSONObject("feedingWeek")
@@ -123,7 +123,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LoadingIndicator()
                     Spacer(Modifier.height(8.dp))
-                    Text(tr("Загружаем профиль ученика...", "Loading student profile..."))
+                    Text(Words.LoadingStudentProfile.text)
                 }
             }
             loading && !refreshing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -135,7 +135,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
             ) {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text(tr("Повторить", "Retry")) }
+                Button(onClick = { load() }) { Text(Words.Retry.text) }
             }
             else -> {
                 val day = MeshCore.foodDayFor(menuDays, selectedDate)
@@ -162,12 +162,12 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                     item { StateCard(state) }
 
                     item {
-                        SectionTitle(tr("Меню на день", "Menu for the day"))
+                        SectionTitle(Words.DailyMenu.text)
                     }
                     // Платное / льготное питание: M3E connected-переключатель.
                     item {
-                        val paidLabel = tr("Платное", "Paid")
-                        val freeLabel = tr("Льготное", "Free")
+                        val paidLabel = Words.Paid.text
+                        val freeLabel = Words.Subsidised.text
                         ButtonGroup(
                             overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                             modifier = Modifier.fillMaxWidth()
@@ -208,7 +208,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                     if (complexes.length() == 0 || mealList.isEmpty()) {
                         item {
                             Text(
-                                tr("Меню на этот день недоступно.", "No menu available for this day."),
+                                Words.NoMenuForThisDay.text,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -227,7 +227,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                     }
 
                     if (orders.length() > 0) {
-                        item { SectionTitle(tr("Предзаказы", "Pre-orders")) }
+                        item { SectionTitle(Words.PreOrders.text) }
                         items((0 until orders.length()).map { orders.getJSONObject(it) }) { order ->
                             OrderRow(order)
                         }
@@ -243,12 +243,12 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
 /** Локализованное название приёма пищи по коду `kind`. */
 @Composable
 private fun mealLabel(kind: Int): String = when (kind) {
-    0 -> tr("Завтрак", "Breakfast")
-    1 -> tr("Второй завтрак", "Second breakfast")
-    2 -> tr("Обед", "Lunch")
-    3 -> tr("Полдник", "Snack")
-    4 -> tr("Ужин", "Dinner")
-    else -> tr("Приём пищи", "Meal")
+    0 -> Words.Breakfast.text
+    1 -> Words.MorningSnack.text
+    2 -> Words.Lunch.text
+    3 -> Words.AfternoonSnack.text
+    4 -> Words.Dinner.text
+    else -> Words.Meal.text
 }
 
 @Composable
@@ -264,20 +264,20 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun BalanceCard(balances: JSONArray) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
+    GlassCard(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         // Ключевая цифра экрана — самый светлый контейнер (M3E: containment).
-        colors = CardDefaults.cardColors(containerColor = emphasisContainer())
+        tint = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                tr("Баланс лицевого счёта", "Account balance"),
+                Words.AccountBalance.text,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(6.dp))
             if (balances.length() == 0) {
-                Text(tr("Недоступен", "Unavailable"), style = MaterialTheme.typography.bodyMedium)
+                Text(Words.Unavailable.text, style = MaterialTheme.typography.bodyMedium)
             } else {
                 for (i in 0 until balances.length()) {
                     val entry = balances.optJSONObject(i) ?: continue
@@ -294,7 +294,7 @@ private fun BalanceCard(balances: JSONArray) {
                         val limit = entry.opt("expenseDayLimit")
                         if (limit != null && limit != JSONObject.NULL) {
                             Text(
-                                tr("Лимит в день: ", "Daily limit: ") + MeshCore.formatMoney(entry.optLong("expenseDayLimit", 0L)),
+                                Words.DailyLimit.text + MeshCore.formatMoney(entry.optLong("expenseDayLimit", 0L)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -313,9 +313,9 @@ private fun StateCard(state: JSONObject?) {
     val first = addresses.optJSONObject(0)
     val name = first?.optString("organizationName").orEmpty()
     val address = first?.optString("text").orEmpty()
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    GlassCard(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             if (name.isNotBlank()) {
@@ -329,8 +329,8 @@ private fun StateCard(state: JSONObject?) {
                 )
             }
             Spacer(Modifier.height(6.dp))
-            InfoLine(tr("Предзаказ", "Pre-order"), src.optBoolean("preorderAllowed", false))
-            InfoLine(tr("Льготное питание", "Discounted meals"), src.optBoolean("discountedMeals", false))
+            InfoLine(Words.PreOrder.text, src.optBoolean("preorderAllowed", false))
+            InfoLine(Words.SubsidisedMeals.text, src.optBoolean("discountedMeals", false))
             FeedingWeekRow(src.optJSONObject("feedingWeek"))
         }
     }
@@ -342,7 +342,7 @@ private fun InfoLine(label: String, enabled: Boolean) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.weight(1f))
         Text(
-            if (enabled) tr("доступно", "available") else tr("недоступно", "unavailable"),
+            if (enabled) Words.Available.text else Words.UnavailableLabel.text,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
             color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -354,8 +354,8 @@ private fun InfoLine(label: String, enabled: Boolean) {
 private fun FeedingWeekRow(week: JSONObject?) {
     if (week == null || week.length() == 0) return
     val days = listOf(
-        "monday" to "Пн", "tuesday" to "Вт", "wednesday" to "Ср",
-        "thursday" to "Чт", "friday" to "Пт", "saturday" to "Сб", "sunday" to "Вс"
+        "monday" to Words.Mon.text, "tuesday" to Words.Tue.text, "wednesday" to Words.Wed.text,
+        "thursday" to Words.Thu.text, "friday" to Words.Fri.text, "saturday" to Words.Sat.text, "sunday" to Words.Sun.text
     )
     Spacer(Modifier.height(6.dp))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -385,12 +385,12 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
     val dishes = complex.optJSONArray("dishes") ?: JSONArray()
     val kindLabel = complex.optString("kindLabel")
     val priceLabel = complex.optString("priceLabel")
-    val mealLabel = tr("Приём пищи", "Meal")
-    val gramLabel = tr("г", "g")
-    val kcalLabel = tr("ккал", "kcal")
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    val mealLabel = Words.Meal.text
+    val gramLabel = Words.G.text
+    val kcalLabel = Words.Kcal.text
+    GlassCard(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
@@ -407,7 +407,7 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        listOf(kindLabel, tr("блюд: ", "dishes: ") + dishes.length()).filter { it.isNotBlank() }.joinToString(" · "),
+                        listOf(kindLabel, Words.Dishes.text + dishes.length()).filter { it.isNotBlank() }.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -453,15 +453,15 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
 
 @Composable
 private fun OrderRow(order: JSONObject) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    GlassCard(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        tint = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 val id = order.opt("id")
                 Text(
-                    tr("Заказ", "Order") + if (id != null && id != JSONObject.NULL) " №$id" else "",
+                    Words.Order.text + if (id != null && id != JSONObject.NULL) " №$id" else "",
                     fontWeight = FontWeight.Medium
                 )
                 val date = order.optString("onDate").ifBlank { order.optString("date") }

@@ -179,7 +179,7 @@ fun HomeworksScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
                 .swipeDays(
                     onPrev = { selectedDate = MeshCore.addDays(selectedDate, -1) },
                     onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) }
@@ -198,13 +198,13 @@ fun HomeworksScreen(
         ) {
             toggleableItem(
                 checked = mode == "due",
-                label = "На день",
+                label = Words.DueOnDate.text,
                 onCheckedChange = { mode = "due" },
                 weight = 1f
             )
             toggleableItem(
                 checked = mode == "assigned",
-                label = "Задано",
+                label = Words.Assigned.text,
                 onCheckedChange = { mode = "assigned" },
                 weight = 1f
             )
@@ -217,7 +217,7 @@ fun HomeworksScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         LoadingIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Загружаем профиль ученика…")
+                        Text(Words.LoadingStudentProfile.text)
                     }
                 }
             }
@@ -228,12 +228,12 @@ fun HomeworksScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load() }) { Text("Повторить") }
+                    Button(onClick = { load() }) { Text(Words.Retry.text) }
                 }
             }
             filtered.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(if (mode == "due") "На этот день домашнего задания нет" else "В этот день ничего не задавали")
+                    Text(if (mode == "due") Words.NoHomeworkDueToday.text else Words.NoHomeworkAssignedOnThisDay.text)
                 }
             }
             else -> {
@@ -295,7 +295,7 @@ private fun HomeworkCard(
         label = "homeworkDoneShape"
     )
 
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
@@ -303,13 +303,11 @@ private fun HomeworkCard(
             // У подсвеченного ДЗ своя акцентная рамка — стеклянную кромку не рисуем.
             .then(if (highlighted) Modifier else Modifier.glass(RoundedCornerShape(cornerRadius))),
         shape = RoundedCornerShape(cornerRadius),
-        colors = CardDefaults.cardColors(
-            containerColor = if (highlighted) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            }
-        ),
+        tint = if (highlighted) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
         border = if (highlighted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -321,7 +319,7 @@ private fun HomeworkCard(
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    h.optString("subjectName").ifBlank { "Задание" },
+                    h.optString("subjectName").ifBlank { Words.Assignment.text },
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
@@ -331,7 +329,7 @@ private fun HomeworkCard(
                 }
                 if (due != null) {
                     Text(
-                        "до ${MeshCore.dateShort(due)}",
+                        Words.Due(MeshCore.dateShort(due)),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -349,23 +347,23 @@ private fun HomeworkCard(
                 OutlinedButton(
                     onClick = {
                         clipboardManager.setText(AnnotatedString(description))
-                        Toast.makeText(context, "Текст задания скопирован", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, Words.AssignmentCopied.text, Toast.LENGTH_SHORT).show()
                     },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_copy),
-                        contentDescription = "Копировать",
+                        contentDescription = Words.Copy.text,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             Spacer(Modifier.height(4.dp))
             val dates = buildString {
-                if (assigned != null) append("Задано: ${MeshCore.dateShort(assigned)}")
+                if (assigned != null) append(Words.AssignedLabel(MeshCore.dateShort(assigned)))
                 if (due != null) {
                     if (isNotEmpty()) append(" · ")
-                    append("Сдать до: ${MeshCore.dateShort(due)}")
+                    append(Words.DueLabel(MeshCore.dateShort(due)))
                 }
             }
             if (dates.isNotBlank()) {
@@ -387,13 +385,13 @@ private fun HomeworkCard(
                 if (visible.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Материалы и ЦДЗ",
+                        Words.MaterialsAndDigitalHomework.text,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                     visible.forEach { material ->
                         val title = material.optString("title").ifBlank {
-                            material.optString("typeName").ifBlank { "Материал" }
+                            material.optString("typeName").ifBlank { Words.Material.text }
                         }
                         val url = material.optString("url").trim()
                         val materialId = material.optString("uuid")
@@ -422,12 +420,12 @@ private fun HomeworkCard(
                                 color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
                             val subline = when {
-                                opening -> "Открываем…"
-                                action.isNotBlank() && canOpen -> "$action · нажмите, чтобы открыть"
+                                opening -> Words.Opening.text
+                                action.isNotBlank() && canOpen -> Words.TapToOpen(action)
                                 action.isNotBlank() -> action
-                                typeLabel.isNotBlank() && canOpen -> "$typeLabel · нажмите, чтобы открыть"
+                                typeLabel.isNotBlank() && canOpen -> Words.TapToOpen(typeLabel)
                                 typeLabel.isNotBlank() -> typeLabel
-                                canOpen -> "Нажмите, чтобы открыть"
+                                canOpen -> Words.TapToOpenLabel.text
                                 else -> ""
                             }
                             if (subline.isNotBlank()) {
@@ -445,10 +443,10 @@ private fun HomeworkCard(
 
             if (attachments != null && attachments.length() > 0) {
                 Spacer(Modifier.height(8.dp))
-                Text("Файлы", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(Words.Files.text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 for (i in 0 until attachments.length()) {
                     val attachment = attachments.optJSONObject(i) ?: continue
-                    val name = attachment.optString("name").ifBlank { "Файл" }
+                    val name = attachment.optString("name").ifBlank { Words.File.text }
                     val url = attachment.optString("url")
                     Text(
                         "📎 $name",
@@ -507,6 +505,6 @@ private fun findHomeworkIndex(items: List<JSONObject>, target: HomeworkTarget): 
 private fun openUrl(uriHandler: UriHandler, url: String, context: Context) {
     if (url.isBlank()) return
     runCatching { uriHandler.openUri(url) }.onFailure {
-        Toast.makeText(context, "Не удалось открыть ссылку", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, Words.CouldNotOpenLink.text, Toast.LENGTH_SHORT).show()
     }
 }

@@ -1,16 +1,28 @@
 package ru.mesh.foss
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -20,7 +32,47 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
+
+/**
+ * Дизайн интерфейса. Хранится в настройке `design`:
+ *  - [PLAIN] — «мой интерфейс»: обычный Material без стекла (по умолчанию);
+ *  - [GLASS] — стеклянный стиль (glassmorphism): фон со свечениями, полупрозрачные
+ *    контейнеры, блики на карточках ([Glass], [Modifier.glass], [GlassBackdrop]);
+ *  - [LIQUID] — «жидкое стекло»: панели с градиентной кромкой и светом от касания
+ *    ([glassPane], [GlassCard], [LiquidBackdrop]).
+ *
+ * Миграция со старого булевого `glass_enabled`: если `design` ещё не записан,
+ * но стекло было включено явно — достаём «glass».
+ */
+object Design {
+    const val PREF_KEY = "design"
+    const val PLAIN = "plain"
+    const val GLASS = "glass"
+    const val LIQUID = "liquid"
+    const val DEFAULT = PLAIN
+
+    /** Старый ключ переключателя стеклянного стиля (PR #4) — только для миграции. */
+    const val LEGACY_GLASS_KEY = "glass_enabled"
+
+    fun migrate(prefs: android.content.SharedPreferences): String =
+        prefs.getString(PREF_KEY, null)
+            ?: if (prefs.contains(LEGACY_GLASS_KEY) && prefs.getBoolean(LEGACY_GLASS_KEY, false)) GLASS else PLAIN
+}
+
+/** Текущий дизайн интерфейса. */
+val LocalDesign = staticCompositionLocalOf { Design.PLAIN }
+
+/** Переключение дизайна из настроек. */
+val LocalDesignSetter = staticCompositionLocalOf<(String) -> Unit> { {} }
+
+/* -------------------------------------------------------------------------- */
+/* Стеклянный стиль (glassmorphism) — PR #4.                                    */
+/* -------------------------------------------------------------------------- */
 
 /**
  * «Стекло» (glassmorphism): полупрозрачные панели со светлой кромкой поверх
@@ -34,12 +86,9 @@ import androidx.compose.ui.unit.dp
  *  - [Glass.glassify] — полупрозрачные контейнеры в цветовой схеме;
  *  - [Modifier.glass] — блик внутри карточки и градиентная кромка.
  *
- * Включается в настройках ключом `glass_enabled` (по умолчанию включено).
+ * Включается дизайном [Design.GLASS] (настройка `design`).
  */
 object Glass {
-    const val PREF_KEY = "glass_enabled"
-    const val DEFAULT = true
-
     private val Violet = Color(0xFF7C3AED)
     private val Indigo = Color(0xFF4F46E5)
     private val Magenta = Color(0xFFC026D3)
@@ -103,14 +152,11 @@ object Glass {
 @Immutable
 data class GlassStyle(val dark: Boolean, val glows: List<Color>)
 
-/** Включено ли стекло. */
+/** Включён ли стеклянный стиль ([Design.GLASS]). */
 val LocalGlass = staticCompositionLocalOf { false }
 
 /** Цвета свечений и яркость для текущей темы. */
 val LocalGlassStyle = staticCompositionLocalOf { GlassStyle(dark = true, glows = emptyList()) }
-
-/** Переключение стекла из настроек. */
-val LocalGlassSetter = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
 
 /**
  * Контейнер «выделенной» карточки (главная цифра экрана). В стекле — чуть более
@@ -126,7 +172,7 @@ fun emphasisContainer(): Color {
  * Стеклянная карточка: диагональный блик внутри и светлая кромка, которая ярче
  * у верхнего левого угла и гаснет к правому краю — как свет на ребре стекла.
  * Ставится последним в цепочке модификаторов карточки (после отступов), чтобы
- * рисовать ровно по её границе. Без стекла модификатор ничего не делает.
+ * рисовать ровно по её границе. Без стеклянного стиля модификатор ничего не делает.
  *
  * @param shape форма карточки; по умолчанию — форма Card (`shapes.medium`).
  */
@@ -177,7 +223,7 @@ fun Modifier.glass(shape: Shape? = null): Modifier = composed {
 }
 
 /**
- * Фон под стеклом: базовый градиент (светлее слева, почти чёрный справа) и
+ * Фон под стеклянным стилем: базовый градиент (светлее слева, почти чёрный справа) и
  * крупные размытые свечения цветов темы. Всё статично — без анимаций, чтобы не
  * тратить батарею.
  */
@@ -245,5 +291,174 @@ fun Modifier.glassBar(dark: Boolean): Modifier = this.drawWithCache {
     onDrawWithContent {
         drawContent()
         drawRect(edge, size = androidx.compose.ui.geometry.Size(size.width, line))
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Жидкое стекло (liquid glass) — codex/liquid-glass.                           */
+/* -------------------------------------------------------------------------- */
+
+private class GlassLight {
+    var touch by mutableStateOf<Offset?>(null)
+}
+
+private val LocalGlassLight = staticCompositionLocalOf<GlassLight?> { null }
+
+/**
+ * Подложка «жидкого стекла»: мягкий свет из левого верхнего угла, отражение в
+ * правом нижнем и свет, следящий за касанием. Фон рисует сама.
+ */
+@Composable
+fun LiquidBackdrop(content: @Composable () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val lightSource = remember { GlassLight() }
+    Box(Modifier.fillMaxSize().pointerInput(lightSource) {
+        try {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    lightSource.touch = event.changes.firstOrNull { it.pressed }?.position
+                }
+            }
+        } finally {
+            lightSource.touch = null
+        }
+    }.background(scheme.background).drawWithCache {
+        val light = Brush.radialGradient(
+            listOf(scheme.primary.copy(alpha = .36f), Color.Transparent),
+            Offset(size.width * .12f, size.height * .08f), size.maxDimension * .65f
+        )
+        val reflection = Brush.radialGradient(
+            listOf(scheme.tertiary.copy(alpha = .24f), Color.Transparent),
+            Offset(size.width, size.height * .83f), size.maxDimension * .56f
+        )
+        onDrawBehind {
+            drawRect(light)
+            drawRect(reflection)
+        }
+    }) {
+        CompositionLocalProvider(LocalGlassLight provides lightSource, LocalContentColor provides scheme.onBackground, content = content)
+    }
+}
+
+/**
+ * Панель «жидкого стекла»: градиентная заливка, светлая кромка и блик, который
+ * перетекает между соседними панелями при касании, не перехватывая тапы.
+ * Без дизайна [Design.LIQUID] модификатор ничего не делает.
+ */
+@Composable
+fun Modifier.glassPane(
+    shape: Shape = MaterialTheme.shapes.large,
+    tint: Color = MaterialTheme.colorScheme.surface
+): Modifier {
+    if (LocalDesign.current != Design.LIQUID) return this
+    val scheme = MaterialTheme.colorScheme
+    val fill = Brush.linearGradient(listOf(
+        tint.copy(alpha = tint.alpha * .85f),
+        tint.copy(alpha = tint.alpha * .48f),
+        tint.copy(alpha = tint.alpha * .76f)
+    ))
+    val edge = Brush.linearGradient(
+        0f to Color.White.copy(alpha = .62f),
+        .32f to scheme.primary.copy(alpha = .12f),
+        .64f to scheme.primary.copy(alpha = .06f),
+        1f to scheme.primary.copy(alpha = .48f)
+    )
+    val lightSource = LocalGlassLight.current
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    return onGloballyPositioned { origin = it.positionInRoot() }.clip(shape).background(fill).drawWithCache {
+        val sheen = Brush.radialGradient(
+            listOf(Color.White.copy(alpha = .13f), Color.Transparent),
+            center = Offset(size.width * .16f, -size.height * .3f),
+            radius = (size.width * .78f).coerceAtLeast(1f)
+        )
+        // The same light passes across adjacent panes without intercepting taps or scrolls.
+        val radius = 112.dp.toPx()
+        val glint = Brush.radialGradient(
+            listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset.Zero, radius
+        )
+        onDrawBehind {
+            drawRect(sheen)
+            lightSource?.touch?.let { touch ->
+                val center = touch - origin
+                drawContext.transform.translate(center.x, center.y)
+                drawCircle(glint, radius, Offset.Zero)
+                drawContext.transform.translate(-center.x, -center.y)
+            }
+        }
+    }.border(1.dp, edge, shape)
+}
+
+/**
+ * Подложка выделения (плитка темы и т.п.): в [Design.LIQUID] — панель «жидкого
+ * стекла», иначе — обычная заливка [tint].
+ */
+@Composable
+fun Modifier.selectionPane(shape: Shape, tint: Color): Modifier = when (LocalDesign.current) {
+    Design.LIQUID -> glassPane(shape, tint)
+    Design.GLASS -> Modifier.clip(shape).background(tint).glass(shape)
+    else -> Modifier.clip(shape).background(tint)
+}
+
+/**
+ * Подложка диалога. В [Design.LIQUID] — панель с кромкой и бликом; в
+ * [Design.GLASS] — плотная поверхность с бликом стеклянного стиля; в [Design.PLAIN]
+ * — просто непрозрачный фон (диалоги задают прозрачный containerColor).
+ */
+@Composable
+internal fun Modifier.dialogGlass(): Modifier {
+    val shape = MaterialTheme.shapes.extraLarge
+    val solid = background(MaterialTheme.colorScheme.surface.copy(alpha = 1f), shape)
+    return when (LocalDesign.current) {
+        Design.LIQUID -> solid.glassPane(shape, MaterialTheme.colorScheme.surfaceContainerHigh)
+        Design.GLASS -> solid.glass(shape)
+        else -> solid
+    }
+}
+
+/**
+ * Карточка-панель. В [Design.LIQUID] — панель «жидкого стекла»; в [Design.GLASS] —
+ * карточка с бликом и кромкой ([Modifier.glass]); в [Design.PLAIN] — обычная
+ * карточка с цветом [tint].
+ */
+@Composable
+fun GlassCard(
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.large,
+    tint: Color = Color.Unspecified,
+    border: BorderStroke? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    when (LocalDesign.current) {
+        Design.LIQUID -> Card(
+            modifier = modifier.glassPane(shape, tint.takeOrElse { MaterialTheme.colorScheme.surface }),
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = border,
+            content = content
+        )
+        Design.GLASS -> Card(
+            modifier = modifier.glass(shape),
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = tint.takeOrElse { MaterialTheme.colorScheme.surfaceContainerLow },
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = border,
+            content = content
+        )
+        else -> Card(
+            modifier = modifier,
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = tint.takeOrElse { MaterialTheme.colorScheme.surfaceContainerLow },
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = border,
+            content = content
+        )
     }
 }

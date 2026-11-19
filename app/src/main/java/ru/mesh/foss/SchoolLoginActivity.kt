@@ -27,6 +27,9 @@ import java.net.URLDecoder
  * и само закрывает окно.
  */
 class SchoolLoginActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(UiLanguage.context(newBase))
+    }
 
     companion object {
         const val EXTRA_TOKEN = "token"
@@ -148,7 +151,7 @@ class SchoolLoginActivity : AppCompatActivity() {
     private fun finishWithToken(token: String, source: String) {
         if (finished) return
         finished = true
-        Toast.makeText(this, "Токен МЭШ получен", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, Words.MeshTokenReceived.text, Toast.LENGTH_SHORT).show()
         setResult(
             Activity.RESULT_OK,
             Intent().putExtra(EXTRA_TOKEN, token).putExtra(EXTRA_SOURCE, source)
