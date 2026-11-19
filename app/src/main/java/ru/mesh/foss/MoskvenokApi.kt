@@ -97,8 +97,10 @@ object MoskvenokApi {
             "barcode_payload|password|token)\"\\s*:\\s*\"([^\"]*)\"",
         RegexOption.IGNORE_CASE
     )
-    private val PERSONAL_BLOCK = Regex("(\"personal\"\\s*:\\s*)\\{[^{}]*}")
-    private val FIELDS_BLOCK = Regex("(\"fields\"\\s*:\\s*)\\[[^\\[\\]]*]")
+    // Экранирование { и ] обязательно: Android-regex (ICU) строже JVM и
+    // падает на «голых» скобках — тесты на JVM это не ловят (краш при старте).
+    private val PERSONAL_BLOCK = Regex("(\"personal\"\\s*:\\s*)\\{[^{}]*\\}")
+    private val FIELDS_BLOCK = Regex("(\"fields\"\\s*:\\s*)\\[[^\\[\\]]*\\]")
 
     // ------------------------------------------------------------- сессия --
 
