@@ -15,13 +15,15 @@ import androidx.compose.ui.graphics.Color
  * совпадают с desktop/desktop-версией, чтобы настройки переносились между клиентами.
  */
 object AppTheme {
-    const val DEFAULT_ID = "midnight"
+    const val DEFAULT_ID = "nebula"
 
     /** Порядок вариантов в списке настроек. */
-    val ids = listOf("midnight", "ocean", "forest", "sunset", "light", "dynamic", "custom")
+    val ids = listOf("nebula", "midnight", "ocean", "forest", "sunset", "light", "dynamic", "custom")
 
     /** Соответствие «встроенный id → тройка цветов (акцент, фон, поверхность)». */
     private val palettes = mapOf(
+        // «Туманность» — тёмно-фиолетовая палитра под стеклянный стиль.
+        "nebula" to Triple(0xFFC4B5FD, 0xFF0B0818, 0xFF1C1633),
         "midnight" to Triple(0xFFD1D5DB, 0xFF10131A, 0xFF1B2130),
         "ocean" to Triple(0xFF67E8F9, 0xFF071923, 0xFF102A3A),
         "forest" to Triple(0xFF86EFAC, 0xFF0D1B16, 0xFF183126),
@@ -41,6 +43,23 @@ object AppTheme {
         val surface = Color(palette.third)
         return if (id == "light") {
             lightColorScheme(primary = primary, background = background, surface = surface)
+        } else if (id == "nebula") {
+            darkColorScheme(
+                primary = primary,
+                onPrimary = Color(0xFF1E1240),
+                primaryContainer = Color(0xFF4C2F9E),
+                onPrimaryContainer = Color(0xFFEDE7FF),
+                secondary = Color(0xFFA5B4FC),
+                secondaryContainer = Color(0xFF3A2D78),
+                onSecondaryContainer = Color(0xFFEDE7FF),
+                tertiary = Color(0xFFF0ABFC),
+                background = background,
+                surface = surface,
+                onBackground = Color(0xFFEDEBF7),
+                onSurface = Color(0xFFEDEBF7),
+                onSurfaceVariant = Color(0xFFB9B3D1),
+                outline = Color(0xFF8B84A8)
+            )
         } else {
             darkColorScheme(
                 primary = primary,
@@ -61,6 +80,7 @@ object AppTheme {
 
     /** Человекочитаемое имя темы для настроек. */
     fun label(id: String, customName: String = "Моя тема"): String = when (id) {
+        "nebula" -> "Туманность"
         "midnight" -> "Полночь"
         "ocean" -> "Океан"
         "forest" -> "Лес"

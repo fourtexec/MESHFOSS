@@ -387,7 +387,7 @@ private fun MarksCharts(marks: List<JSONObject>) {
 private fun GradeDistributionChart(summary: JSONObject) {
     val buckets = summary.optJSONArray("byValue")?.toObjectList().orEmpty()
     val maxCount = buckets.maxOfOrNull { it.optInt("count") } ?: 0
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().glass()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 "Распределение оценок",
@@ -442,7 +442,7 @@ private data class TrendPoint(val week: String, val average: Double)
 @Composable
 private fun WeeklyTrendChart(marks: List<JSONObject>) {
     val points = remember(marks) { weeklyAverages(marks) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().glass()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 "Динамика по неделям",
@@ -809,6 +809,7 @@ private fun SubjectMarksCard(subject: JSONObject, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(vertical = 3.dp)
             .clickable(onClick = onClick)
+            .glass()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -841,7 +842,7 @@ private fun SubjectSummaryCard(subject: JSONObject) {
     val count = subject.optJSONArray("marks")?.length() ?: 0
     val dynamic = subject.optString("dynamic")
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().glass()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
@@ -900,7 +901,8 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean, 
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .glass(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(

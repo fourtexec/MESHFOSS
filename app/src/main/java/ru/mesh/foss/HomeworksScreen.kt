@@ -299,7 +299,9 @@ private fun HomeworkCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .alpha(cardAlpha),
+            .alpha(cardAlpha)
+            // У подсвеченного ДЗ своя акцентная рамка — стеклянную кромку не рисуем.
+            .then(if (highlighted) Modifier else Modifier.glass(RoundedCornerShape(cornerRadius))),
         shape = RoundedCornerShape(cornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
