@@ -35,12 +35,13 @@ object MoskvenokLog {
         MoskvenokApi.logger = ::append
     }
 
-    /** Одна строка лога. */
+    /** Одна строка лога. Чувствительное (сессии, куки, ПИИ) убирается на входе. */
     fun append(line: String) {
         if (!enabled) return
         val context = appContext ?: return
         synchronized(lock) {
-            val stamped = "${SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())} $line"
+            val stamped =
+                "${SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())} ${MoskvenokApi.scrub(line)}"
             Log.d(TAG, stamped)
             runCatching {
                 val file = File(context.filesDir, FILE_NAME)

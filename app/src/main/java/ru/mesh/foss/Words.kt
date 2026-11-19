@@ -2013,6 +2013,13 @@ internal enum class Words(
         "Cargando Moskvenok…",
         "Chargement de Moskvenok…"
     ),
+    MoskvenokProcessing(
+        "Идёт обработка документов…",
+        "Processing documents…",
+        "A dokumentumok feldolgozása…",
+        "Procesando documentos…",
+        "Traitement des documents…"
+    ),
     MoskvenokQrExpired(
         "Код устарел",
         "Code expired",

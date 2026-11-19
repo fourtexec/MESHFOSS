@@ -74,7 +74,7 @@ import java.util.Locale
  * barcode_payload. Работает во всех дизайнах — карточки через GlassCard.
  */
 @Composable
-fun MoskvenokScreen(store: SessionStore, studentId: String?) {
+fun MoskvenokScreen(store: SessionStore) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     // Официальное приложение шлёт Android ID в ВЕРХНЕМ регистре (84EB0B6C9F508016
@@ -95,6 +95,8 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
     var doc by remember { mutableStateOf<JSONObject?>(null) }
     var enabling by remember { mutableStateOf(false) }
     var qrRefreshing by remember { mutableStateOf(false) }
+    // Сервер асинхронно генерирует документы: ответ 202 «Идет обработка документов».
+    var processing by remember { mutableStateOf(false) }
     // Срок действия QR: barcode_valid_time приходит в миллисекундах (~5 минут).
     var validMs by remember { mutableStateOf(0L) }
     var expiresAt by remember { mutableStateOf(0L) }
@@ -191,10 +193,19 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
                 return objects?.let { MoskvenokApi.isEnabled(it) } ?: false
             }
             MoskvenokLog.append("load: objects ошибка: $error")
+            processing = false
             errorText = describeMoskvenok(error)
             return false
         }
         objects = objectsJson
+        // 202 «Идет обработка документов» — не данные: ждём и опрашиваем,
+        // пока сервер не соберёт документы.
+        if (objectsJson.optInt("refresh") != 0 && objectsJson.has("message")) {
+            processing = true
+            MoskvenokLog.append("load: objects — 202 обработка")
+            return false
+        }
+        processing = false
         val enabledNow = MoskvenokApi.isEnabled(objectsJson)
         if (!enabledNow) {
             doc = null
@@ -202,7 +213,7 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
             MoskvenokLog.append("load: isEnabled=false")
             return false
         }
-        val docId = MoskvenokApi.meshDocId(objectsJson, studentId)
+        val docId = MoskvenokApi.meshDocId(objectsJson, store.personId)
         if (docId == null) {
             MoskvenokLog.append("load: isEnabled=true, но id документа нет")
             if (!refreshQr) errorText = describeMoskvenok(MoskvenokApi.MosError("no mesh document"))
@@ -212,6 +223,12 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
             var document = withContext(Dispatchers.IO) {
                 MoskvenokApi.document(sid, deviceId, docId, refreshQr)
             }
+            if (document.optInt("refresh") != 0 && document.has("message")) {
+                processing = true
+                MoskvenokLog.append("load: документ — 202 обработка")
+                return true
+            }
+            processing = false
             // Сразу после включения сервер может отдать документ без barcode_payload
             // (пустой квадрат на экране) — добиваемся повторами с force-refresh.
             var payloadTry = 1
@@ -221,6 +238,11 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
                 MoskvenokLog.append("load: документ без payload, повтор $payloadTry (force-refresh)")
                 document = withContext(Dispatchers.IO) {
                     MoskvenokApi.document(sid, deviceId, docId, refresh = true)
+                }
+                if (document.optInt("refresh") != 0 && document.has("message")) {
+                    processing = true
+                    MoskvenokLog.append("load: документ — 202 обработка (повтор)")
+                    return true
                 }
             }
             if (document.optString("barcode_payload").isBlank()) {
@@ -267,28 +289,39 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
                 MoskvenokLog.append("enable: POST принят — берём документ по uuid (как official, flow)")
                 // Официальное приложение после POST сразу запрашивает документ по uuid
                 // и не перепроверяет groups — делаем так же.
-                val docId = MoskvenokApi.meshDocId(objects ?: JSONObject(), studentId)
+                val docId = MoskvenokApi.meshDocId(objects ?: JSONObject(), store.personId)
                 if (docId == null) {
                     MoskvenokLog.append("enable: нет uuid ученика — документ не запросить")
                     errorText = Words.MoskvenokEnableFailed.text
                 } else {
                     // Пока payload не пришёл — doc не ставим: иначе пустой квадрат.
-                    // Официальное приложение после POST идёт в документ по uuid;
-                    // первые ответы могут быть без barcode_payload — повторяем до 4 раз
-                    // (3-й и 4-й — с x-force-refresh, он и генерирует новый payload).
+                    // После POST сервер отвечает 202 «Идет обработка документов»:
+                    // первая попытка ждёт до 45 с, вторая (через 1 с, с
+                    // x-force-refresh,20 с) добивается нового barcode_payload.
                     var fetched: JSONObject? = null
-                    for (attempt in 1..4) {
-                        if (attempt > 1) delay(if (attempt == 2) 800L else 1200L)
+                    for (attempt in 1..2) {
+                        if (attempt == 2) delay(1000)
                         try {
                             val document = withContext(Dispatchers.IO) {
-                                MoskvenokApi.document(session(), deviceId, docId, refresh = attempt >= 3)
+                                MoskvenokApi.document(
+                                    session(), deviceId, docId,
+                                    refresh = attempt == 2,
+                                    processingBudgetMs = if (attempt == 1) 45_000L else 20_000L
+                                )
                             }
                             fetched = document
                             if (document.optString("barcode_payload").isNotBlank()) {
                                 MoskvenokLog.append("enable: документ получен, попытка $attempt")
                                 break
                             }
-                            MoskvenokLog.append("enable: документ, попытка $attempt — без barcode_payload")
+                            MoskvenokLog.append(
+                                "enable: документ, попытка $attempt — " +
+                                    if (document.optInt("refresh") != 0) {
+                                        "202 обработка"
+                                    } else {
+                                        "без barcode_payload"
+                                    }
+                            )
                         } catch (docError: Exception) {
                             MoskvenokLog.append("enable: документ, попытка $attempt: $docError")
                         }
@@ -296,6 +329,7 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
                     val document = fetched?.takeIf { it.optString("barcode_payload").isNotBlank() }
                     if (document != null) {
                         doc = document
+                        processing = false
                         applyDocTiming(document)
                         errorText = null
                         MoskvenokLog.append(
@@ -305,7 +339,7 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
                     } else {
                         // Документ не пришёл — сверяемся с objects и честно сообщаем.
                         val enabledNow = refreshAll(false)
-                        if (!enabledNow && errorText == null) {
+                        if (!enabledNow && !processing && errorText == null) {
                             MoskvenokLog.append("enable: не подтвердилось")
                             errorText = Words.MoskvenokEnableFailed.text
                         }
@@ -323,6 +357,15 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
 
     LaunchedEffect(Unit) { load() }
 
+    // Сервер асинхронно генерирует документы (202) — опрашиваем сами.
+    LaunchedEffect(processing) {
+        if (!processing) return@LaunchedEffect
+        while (processing) {
+            delay(3000)
+            refreshAll(false)
+        }
+    }
+
     val loadedObjects = objects
     val error = errorText
     Column(
@@ -336,6 +379,8 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
             loading -> MoskvenokLoader()
             loadedObjects == null ->
                 if (error != null) MoskvenokErrorCard(error) { load() } else MoskvenokLoader()
+            // 202 «Идет обработка документов» — сервер собирает документы.
+            processing && doc == null -> MoskvenokProcessingCard()
             // QR показываем, пока есть документ: включение подтверждается именно
             // им (официальное приложение не смотрит groups после POST).
             doc == null && !MoskvenokApi.isEnabled(loadedObjects) -> GlassCard(
@@ -520,6 +565,24 @@ private fun MoskvenokLoader() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun MoskvenokProcessingCard() {
+    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(16.dp))
+            Text(
+                Words.MoskvenokProcessing.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

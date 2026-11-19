@@ -652,7 +652,7 @@ fun MainScaffold(
                         onHomeworkClick = { navigateTo(NavState(tab = "homeworks", target = it)) },
                         onFoodClick = { navigateTo(NavState(tab = "food")) }
                     )
-                    "moskvenok" -> MoskvenokScreen(store, studentId)
+                    "moskvenok" -> MoskvenokScreen(store)
                     "food" -> FoodScreen(store, client, personId)
                     "settings" -> SettingsScreen(store, client, profile, onLogout)
                 }

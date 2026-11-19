@@ -56,6 +56,23 @@ class MoskvenokApiTest {
         )
         assertNull(MoskvenokApi.meshDocId(empty, null))
         assertNull(MoskvenokApi.meshDocId(empty, "  "))
+        // Числовой studentId МЭШ не годится — только UUID.
+        assertNull(MoskvenokApi.meshDocId(empty, "37050212"))
+    }
+
+    @Test
+    fun scrubMasksSessionAndPersonalData() {
+        val line = "session: got sid=1qqfos472uya2epxu79ow36tuxjl42g0"
+        assertFalse(MoskvenokApi.scrub(line).contains("1qqfos472uya2epxu79ow36tuxjl42g0"))
+        val response =
+            """response: {"personal": {"email": "user@example.com"}, "phone": "+79990001122"}"""
+        val scrubbed = MoskvenokApi.scrub(response)
+        assertFalse(scrubbed.contains("user@example.com"))
+        assertFalse(scrubbed.contains("+79990001122"))
+        val qr = """{"barcode_payload": "ABC123"}"""
+        assertFalse(MoskvenokApi.scrub(qr).contains("ABC123"))
+        // Обычные строки не ломаются.
+        assertEquals("load: isEnabled=false", MoskvenokApi.scrub("load: isEnabled=false"))
     }
 
     @Test

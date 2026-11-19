@@ -45,6 +45,10 @@ object MoskvenokApi {
     private val MOSID_LINK = Regex("mosid://[^\"'\\s<>]+")
     private val SESSION_ID_PARAM = Regex("[?&]session_id=([^&\"'\\s<>]+)")
 
+    /** UUID ученика (contingent_guid) — только в таком виде строится id документа. */
+    private val UUID_FORMAT =
+        Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
     /** code = 401 — сессия невалидна (нужно получить заново); -1 — сессии нет вообще. */
     class MosError(message: String, val code: Int = 0) : Exception(message)
 
@@ -55,6 +59,46 @@ object MoskvenokApi {
     private fun log(line: String) {
         logger?.invoke(line)
     }
+
+    /** Маска секрета в логе: первые 4 символа + многоточие. */
+    internal fun mask(value: String): String =
+        if (value.length <= 4) "***" else value.take(4) + "…"
+
+    /**
+     * Чувствительное в логе убирается на входе в файл/logcat: sid и sessionid,
+     * параметры OAuth (code/state/session_id), ПИИ из personal и fields,
+     * barcode_payload (содержимое QR).
+     */
+    internal fun scrub(input: String): String {
+        var out = input
+        // sid=…, sessionid=…, session_id=… (в т.ч. внутри URL).
+        out = SID_ASSIGN.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
+        // x-sessionid: … (решения экрана, а не wire — там маскируется на месте).
+        out = SESSION_HEADER.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
+        // Параметры OAuth (code/state) в URL.
+        out = OAUTH_PARAM.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
+        // ПИИ и payload в JSON-ответах.
+        out = PII_KEY.replace(out) { m ->
+            if (m.groupValues[2].isEmpty()) m.value else m.value.replace(m.groupValues[2], "***")
+        }
+        out = PERSONAL_BLOCK.replace(out) { m -> m.groupValues[1] + "\"***\"" }
+        out = FIELDS_BLOCK.replace(out) { m -> m.groupValues[1] + "\"***\"" }
+        return out
+    }
+
+    private val SID_ASSIGN =
+        Regex("((?:x-)?(?:session[_-]?id|sid)[=:]\\s*)([A-Za-z0-9]+)", RegexOption.IGNORE_CASE)
+    private val OAUTH_PARAM =
+        Regex("([?&](?:code|state)=)([^&\\s\"']+)", RegexOption.IGNORE_CASE)
+    private val SESSION_HEADER =
+        Regex("(x-sessionid:\\s*)(\\S+)", RegexOption.IGNORE_CASE)
+    private val PII_KEY = Regex(
+        "\"(email|phone|lastname|firstname|patronymic|first_name|last_name|middle_name|" +
+            "barcode_payload|password|token)\"\\s*:\\s*\"([^\"]*)\"",
+        RegexOption.IGNORE_CASE
+    )
+    private val PERSONAL_BLOCK = Regex("(\"personal\"\\s*:\\s*)\\{[^{}]*}")
+    private val FIELDS_BLOCK = Regex("(\"fields\"\\s*:\\s*)\\[[^\\[\\]]*]")
 
     // ------------------------------------------------------------- сессия --
 
@@ -123,8 +167,11 @@ object MoskvenokApi {
     // ---------------------------------------------------------------- API --
 
     /** GET /api/v3/edm/mp/objects — есть ли «Москвёнок» (type: mesh в groups). */
-    fun objects(session: String, device: String): JSONObject =
-        api("GET", "$ID/api/v3/edm/mp/objects", session, device, refresh = true)
+    fun objects(session: String, device: String, processingBudgetMs: Long = 15_000): JSONObject =
+        api(
+            "GET", "$ID/api/v3/edm/mp/objects", session, device,
+            refresh = true, processingBudgetMs = processingBudgetMs
+        )
 
     /** POST /api/v3/edm/mp/settings/docs {"profile":[22],"favorites":[22]} — включает карту. */
     fun enable(session: String, device: String): JSONObject =
@@ -134,9 +181,19 @@ object MoskvenokApi {
     /**
      * GET /api/v3/edm/mp/documents/{docId}?type=mesh — QR-пейлоад и поля.
      * [refresh] = true добавляет x-force-refresh — для нового barcode_payload.
+     * [processingBudgetMs] — сколько ждать ответа 202 «Идет обработка документов».
      */
-    fun document(session: String, device: String, docId: String, refresh: Boolean = false): JSONObject =
-        api("GET", "$ID/api/v3/edm/mp/documents/$docId?type=mesh", session, device, refresh = refresh)
+    fun document(
+        session: String,
+        device: String,
+        docId: String,
+        refresh: Boolean = false,
+        processingBudgetMs: Long = 20_000
+    ): JSONObject =
+        api(
+            "GET", "$ID/api/v3/edm/mp/documents/$docId?type=mesh", session, device,
+            refresh = refresh, processingBudgetMs = processingBudgetMs
+        )
 
     /** Включена ли карта: items[].type == "mesh" (или title «Москвёнок») в groups. */
     fun isEnabled(objects: JSONObject): Boolean {
@@ -152,8 +209,8 @@ object MoskvenokApi {
         return false
     }
 
-    /** id документа для GET /documents/…: из objects, иначе сборка из uuid ученика. */
-    fun meshDocId(objects: JSONObject, studentId: String?): String? {
+    /** id документа для GET /documents/…: из objects, иначе сборка из UUID ученика. */
+    fun meshDocId(objects: JSONObject, studentUuid: String?): String? {
         val groups = objects.optJSONArray("groups")
         if (groups != null) {
             for (i in 0 until groups.length()) {
@@ -166,7 +223,10 @@ object MoskvenokApi {
                 }
             }
         }
-        return studentId?.takeIf { it.isNotBlank() }?.let { "combined/mesh/${it}_mesh_bal" }
+        // Числовой id МЭШ (studentId) не годится: у id.mos.ru документы
+        // именуются UUID (contingent_guid) — иначе сервер отдаёт 404/500.
+        return studentUuid?.takeIf { UUID_FORMAT.matches(it) }
+            ?.let { "combined/mesh/${it}_mesh_bal" }
     }
 
     /** session_id из HTML с mosid:// ссылкой (window.location = "mosid://auth?…"). */
@@ -210,7 +270,8 @@ object MoskvenokApi {
         refresh: Boolean = false,
         body: String? = null,
         allowEmpty: Boolean = false,
-        acceptRedirect: Boolean = false
+        acceptRedirect: Boolean = false,
+        processingBudgetMs: Long = 0
     ): JSONObject {
         val headers = mutableMapOf(
             "User-Agent" to API_UA,
@@ -220,35 +281,51 @@ object MoskvenokApi {
             "x-deviceid" to device
         )
         if (refresh) headers["x-force-refresh"] = "true"
-        // Не следуем за редиректами: 3xx на API = сессия невалидна.
-        val response = http(url, follow = false, method = method, body = body, headers = headers)
-        if (response.code in 300..399) {
-            // POST settings/docs может отвечать редиректом — для него это успех.
-            if (acceptRedirect) {
-                log("$method $url -> ${response.code} (redirect принят как успех)")
-                return JSONObject()
+        val deadline =
+            if (processingBudgetMs > 0) System.currentTimeMillis() + processingBudgetMs else 0L
+        while (true) {
+            // Не следуем за редиректами: 3xx на API = сессия невалидна.
+            val response = http(url, follow = false, method = method, body = body, headers = headers)
+            // 202 «Идет обработка документов» — сервер генерирует документы после
+            // включения: для GET ждём и повторяем в пределах бюджета.
+            if (method == "GET" && response.code == 202 && deadline > 0 &&
+                System.currentTimeMillis() < deadline
+            ) {
+                log(
+                    "… 202 обработка, повтор через 1500 мс " +
+                        "(осталось ${deadline - System.currentTimeMillis()} мс)"
+                )
+                Thread.sleep(1500)
+                continue
             }
-            log("!! $method $url -> ${response.code} (unauthorized)")
-            throw MosError("unauthorized", 401)
-        }
-        if (response.code == 401 || response.code == 403) {
-            log("!! $method $url -> ${response.code} (unauthorized)")
-            throw MosError("unauthorized", 401)
-        }
-        if (response.code !in 200..299) {
-            log("!! $method $url -> HTTP ${response.code}")
-            throw MosError("HTTP ${response.code}", response.code)
-        }
-        if (response.body.isBlank()) {
-            if (allowEmpty) return JSONObject()
-            log("!! $method $url -> пустое тело ответа")
-            throw MosError("empty response", response.code)
-        }
-        return try {
-            JSONObject(response.body)
-        } catch (error: Exception) {
-            log("!! $method $url -> invalid json: ${response.body.take(200)}")
-            throw MosError("invalid json", response.code)
+            if (response.code in 300..399) {
+                // POST settings/docs может отвечать редиректом — для него это успех.
+                if (acceptRedirect) {
+                    log("$method $url -> ${response.code} (redirect принят как успех)")
+                    return JSONObject()
+                }
+                log("!! $method $url -> ${response.code} (unauthorized)")
+                throw MosError("unauthorized", 401)
+            }
+            if (response.code == 401 || response.code == 403) {
+                log("!! $method $url -> ${response.code} (unauthorized)")
+                throw MosError("unauthorized", 401)
+            }
+            if (response.code !in 200..299) {
+                log("!! $method $url -> HTTP ${response.code}")
+                throw MosError("HTTP ${response.code}", response.code)
+            }
+            if (response.body.isBlank()) {
+                if (allowEmpty) return JSONObject()
+                log("!! $method $url -> пустое тело ответа")
+                throw MosError("empty response", response.code)
+            }
+            return try {
+                JSONObject(response.body)
+            } catch (error: Exception) {
+                log("!! $method $url -> invalid json: ${response.body.take(200)}")
+                throw MosError("invalid json", response.code)
+            }
         }
     }
 
@@ -262,9 +339,13 @@ object MoskvenokApi {
     ): Response {
         val started = System.currentTimeMillis()
         log("→ $method $url")
-        headers.forEach { (key, value) -> log("  $key: $value") }
+        headers.forEach { (key, value) ->
+            // Значение сессии в лог не пишем.
+            log("  $key: " + if (key.equals("x-sessionid", ignoreCase = true)) mask(value) else value)
+        }
         if (cookies.isNotEmpty()) {
-            log("  Cookie: " + cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
+            // Только имена кук: значения — чувствительные.
+            log("  Cookie: " + cookies.keys.joinToString("; ") { "$it=***" })
         }
         body?.let { log("  body: $it") }
         val connection = URL(url).openConnection() as HttpURLConnection
