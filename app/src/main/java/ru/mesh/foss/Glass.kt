@@ -429,13 +429,16 @@ fun GlassCard(
     border: BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val fill = if (tint.isSpecified) tint else scheme.surface
+    val container = if (tint.isSpecified) tint else scheme.surfaceContainerLow
     when (LocalDesign.current) {
         Design.LIQUID -> Card(
-            modifier = modifier.glassPane(shape, tint.takeOrElse { MaterialTheme.colorScheme.surface }),
+            modifier = modifier.glassPane(shape, fill),
             shape = shape,
             colors = CardDefaults.cardColors(
                 containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onSurface
+                contentColor = scheme.onSurface
             ),
             border = border,
             content = content
@@ -444,8 +447,8 @@ fun GlassCard(
             modifier = modifier.glass(shape),
             shape = shape,
             colors = CardDefaults.cardColors(
-                containerColor = tint.takeOrElse { MaterialTheme.colorScheme.surfaceContainerLow },
-                contentColor = MaterialTheme.colorScheme.onSurface
+                containerColor = container,
+                contentColor = scheme.onSurface
             ),
             border = border,
             content = content
@@ -454,8 +457,8 @@ fun GlassCard(
             modifier = modifier,
             shape = shape,
             colors = CardDefaults.cardColors(
-                containerColor = tint.takeOrElse { MaterialTheme.colorScheme.surfaceContainerLow },
-                contentColor = MaterialTheme.colorScheme.onSurface
+                containerColor = container,
+                contentColor = scheme.onSurface
             ),
             border = border,
             content = content
