@@ -111,7 +111,9 @@ fun MarkDetailDialog(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Medium
                         )
+                        // Сортировка по возрастанию оценки (2,3,4,5) — сервер отдаёт в произвольном порядке.
                         val dist = classResults.optJSONArray("marks_distributions")?.toObjectList().orEmpty()
+                            .sortedWith(compareBy { it.gradeFive() ?: Double.MAX_VALUE })
                         dist.forEach { bucket ->
                             val grade = bucket.optJSONObject("mark_value")?.opt("five")
                             val percent = bucket.optInt("percentage_of_students")
@@ -159,6 +161,16 @@ private fun InfoRow(label: String, value: String) {
 
 private fun JSONArray.toObjectList(): List<JSONObject> =
     (0 until length()).mapNotNull { optJSONObject(it) }
+
+/** Оценка пятибалльной шкалы из marks_distributions: число, строка или null. */
+private fun JSONObject.gradeFive(): Double? {
+    val raw = optJSONObject("mark_value")?.opt("five") ?: return null
+    return when (raw) {
+        is Number -> raw.toDouble()
+        is String -> raw.toDoubleOrNull()
+        else -> null
+    }
+}
 
 private fun JSONObject.nullableDouble(key: String): Double? =
     if (isNull(key)) null else optDouble(key).takeUnless { it.isNaN() || it.isInfinite() }

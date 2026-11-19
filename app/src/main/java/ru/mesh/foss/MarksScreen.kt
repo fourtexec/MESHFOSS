@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -194,27 +197,84 @@ fun MarksScreen(
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (subjectId == null) {
             // M3E: connected-группа переключателей — выделенный сегмент меняет и форму, и цвет.
+            // customItem вместо toggleableItem: подпись измеряется один раз в покое и
+            // фиксируется через requiredWidth. Иначе анимация enlarge-on-press при нажатии
+            // сжимает соседние сегменты, текст переносится на лишнюю строку и всё дёргается.
             ButtonGroup(
                 overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                toggleableItem(
-                    checked = mode == "date",
-                    label = Words.ByDate.text,
-                    onCheckedChange = { mode = "date" },
-                    weight = 1f
+                customItem(
+                    buttonGroupContent = {
+                        val interactionSource = remember { MutableInteractionSource() }
+                        ToggleButton(
+                            checked = mode == "date",
+                            onCheckedChange = { mode = "date" },
+                            interactionSource = interactionSource,
+                            modifier = Modifier
+                                .animateWidth(interactionSource)
+                                .weight(1f)
+                        ) {
+                            StableGroupLabel(Words.ByDate.text)
+                        }
+                    },
+                    menuContent = { state ->
+                        DropdownMenuItem(
+                            text = { Text(Words.ByDate.text) },
+                            onClick = {
+                                mode = "date"
+                                state.dismiss()
+                            }
+                        )
+                    }
                 )
-                toggleableItem(
-                    checked = mode == "subject",
-                    label = Words.BySubject.text,
-                    onCheckedChange = { mode = "subject" },
-                    weight = 1f
+                customItem(
+                    buttonGroupContent = {
+                        val interactionSource = remember { MutableInteractionSource() }
+                        ToggleButton(
+                            checked = mode == "subject",
+                            onCheckedChange = { mode = "subject" },
+                            interactionSource = interactionSource,
+                            modifier = Modifier
+                                .animateWidth(interactionSource)
+                                .weight(1f)
+                        ) {
+                            StableGroupLabel(Words.BySubject.text)
+                        }
+                    },
+                    menuContent = { state ->
+                        DropdownMenuItem(
+                            text = { Text(Words.BySubject.text) },
+                            onClick = {
+                                mode = "subject"
+                                state.dismiss()
+                            }
+                        )
+                    }
                 )
-                toggleableItem(
-                    checked = mode == "final",
-                    label = Words.FinalGrades.text,
-                    onCheckedChange = { mode = "final" },
-                    weight = 1f
+                customItem(
+                    buttonGroupContent = {
+                        val interactionSource = remember { MutableInteractionSource() }
+                        ToggleButton(
+                            checked = mode == "final",
+                            onCheckedChange = { mode = "final" },
+                            interactionSource = interactionSource,
+                            modifier = Modifier
+                                .animateWidth(interactionSource)
+                                .weight(1f)
+                        ) {
+                            StableGroupLabel(Words.FinalGrades.text)
+                        }
+                    },
+                    menuContent = { state ->
+                        DropdownMenuItem(
+                            text = { Text(Words.FinalGrades.text) },
+                            onClick = {
+                                mode = "final"
+                                state.dismiss()
+                            }
+                        )
+                    }
                 )
             }
             Spacer(Modifier.height(4.dp))
@@ -282,6 +342,30 @@ fun MarksScreen(
             onDismiss = { selectedMarkId = null }
         )
     }
+}
+
+/**
+ * Подпись сегмента ButtonGroup с фиксированной шириной.
+ *
+ * Ширина текста измеряется один раз в покое (до первого нажатия) и дальше не меняется:
+ * без этого анимация enlarge-on-press сжимает соседние сегменты, текст переносится на
+ * лишнюю строку (буквы прыгают) и высота группы дёргается.
+ */
+@Composable
+private fun StableGroupLabel(text: String) {
+    val density = LocalDensity.current
+    var fixedPx by remember(text) { mutableStateOf<Int?>(null) }
+    Text(
+        text = text,
+        modifier = Modifier
+            .onSizeChanged { size ->
+                if (fixedPx == null) fixedPx = size.width
+            }
+            .then(
+                fixedPx?.let { px -> Modifier.requiredWidth(with(density) { px.toDp() }) }
+                    ?: Modifier
+            )
+    )
 }
 
 @Composable
