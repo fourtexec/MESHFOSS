@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +49,8 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
+    var moskvenokLog by remember { mutableStateOf(prefs.getBoolean("moskvenok_log", false)) }
+    var showMoskvenokLog by remember { mutableStateOf(false) }
     var updateChannel by remember {
         mutableStateOf(
             prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
@@ -217,6 +220,45 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                             prefs.edit().putBoolean("haptics_enabled", value).apply()
                                         }
                                     )
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            Words.MoskvenokLog.text,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            Words.MoskvenokLogHint.text,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = moskvenokLog,
+                                        onCheckedChange = { value ->
+                                            moskvenokLog = value
+                                            prefs.edit().putBoolean("moskvenok_log", value).apply()
+                                            MoskvenokLog.enabled = value
+                                        }
+                                    )
+                                }
+                                if (moskvenokLog) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { showMoskvenokLog = true }) {
+                                            Text(Words.ShowMoskvenokLog.text)
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                MoskvenokLog.clear()
+                                                showMoskvenokLog = false
+                                            }
+                                        ) {
+                                            Text(Words.ClearMoskvenokLog.text)
+                                        }
+                                    }
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 Text(
@@ -394,6 +436,38 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
             dismissButton = {
                 TextButton(onClick = { updateInfo = null }) {
                     Text(Words.Later.text)
+                }
+            }
+        )
+    }
+
+    if (showMoskvenokLog) {
+        val logText = remember { MoskvenokLog.read(context) }
+        AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = Color.Transparent,
+            onDismissRequest = { showMoskvenokLog = false },
+            title = { Text(Words.MoskvenokLog.text) },
+            text = {
+                if (logText.isBlank()) {
+                    Text(Words.MoskvenokLogEmpty.text, style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Column(
+                        Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            logText,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMoskvenokLog = false }) {
+                    Text(Words.Close.text)
                 }
             }
         )

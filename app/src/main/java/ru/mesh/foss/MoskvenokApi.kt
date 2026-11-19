@@ -48,6 +48,14 @@ object MoskvenokApi {
     /** code = 401 — сессия невалидна (нужно получить заново); -1 — сессии нет вообще. */
     class MosError(message: String, val code: Int = 0) : Exception(message)
 
+    /** Синк логирования (задаётся MoskvenokLog.init): запросы, ответы, ошибки. */
+    @Volatile
+    var logger: ((String) -> Unit)? = null
+
+    private fun log(line: String) {
+        logger?.invoke(line)
+    }
+
     // ------------------------------------------------------------- сессия --
 
     /**
@@ -63,27 +71,36 @@ object MoskvenokApi {
         )
 
         // 1. GET /auth/login/{device}/{platform} -> 302 на OAuth entry + cookie sessionid.
+        log("session: GET $ID/api/v3/edm/auth/login/$device/$PLATFORM (jar: ${cookies.keys.joinToString(",")})")
         val start = http(
             "$ID/api/v3/edm/auth/login/$device/$PLATFORM",
             cookies,
             follow = false,
             headers = htmlAccept
         )
-        val location = start.location ?: return null
-        if (start.code != 302) return null
+        val location = start.location
+        if (start.code != 302 || location == null) {
+            log("session: start failed: code=${start.code} location=${location ?: "-"}")
+            return null
+        }
         start.cookies["sessionid"]?.takeIf { it.isNotBlank() }?.let { cookies["sessionid"] = it }
+        log("session: start ${start.code}, sessionid=${cookies["sessionid"] ?: "-"}")
 
         // 2. OAuth-цепочка без prompt=login — переиспользуем SSO от входа (PoC).
         var url = stripParam(location, "prompt")
+        log("session: oauth $url")
         var reachedCallback = false
         var html = ""
         for (hop in 0 until 15) {
             val response = http(url, cookies, follow = false, headers = htmlAccept)
             val next = response.location
+            log("session: hop ${response.code} $url" + (next?.let { " -> $it" } ?: ""))
             if (response.code in 300..399 && next != null) {
                 val target = resolve(url, next)
                 if (target.contains(CALLBACK_MARK)) {
-                    html = http(target, cookies, follow = false, headers = htmlAccept).body
+                    val callback = http(target, cookies, follow = false, headers = htmlAccept)
+                    html = callback.body
+                    log("session: callback ${callback.code}")
                     reachedCallback = true
                     break
                 }
@@ -92,10 +109,15 @@ object MoskvenokApi {
                 break
             }
         }
-        if (!reachedCallback) return null
+        if (!reachedCallback) {
+            log("session: failed — OAuth не дошёл до id.mos.ru callback (SSO не активна?)")
+            return null
+        }
 
         // 3. session_id из mosid:// ссылки (иначе cookie sessionid, который ставит callback).
-        return sessionFromMosid(html) ?: cookies["sessionid"]?.takeIf { it.isNotBlank() }
+        val result = sessionFromMosid(html) ?: cookies["sessionid"]?.takeIf { it.isNotBlank() }
+        log(if (result != null) "session: got sid=$result" else "session: failed — пустой sessionid")
+        return result
     }
 
     // ---------------------------------------------------------------- API --
@@ -107,7 +129,7 @@ object MoskvenokApi {
     /** POST /api/v3/edm/mp/settings/docs {"profile":[22],"favorites":[22]} — включает карту. */
     fun enable(session: String, device: String): JSONObject =
         api("POST", "$ID/api/v3/edm/mp/settings/docs", session, device,
-            body = ENABLE_BODY, allowEmpty = true)
+            body = ENABLE_BODY, allowEmpty = true, acceptRedirect = true)
 
     /**
      * GET /api/v3/edm/mp/documents/{docId}?type=mesh — QR-пейлоад и поля.
@@ -187,27 +209,45 @@ object MoskvenokApi {
         device: String,
         refresh: Boolean = false,
         body: String? = null,
-        allowEmpty: Boolean = false
+        allowEmpty: Boolean = false,
+        acceptRedirect: Boolean = false
     ): JSONObject {
         val headers = mutableMapOf(
             "User-Agent" to API_UA,
+            // content-type есть на всех запросах captured (включая GET — flow.txt).
+            "Content-Type" to "application/json",
             "x-sessionid" to session,
             "x-deviceid" to device
         )
         if (refresh) headers["x-force-refresh"] = "true"
         // Не следуем за редиректами: 3xx на API = сессия невалидна.
         val response = http(url, follow = false, method = method, body = body, headers = headers)
-        if (response.code in 300..399 || response.code == 401 || response.code == 403) {
+        if (response.code in 300..399) {
+            // POST settings/docs может отвечать редиректом — для него это успех.
+            if (acceptRedirect) {
+                log("$method $url -> ${response.code} (redirect принят как успех)")
+                return JSONObject()
+            }
+            log("!! $method $url -> ${response.code} (unauthorized)")
             throw MosError("unauthorized", 401)
         }
-        if (response.code !in 200..299) throw MosError("HTTP ${response.code}", response.code)
+        if (response.code == 401 || response.code == 403) {
+            log("!! $method $url -> ${response.code} (unauthorized)")
+            throw MosError("unauthorized", 401)
+        }
+        if (response.code !in 200..299) {
+            log("!! $method $url -> HTTP ${response.code}")
+            throw MosError("HTTP ${response.code}", response.code)
+        }
         if (response.body.isBlank()) {
             if (allowEmpty) return JSONObject()
+            log("!! $method $url -> пустое тело ответа")
             throw MosError("empty response", response.code)
         }
         return try {
             JSONObject(response.body)
         } catch (error: Exception) {
+            log("!! $method $url -> invalid json: ${response.body.take(200)}")
             throw MosError("invalid json", response.code)
         }
     }
@@ -220,6 +260,13 @@ object MoskvenokApi {
         body: String? = null,
         headers: Map<String, String> = emptyMap()
     ): Response {
+        val started = System.currentTimeMillis()
+        log("→ $method $url")
+        headers.forEach { (key, value) -> log("  $key: $value") }
+        if (cookies.isNotEmpty()) {
+            log("  Cookie: " + cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
+        }
+        body?.let { log("  body: $it") }
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = follow
@@ -257,12 +304,25 @@ object MoskvenokApi {
                     }
                 }
             }
+            val text = readBody(connection, code)
+            log(
+                "← $code $method $url (${System.currentTimeMillis() - started} ms)" +
+                    (if (responseCookies.isNotEmpty()) {
+                        " set-cookie: ${responseCookies.keys.joinToString(",")}"
+                    } else {
+                        ""
+                    })
+            )
+            if (text.isNotBlank()) log("  response: ${text.take(2000)}")
             return Response(
                 code = code,
                 location = connection.getHeaderField("Location"),
                 cookies = responseCookies,
-                body = readBody(connection, code)
+                body = text
             )
+        } catch (error: Exception) {
+            log("!! $method $url: $error")
+            throw error
         } finally {
             connection.disconnect()
         }

@@ -20,6 +20,7 @@ class MeshApp : Application() {
     override fun onCreate() {
         super.onCreate()
         UiLanguage.select(getSharedPreferences("mesh_settings", MODE_PRIVATE).getString("language", "ru"))
+        MoskvenokLog.init(this)
         createNotificationChannel()
         scheduleTokenRefresh()
     }

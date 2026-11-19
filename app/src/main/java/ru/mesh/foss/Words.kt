@@ -2047,6 +2047,48 @@ internal enum class Words(
         "A Moskvenok nem tölthető be. Próbálja újra később.",
         "No se pudo cargar Moskvenok. Inténtelo más tarde.",
         "Impossible de charger Moskvenok. Réessayez plus tard."
+    ),
+    MoskvenokEnableFailed(
+        "Карта не включилась. Обновите экран или повторите попытку.",
+        "The card was not enabled. Refresh the screen or try again.",
+        "A kártya nem kapcsolt be. Frissítse a képernyőt, vagy próbálja újra.",
+        "La tarjeta no se activó. Actualice la pantalla o inténtelo de nuevo.",
+        "La carte n’a pas été activée. Actualisez l’écran ou réessayez."
+    ),
+    MoskvenokLog(
+        "Лог Москвёнка",
+        "Moskvenok log",
+        "Moskvenok napló",
+        "Registro de Moskvenok",
+        "Journal Moskvenok"
+    ),
+    MoskvenokLogHint(
+        "Запросы, ответы и ошибки экрана «Москвёнок».",
+        "Requests, responses and errors of the Moskvenok screen.",
+        "A Moskvenok képernyő kérései, válaszai és hibái.",
+        "Solicitudes, respuestas y errores de la pantalla Moskvenok.",
+        "Requêtes, réponses et erreurs de l’écran Moskvenok."
+    ),
+    ShowMoskvenokLog(
+        "Показать лог",
+        "Show log",
+        "Napló megjelenítése",
+        "Ver registro",
+        "Afficher le journal"
+    ),
+    ClearMoskvenokLog(
+        "Очистить лог",
+        "Clear log",
+        "Napló törlése",
+        "Borrar registro",
+        "Effacer le journal"
+    ),
+    MoskvenokLogEmpty(
+        "Лог пуст. Включите переключатель и повторите действие на экране «Москвёнок».",
+        "The log is empty. Turn on the toggle and repeat an action on the Moskvenok screen.",
+        "A napló üres. Kapcsolja be a kapcsolót, és ismételjen meg egy műveletet a Moskvenok képernyőn.",
+        "El registro está vacío. Active el interruptor y repita una acción en la pantalla Moskvenok.",
+        "Le journal est vide. Activez l’interrupteur et répétez une action sur l’écran Moskvenok."
     );
 
     val text: String
