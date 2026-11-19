@@ -2083,6 +2083,13 @@ internal enum class Words(
         "Borrar registro",
         "Effacer le journal"
     ),
+    CopyMoskvenokLog(
+        "Копировать лог",
+        "Copy log",
+        "Napló másolása",
+        "Copiar registro",
+        "Copier le journal"
+    ),
     MoskvenokLogEmpty(
         "Лог пуст. Включите переключатель и повторите действие на экране «Москвёнок».",
         "The log is empty. Turn on the toggle and repeat an action on the Moskvenok screen.",

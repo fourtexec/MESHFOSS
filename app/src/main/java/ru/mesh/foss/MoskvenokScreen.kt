@@ -77,10 +77,16 @@ import java.util.Locale
 fun MoskvenokScreen(store: SessionStore, studentId: String?) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    // Официальное приложение шлёт Android ID в ВЕРХНЕМ регистре (84EB0B6C9F508016
+    // из flow — это ID в caps). Сервер регистрирует устройство на логине в таком
+    // виде: с нижним регистром settings/docs принимается (эхо 200), но не
+    // сохраняется, а документ отдаёт 500. Регистр чувствителен и для привязки
+    // сессии: несовпадение session/deviceid -> 403 (старая закэшированная сессия
+    // в этом случае сама переполучится).
     val deviceId = remember(context) {
         runCatching {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() } ?: "unknown"
+        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.uppercase() ?: "unknown"
     }
 
     var loading by remember { mutableStateOf(true) }
@@ -243,18 +249,43 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
             )
             try {
                 withContext(Dispatchers.IO) { MoskvenokApi.enable(session(), deviceId) }
-                MoskvenokLog.append("enable: POST принят, перепроверяем objects")
-                // Настройка применяется не мгновенно — до 3 проверок с паузой 800 мс.
-                var enabledNow = false
-                for (attempt in 1..3) {
-                    if (attempt > 1) delay(800)
-                    enabledNow = refreshAll(false)
-                    if (enabledNow || errorText != null) break
-                    MoskvenokLog.append("enable: проверка $attempt — карта ещё выключена")
-                }
-                if (!enabledNow && errorText == null) {
-                    MoskvenokLog.append("enable: не подтвердилось после 3 проверок")
+                MoskvenokLog.append("enable: POST принят — берём документ по uuid (как official, flow)")
+                // Официальное приложение после POST сразу запрашивает документ по uuid
+                // и не перепроверяет groups — делаем так же. Повтор один раз на случай
+                // серверной задержки генерации.
+                val docId = MoskvenokApi.meshDocId(objects ?: JSONObject(), studentId)
+                if (docId == null) {
+                    MoskvenokLog.append("enable: нет uuid ученика — документ не запросить")
                     errorText = Words.MoskvenokEnableFailed.text
+                } else {
+                    var fetched: JSONObject? = null
+                    for (attempt in 1..2) {
+                        if (attempt > 1) delay(800)
+                        try {
+                            fetched = withContext(Dispatchers.IO) {
+                                MoskvenokApi.document(session(), deviceId, docId, refresh = false)
+                            }
+                            break
+                        } catch (docError: Exception) {
+                            MoskvenokLog.append("enable: документ, попытка $attempt: $docError")
+                        }
+                    }
+                    if (fetched != null) {
+                        doc = fetched
+                        applyDocTiming(fetched)
+                        errorText = null
+                        MoskvenokLog.append(
+                            "enable: документ получен doc=$docId " +
+                                "(objects включена: ${objects?.let { MoskvenokApi.isEnabled(it) } ?: false})"
+                        )
+                    } else {
+                        // Документ не пришёл — сверяемся с objects и честно сообщаем.
+                        val enabledNow = refreshAll(false)
+                        if (!enabledNow && errorText == null) {
+                            MoskvenokLog.append("enable: не подтвердилось")
+                            errorText = Words.MoskvenokEnableFailed.text
+                        }
+                    }
                 }
             } catch (error: Exception) {
                 MoskvenokLog.append("enable: ошибка: $error")
@@ -281,7 +312,9 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
             loading -> MoskvenokLoader()
             loadedObjects == null ->
                 if (error != null) MoskvenokErrorCard(error) { load() } else MoskvenokLoader()
-            !MoskvenokApi.isEnabled(loadedObjects) -> GlassCard(
+            // QR показываем, пока есть документ: включение подтверждается именно
+            // им (официальное приложение не смотрит groups после POST).
+            doc == null && !MoskvenokApi.isEnabled(loadedObjects) -> GlassCard(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {

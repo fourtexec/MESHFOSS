@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -443,6 +445,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
 
     if (showMoskvenokLog) {
         val logText = remember { MoskvenokLog.read(context) }
+        val clipboard = LocalClipboardManager.current
         AlertDialog(
             modifier = Modifier.dialogGlass(),
             containerColor = Color.Transparent,
@@ -468,6 +471,14 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
             confirmButton = {
                 TextButton(onClick = { showMoskvenokLog = false }) {
                     Text(Words.Close.text)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { clipboard.setText(AnnotatedString(logText)) },
+                    enabled = logText.isNotBlank()
+                ) {
+                    Text(Words.CopyMoskvenokLog.text)
                 }
             }
         )
