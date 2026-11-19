@@ -209,8 +209,23 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
             return true
         }
         try {
-            val document = withContext(Dispatchers.IO) {
+            var document = withContext(Dispatchers.IO) {
                 MoskvenokApi.document(sid, deviceId, docId, refreshQr)
+            }
+            // Сразу после включения сервер может отдать документ без barcode_payload
+            // (пустой квадрат на экране) — добиваемся повторами с force-refresh.
+            var payloadTry = 1
+            while (document.optString("barcode_payload").isBlank() && payloadTry < 3) {
+                payloadTry++
+                delay(800)
+                MoskvenokLog.append("load: документ без payload, повтор $payloadTry (force-refresh)")
+                document = withContext(Dispatchers.IO) {
+                    MoskvenokApi.document(sid, deviceId, docId, refresh = true)
+                }
+            }
+            if (document.optString("barcode_payload").isBlank()) {
+                MoskvenokLog.append("load: payload так и не пришёл")
+                throw MoskvenokApi.MosError("empty barcode")
             }
             doc = document
             errorText = null
@@ -251,31 +266,40 @@ fun MoskvenokScreen(store: SessionStore, studentId: String?) {
                 withContext(Dispatchers.IO) { MoskvenokApi.enable(session(), deviceId) }
                 MoskvenokLog.append("enable: POST принят — берём документ по uuid (как official, flow)")
                 // Официальное приложение после POST сразу запрашивает документ по uuid
-                // и не перепроверяет groups — делаем так же. Повтор один раз на случай
-                // серверной задержки генерации.
+                // и не перепроверяет groups — делаем так же.
                 val docId = MoskvenokApi.meshDocId(objects ?: JSONObject(), studentId)
                 if (docId == null) {
                     MoskvenokLog.append("enable: нет uuid ученика — документ не запросить")
                     errorText = Words.MoskvenokEnableFailed.text
                 } else {
+                    // Пока payload не пришёл — doc не ставим: иначе пустой квадрат.
+                    // Официальное приложение после POST идёт в документ по uuid;
+                    // первые ответы могут быть без barcode_payload — повторяем до 4 раз
+                    // (3-й и 4-й — с x-force-refresh, он и генерирует новый payload).
                     var fetched: JSONObject? = null
-                    for (attempt in 1..2) {
-                        if (attempt > 1) delay(800)
+                    for (attempt in 1..4) {
+                        if (attempt > 1) delay(if (attempt == 2) 800L else 1200L)
                         try {
-                            fetched = withContext(Dispatchers.IO) {
-                                MoskvenokApi.document(session(), deviceId, docId, refresh = false)
+                            val document = withContext(Dispatchers.IO) {
+                                MoskvenokApi.document(session(), deviceId, docId, refresh = attempt >= 3)
                             }
-                            break
+                            fetched = document
+                            if (document.optString("barcode_payload").isNotBlank()) {
+                                MoskvenokLog.append("enable: документ получен, попытка $attempt")
+                                break
+                            }
+                            MoskvenokLog.append("enable: документ, попытка $attempt — без barcode_payload")
                         } catch (docError: Exception) {
                             MoskvenokLog.append("enable: документ, попытка $attempt: $docError")
                         }
                     }
-                    if (fetched != null) {
-                        doc = fetched
-                        applyDocTiming(fetched)
+                    val document = fetched?.takeIf { it.optString("barcode_payload").isNotBlank() }
+                    if (document != null) {
+                        doc = document
+                        applyDocTiming(document)
                         errorText = null
                         MoskvenokLog.append(
-                            "enable: документ получен doc=$docId " +
+                            "enable: QR doc=$docId " +
                                 "(objects включена: ${objects?.let { MoskvenokApi.isEnabled(it) } ?: false})"
                         )
                     } else {
