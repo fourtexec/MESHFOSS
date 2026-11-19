@@ -48,6 +48,8 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
+    val glassEnabled = LocalGlass.current
+    val setGlass = LocalGlassSetter.current
     var updateChannel by remember {
         mutableStateOf(
             prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
@@ -64,7 +66,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         ProfileBody(store, client, profile, showToken = false)
         Spacer(Modifier.height(8.dp))
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth().glass()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Оформление", "Appearance"),
@@ -102,6 +104,23 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                         Text(AppTheme.label(id, customName.ifBlank { myThemeLabel }))
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(tr("Стеклянный стиль", "Glass style"), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            tr(
+                                "Полупрозрачные карточки на фоне со свечением",
+                                "Translucent cards over a glowing backdrop"
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = glassEnabled, onCheckedChange = setGlass)
+                }
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(
                     value = customName,
@@ -137,7 +156,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth().glass()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Язык", "Language"),
@@ -171,7 +190,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth().glass()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     tr("Приложение", "Application"),
@@ -278,7 +297,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth().glass()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(tr("Токен МЭШ", "MESH token"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))
@@ -334,7 +353,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
 
         Spacer(Modifier.height(8.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(modifier = Modifier.fillMaxWidth().glass()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(tr("Аккаунт", "Account"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))

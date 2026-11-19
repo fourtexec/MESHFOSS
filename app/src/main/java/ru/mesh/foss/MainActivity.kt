@@ -61,8 +61,9 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     var themeId by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var themeColors by remember { mutableStateOf(prefs.getString("theme_colors", null)) }
     var language by remember { mutableStateOf(prefs.getString("language", "ru") ?: "ru") }
+    var glass by remember { mutableStateOf(prefs.getBoolean(Glass.PREF_KEY, Glass.DEFAULT)) }
     val dark = isSystemInDarkTheme()
-    val colors = remember(themeId, themeColors, dark) {
+    val baseColors = remember(themeId, themeColors, dark) {
         if (themeId == "dynamic") {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -74,12 +75,15 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
             AppTheme.colors(themeId, themeColors)
         }
     }
-    val shapes = remember {
+    val colors = remember(baseColors, glass) { if (glass) Glass.glassify(baseColors) else baseColors }
+    val glassStyle = remember(themeId, baseColors) { Glass.style(themeId, baseColors) }
+    // В стекле карточки скруглены сильнее (20dp) — крупные мягкие углы, как у пластины.
+    val shapes = remember(glass) {
         Shapes(
             extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
             small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-            large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(if (glass) 20.dp else 16.dp),
+            large = androidx.compose.foundation.shape.RoundedCornerShape(if (glass) 28.dp else 24.dp),
             extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
         )
     }
@@ -94,18 +98,33 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         language = code
         prefs.edit().putString("language", code).apply()
     }
+    val applyGlass: (Boolean) -> Unit = { enabled ->
+        glass = enabled
+        prefs.edit().putBoolean(Glass.PREF_KEY, enabled).apply()
+    }
 
     CompositionLocalProvider(
         LocalAppTheme provides applyTheme,
         LocalAppLanguage provides language,
-        LocalAppLanguageSetter provides applyLanguage
+        LocalAppLanguageSetter provides applyLanguage,
+        LocalGlass provides glass,
+        LocalGlassStyle provides glassStyle,
+        LocalGlassSetter provides applyGlass
     ) {
         MaterialTheme(
             colorScheme = colors,
             motionScheme = MotionScheme.expressive(),
-            shapes = shapes,
-            content = content
-        )
+            shapes = shapes
+        ) {
+            if (glass) {
+                GlassBackdrop {
+                    // Фон рисует GlassBackdrop: прозрачная Surface задаёт только цвет текста.
+                    Surface(color = androidx.compose.ui.graphics.Color.Transparent, content = content)
+                }
+            } else {
+                Surface(color = MaterialTheme.colorScheme.background, content = content)
+            }
+        }
     }
 }
 
@@ -429,7 +448,10 @@ fun MainScaffold(
         else -> tr("МЭШ Рейтинг", "MESH Ranking")
     }
 
+    val glass = LocalGlass.current
+    val glassStyle = LocalGlassStyle.current
     Scaffold(
+        containerColor = if (glass) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         modifier = Modifier.pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
@@ -462,6 +484,15 @@ fun MainScaffold(
         },
         topBar = {
             TopAppBar(
+                // В стекле шапка прозрачная: под ней виден фон со свечениями.
+                colors = if (glass) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                    )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                },
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
@@ -485,7 +516,15 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            ShortNavigationBar {
+            ShortNavigationBar(
+                // Нижняя панель — стеклянная пластина с тонкой светлой кромкой сверху.
+                modifier = if (glass) Modifier.glassBar(glassStyle.dark) else Modifier,
+                containerColor = if (glass) {
+                    androidx.compose.ui.graphics.Color.White.copy(alpha = if (glassStyle.dark) 0.06f else 0.55f)
+                } else {
+                    ShortNavigationBarDefaults.containerColor
+                }
+            ) {
                 val items = listOf(
                     Triple("ranking", tr("Рейтинг", "Rating"), R.drawable.ic_nav_ranking),
                     Triple("marks", tr("Оценки", "Marks"), R.drawable.ic_nav_marks),

@@ -2,3 +2,8 @@
 keystore.properties
 *.jks
 *.keystore
+
+# Gradle build output and local SDK path
+.gradle/
+build/
+local.properties

@@ -123,7 +123,7 @@ fun ScheduleScreen(
                     val homework = lesson.optString("homework")
 
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
                         Row(

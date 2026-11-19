@@ -98,6 +98,7 @@ fun SubjectsScreen(
                                     Modifier
                                 }
                             )
+                            .glass()
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),

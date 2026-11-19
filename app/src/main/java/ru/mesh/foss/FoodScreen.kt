@@ -265,9 +265,9 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun BalanceCard(balances: JSONArray) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
         // Ключевая цифра экрана — самый светлый контейнер (M3E: containment).
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        colors = CardDefaults.cardColors(containerColor = emphasisContainer())
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -314,7 +314,7 @@ private fun StateCard(state: JSONObject?) {
     val name = first?.optString("organizationName").orEmpty()
     val address = first?.optString("text").orEmpty()
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -389,7 +389,7 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
     val gramLabel = tr("г", "g")
     val kcalLabel = tr("ккал", "kcal")
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(
@@ -454,7 +454,7 @@ private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefau
 @Composable
 private fun OrderRow(order: JSONObject) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).glass(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
