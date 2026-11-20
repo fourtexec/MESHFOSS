@@ -284,12 +284,21 @@ fun MoskvenokScreen(store: SessionStore) {
     fun enableMoskvenok() {
         scope.launch {
             enabling = true
-            MoskvenokLog.append(
-                """enable: POST /api/v3/edm/mp/settings/docs {"profile":[22],"favorites":[22]}"""
-            )
             try {
-                withContext(Dispatchers.IO) { MoskvenokApi.enable(session(), deviceId) }
-                MoskvenokLog.append("enable: POST принят — берём документ по uuid (как official, flow)")
+                // Flow: POST settings/docs — только «если выключен». Если GET objects
+                // уже отдаёт type: mesh в groups — не шлём (в т.ч. на кнопке повтора).
+                val alreadyEnabled = objects?.let { MoskvenokApi.isEnabled(it) } == true
+                if (alreadyEnabled) {
+                    MoskvenokLog.append(
+                        "enable: уже включено (type: mesh в groups) — POST не шлём, берём документ"
+                    )
+                } else {
+                    MoskvenokLog.append(
+                        """enable: POST /api/v3/edm/mp/settings/docs {"profile":[22],"favorites":[22]}"""
+                    )
+                    withContext(Dispatchers.IO) { MoskvenokApi.enable(session(), deviceId) }
+                    MoskvenokLog.append("enable: POST принят — берём документ по uuid (как official, flow)")
+                }
                 // Официальное приложение после POST сразу запрашивает документ по uuid
                 // и не перепроверяет groups — делаем так же.
                 val docId = MoskvenokApi.meshDocId(objects ?: JSONObject(), store.personId)
