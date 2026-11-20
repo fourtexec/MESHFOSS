@@ -7,3 +7,6 @@ keystore.properties
 .gradle/
 build/
 local.properties
+
+# Служебные файлы компилятора Kotlin 2.x
+.kotlin/
