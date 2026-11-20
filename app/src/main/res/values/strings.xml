@@ -9,5 +9,5 @@
     <string name="notif_token_text">Сессия продлена автоматически</string>
     <string name="notif_error_title">Нужен повторный вход в МЭШ</string>
     <string name="notif_error_text">Токен не удалось обновить — откройте приложение и войдите заново.</string>
-    <string name="widget_description">Уроки, домашние задания, пропуски и проходы на сегодня</string>
+    <string name="widget_description">Текущий и следующий урок с обратным отсчётом, домашние задания</string>
 </resources>

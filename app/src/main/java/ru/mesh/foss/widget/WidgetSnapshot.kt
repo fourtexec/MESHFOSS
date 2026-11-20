@@ -1,9 +1,43 @@
 package ru.mesh.foss.widget
 
+import org.json.JSONArray
 import org.json.JSONObject
 
+/** Один урок в снимке виджета. */
+data class WidgetLesson(
+    val begin: String = "",
+    val end: String = "",
+    val subject: String = "",
+    val room: String = "",
+    val homework: List<String> = emptyList(),
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("begin", begin)
+        .put("end", end)
+        .put("subject", subject)
+        .put("room", room)
+        .put("homework", JSONArray().putAll(homework))
+
+    companion object {
+        fun fromJson(json: JSONObject?): WidgetLesson? {
+            if (json == null) return null
+            val subject = json.optString("subject").takeIf { it.isNotBlank() } ?: return null
+            val homework = json.optJSONArray("homework")
+            val texts = (0 until (homework?.length() ?: 0)).mapNotNull { homework?.optString(it)?.takeIf(String::isNotBlank) }
+            return WidgetLesson(
+                begin = json.optString("begin"),
+                end = json.optString("end"),
+                subject = subject,
+                room = json.optString("room"),
+                homework = texts,
+            )
+        }
+    }
+}
+
 /**
- * Компактные данные домашнего виджета.
+ * Компактные данные домашнего виджета: только то, что реально нужно на
+ * главном экране — расписание на день и невыполненное ДЗ.
  *
  * Виджет не делает сетевых запросов во время отрисовки: приложение обновляет
  * снимок в кэше и только после этого просит Glance перерисоваться. Это важно,
@@ -12,45 +46,53 @@ import org.json.JSONObject
 data class WidgetSnapshot(
     val childName: String = "",
     val date: String = "",
-    val lessonCount: Int = 0,
-    val firstLesson: String? = null,
-    val lastLesson: String? = null,
+    val lessons: List<WidgetLesson> = emptyList(),
     val pendingHomework: Int = 0,
-    val absences: Int = 0,
-    val entry: String? = null,
-    val exit: String? = null,
     val updatedAt: Long = 0L,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("childName", childName)
         .put("date", date)
-        .put("lessonCount", lessonCount)
-        .put("firstLesson", firstLesson ?: JSONObject.NULL)
-        .put("lastLesson", lastLesson ?: JSONObject.NULL)
+        .put("lessons", JSONArray().putAll(lessons.map { it.toJson() }))
         .put("pendingHomework", pendingHomework)
-        .put("absences", absences)
-        .put("entry", entry ?: JSONObject.NULL)
-        .put("exit", exit ?: JSONObject.NULL)
         .put("updatedAt", updatedAt)
 
     companion object {
         fun fromJson(json: JSONObject?): WidgetSnapshot {
             if (json == null) return WidgetSnapshot()
+            val array = json.optJSONArray("lessons")
+            var lessons = (0 until (array?.length() ?: 0)).mapNotNull { array?.optJSONObject(it) }
+                .mapNotNull { WidgetLesson.fromJson(it) }
+            if (lessons.isEmpty()) {
+                // Совместимость со снимками beta.1: там был только первый/последний урок.
+                val first = json.stringOrNull("firstLesson")
+                val last = json.stringOrNull("lastLesson")
+                if (first != null || last != null) {
+                    lessons = listOf(
+                        WidgetLesson(
+                            begin = first.orEmpty(),
+                            end = last.orEmpty(),
+                            subject = WidgetLegacySubject,
+                        )
+                    )
+                }
+            }
             return WidgetSnapshot(
                 childName = json.optString("childName"),
                 date = json.optString("date"),
-                lessonCount = json.optInt("lessonCount"),
-                firstLesson = json.stringOrNull("firstLesson"),
-                lastLesson = json.stringOrNull("lastLesson"),
+                lessons = lessons,
                 pendingHomework = json.optInt("pendingHomework"),
-                absences = json.optInt("absences"),
-                entry = json.stringOrNull("entry"),
-                exit = json.stringOrNull("exit"),
                 updatedAt = json.optLong("updatedAt"),
             )
         }
 
+        private const val WidgetLegacySubject = "—"
+
         private fun JSONObject.stringOrNull(key: String): String? =
             if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
     }
+}
+
+private fun JSONArray.putAll(values: Iterable<Any>): JSONArray = apply {
+    values.forEach { put(it) }
 }

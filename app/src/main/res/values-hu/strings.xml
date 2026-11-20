@@ -7,5 +7,5 @@
     <string name="notif_token_text">A munkamenet automatikusan megújult</string>
     <string name="notif_error_title">Jelentkezzen be újra a MESH-be</string>
     <string name="notif_error_text">A token nem újítható meg. Nyissa meg az alkalmazást és jelentkezzen be újra.</string>
-    <string name="widget_description">Mai órák, házik, hiányzások és belépések</string>
+    <string name="widget_description">Aktuális és következő óra visszaszámlálással, házi feladatok</string>
 </resources>

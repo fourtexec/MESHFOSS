@@ -10,7 +10,6 @@ import ru.mesh.foss.feature.profile.*
 
 import android.content.Intent
 import android.net.Uri
-import androidx.biometric.BiometricManager
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.selection.selectable
@@ -29,16 +28,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import ru.mesh.foss.lock.PinManager
 
 @Composable
 fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?, onLogout: () -> Unit) {
@@ -64,18 +59,6 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
     var moskvenokLog by remember { mutableStateOf(MeshLog.enabled) }
     var showMoskvenokLog by remember { mutableStateOf(false) }
-    var pinEnabled by remember { mutableStateOf(PinManager.isEnabled(context)) }
-    var biometricEnabled by remember { mutableStateOf(PinManager.isBiometricEnabled(context)) }
-    var showPinDialog by remember { mutableStateOf(false) }
-    var pinDraft by remember { mutableStateOf("") }
-    var pinRepeat by remember { mutableStateOf("") }
-    var pinError by remember { mutableStateOf<String?>(null) }
-    val biometricAvailable = remember(context) {
-        BiometricManager.from(context).canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.BIOMETRIC_WEAK
-        ) == BiometricManager.BIOMETRIC_SUCCESS
-    }
     var updateChannel by remember {
         mutableStateOf(
             prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
@@ -230,59 +213,6 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                     if (store.isEncrypted()) Words.Encrypted.text else Words.Private.text
                                 )
                                 SettingsRow(Words.NameCache.text, Words.Enabled.text)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(Words.PinCode.text, style = MaterialTheme.typography.bodyMedium)
-                                        Text(
-                                            if (pinEnabled) Words.PinEnabledHint.text else Words.PinDisabledHint.text,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Switch(
-                                        checked = pinEnabled,
-                                        onCheckedChange = { value ->
-                                            if (value) {
-                                                pinDraft = ""
-                                                pinRepeat = ""
-                                                pinError = null
-                                                showPinDialog = true
-                                            } else {
-                                                PinManager.clear(context)
-                                                pinEnabled = false
-                                                biometricEnabled = false
-                                            }
-                                        }
-                                    )
-                                }
-                                if (pinEnabled) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(Words.Biometrics.text, style = MaterialTheme.typography.bodyMedium)
-                                            if (!biometricAvailable) {
-                                                Text(
-                                                    Words.BiometricUnavailable.text,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                        Switch(
-                                            checked = biometricEnabled,
-                                            enabled = biometricAvailable,
-                                            onCheckedChange = { value ->
-                                                biometricEnabled = value
-                                                PinManager.setBiometricEnabled(context, value)
-                                            }
-                                        )
-                                    }
-                                }
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -490,79 +420,6 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         }
     }
 
-    if (showPinDialog) {
-        AlertDialog(
-            modifier = Modifier.dialogGlass(),
-            containerColor = Color.Transparent,
-            onDismissRequest = { showPinDialog = false },
-            title = { Text(Words.SetPinCode.text) },
-            text = {
-                Column {
-                    Text(
-                        Words.PinDigitsHint.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = pinDraft,
-                        onValueChange = {
-                            if (it.length <= PinManager.MAX_LENGTH && it.all(Char::isDigit)) {
-                                pinDraft = it
-                                pinError = null
-                            }
-                        },
-                        label = { Text(Words.Pin.text) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = pinRepeat,
-                        onValueChange = {
-                            if (it.length <= PinManager.MAX_LENGTH && it.all(Char::isDigit)) {
-                                pinRepeat = it
-                                pinError = null
-                            }
-                        },
-                        label = { Text(Words.RepeatPin.text) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    pinError?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        when {
-                            pinDraft.length < PinManager.MIN_LENGTH -> pinError = Words.PinTooShort.text
-                            pinDraft != pinRepeat -> pinError = Words.PinMismatch.text
-                            else -> {
-                                if (PinManager.setPin(context, pinDraft)) {
-                                    pinEnabled = true
-                                    biometricEnabled = false
-                                    showPinDialog = false
-                                } else {
-                                    pinError = Words.PinTooShort.text
-                                }
-                            }
-                        }
-                    }
-                ) { Text(Words.Save.text) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPinDialog = false }) { Text(Words.Cancel.text) }
-            }
-        )
-    }
 
     updateInfo?.let { info ->
         AlertDialog(

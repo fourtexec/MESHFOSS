@@ -18,14 +18,12 @@ retrofit = "3.0.0"
 gson = "2.15.0"
 okhttp = "5.5.1"
 glance = "1.2.0"
-biometric = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 androidx-work = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
-androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 material = { module = "com.google.android.material:material", version.ref = "material" }

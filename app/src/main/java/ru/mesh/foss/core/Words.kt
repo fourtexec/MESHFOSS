@@ -2230,75 +2230,40 @@ internal enum class Words(
         "Más",
         "Plus"
     ),
-    PinCode(
-        "PIN-код",
-        "PIN code",
-        "PIN-kód",
-        "Código PIN",
-        "Code PIN"
+    EditTabs(
+        "Редактировать",
+        "Edit",
+        "Szerkesztés",
+        "Editar",
+        "Modifier"
     ),
-    PinEnabledHint(
-        "Запрашивается при запуске приложения",
-        "Asked when the app starts",
-        "Az alkalmazás indításakor kéri",
-        "Se pide al iniciar la aplicación",
-        "Demandé au démarrage de l’application"
+    Done(
+        "Готово",
+        "Done",
+        "Kész",
+        "Listo",
+        "Terminé"
     ),
-    PinDisabledHint(
-        "Не задан",
-        "Not set",
-        "Nincs beállítva",
-        "No configurado",
-        "Non défini"
+    OnBar(
+        "На панели",
+        "On the bar",
+        "A sávon",
+        "En la barra",
+        "Sur la barre"
     ),
-    Biometrics(
-        "Биометрия",
-        "Biometrics",
-        "Biometria",
-        "Biometría",
-        "Biométrie"
+    InMore(
+        "В «Ещё»",
+        "In «More»",
+        "A «Továbbiak»",
+        "En «Más»",
+        "Dans «Plus»"
     ),
-    BiometricUnavailable(
-        "Недоступна на этом устройстве",
-        "Unavailable on this device",
-        "Nem elérhető ezen az eszközön",
-        "No disponible en este dispositivo",
-        "Indisponible sur cet appareil"
-    ),
-    SetPinCode(
-        "Задайте PIN-код",
-        "Set a PIN code",
-        "Állítson be PIN-kódot",
-        "Configure un código PIN",
-        "Définir un code PIN"
-    ),
-    PinDigitsHint(
-        "4–8 цифр. Хранится только хеш PIN.",
-        "4–8 digits. Only the PIN hash is stored.",
-        "4–8 számjegy. Csak a PIN hash kerül tárolásra.",
-        "4–8 dígitos. Solo se guarda el hash del PIN.",
-        "4 à 8 chiffres. Seul le hachage du PIN est stocké."
-    ),
-    RepeatPin(
-        "Повторите PIN",
-        "Repeat PIN",
-        "Ismételje meg a PIN-t",
-        "Repita el PIN",
-        "Répétez le PIN"
-    ),
-    PinTooShort(
-        "PIN должен содержать 4–8 цифр",
-        "PIN must contain 4–8 digits",
-        "A PIN 4–8 számjegyű kell legyen",
-        "El PIN debe tener 4–8 dígitos",
-        "Le PIN doit contenir 4 à 8 chiffres"
-    ),
-    PinMismatch(
-        "PIN-коды не совпадают",
-        "PIN codes do not match",
-        "A PIN-kódok nem egyeznek",
-        "Los códigos PIN no coinciden",
-        "Les codes PIN ne correspondent pas"
+    DragHint(
+        "Перетащите, чтобы изменить порядок",
+        "Drag to reorder",
+        "Húzza az átrendezéshez",
+        "Arrastre para reordenar",
+        "Glissez pour réorganiser"
     ),
     Save(
         "Сохранить",
@@ -2306,69 +2271,6 @@ internal enum class Words(
         "Mentés",
         "Guardar",
         "Enregistrer"
-    ),
-    UnlockMesh(
-        "Разблокировать MESHFOSS",
-        "Unlock MESHFOSS",
-        "MESHFOSS feloldása",
-        "Desbloquear MESHFOSS",
-        "Déverrouiller MESHFOSS"
-    ),
-    EnterPinToOpen(
-        "Введите PIN или используйте биометрию",
-        "Enter the PIN or use biometrics",
-        "Adja meg a PIN-t vagy használjon biometriát",
-        "Introduzca el PIN o use la biometría",
-        "Saisissez le PIN ou utilisez la biométrie"
-    ),
-    Pin(
-        "PIN",
-        "PIN",
-        "PIN",
-        "PIN",
-        "PIN"
-    ),
-    Unlock(
-        "Разблокировать",
-        "Unlock",
-        "Feloldás",
-        "Desbloquear",
-        "Déverrouiller"
-    ),
-    WrongPin(
-        "Неверный PIN",
-        "Wrong PIN",
-        "Hibás PIN",
-        "PIN incorrecto",
-        "PIN incorrect"
-    ),
-    UnlockWithBiometrics(
-        "Разблокировать биометрией",
-        "Unlock with biometrics",
-        "Feloldás biometriával",
-        "Desbloquear con biometría",
-        "Déverrouiller avec la biométrie"
-    ),
-    BiometricPromptSubtitle(
-        "Подтвердите личность",
-        "Confirm your identity",
-        "Erősítse meg a személyazonosságát",
-        "Confirme su identidad",
-        "Confirmez votre identité"
-    ),
-    BiometricNotRecognised(
-        "Не удалось распознать. Попробуйте ещё раз.",
-        "Not recognised. Try again.",
-        "Nem sikerült felismerni. Próbálja újra.",
-        "No reconocido. Inténtelo de nuevo.",
-        "Non reconnu. Réessayez."
-    ),
-    UsePin(
-        "Использовать PIN",
-        "Use PIN",
-        "PIN használata",
-        "Usar PIN",
-        "Utiliser le PIN"
     ),
     Refresh(
         "Обновить",
@@ -2404,6 +2306,48 @@ internal enum class Words(
         "Házi: %d",
         "Tareas: %d",
         "Devoirs : %d"
+    ),
+    WidgetAtLesson(
+        "Сейчас урок",
+        "Lesson now",
+        "Óra most",
+        "Clase ahora",
+        "Cours en cours"
+    ),
+    WidgetNextLesson(
+        "Следующий урок",
+        "Next lesson",
+        "Következő óra",
+        "Siguiente clase",
+        "Prochain cours"
+    ),
+    WidgetLessonsOver(
+        "Уроков больше нет",
+        "No more lessons",
+        "Nincs több óra",
+        "No hay más clases",
+        "Plus de cours"
+    ),
+    WidgetUntilEnd(
+        "До конца: %s",
+        "Until end: %s",
+        "Végéig: %s",
+        "Hasta el final: %s",
+        "Jusqu’à la fin : %s"
+    ),
+    WidgetUntilStart(
+        "До начала: %s",
+        "Until start: %s",
+        "Kezdetig: %s",
+        "Hasta el inicio: %s",
+        "Jusqu’au début : %s"
+    ),
+    WidgetNextAt(
+        "Далее в %s — %s",
+        "Next at %s — %s",
+        "Következő %s — %s",
+        "Siguiente a las %s — %s",
+        "Suivant à %s — %s"
     ),
     WidgetUpdated(
         "Обновлено %s",

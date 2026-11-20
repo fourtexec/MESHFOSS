@@ -45,7 +45,6 @@
 - JVM-тесты `MeshAttendanceRepository` на фейковом `MeshClient`/HTTP;
 - тест `WidgetSnapshot` (JSON → объект → JSON, null-поля);
 - Compose UI-тест нижней навигации: четыре вкладки + «Ещё» → лист;
-- тест `PinManager`: неверный PIN, смена PIN, сброс, отсутствие открытого PIN
   в `SharedPreferences`.
 
 ## 5. Устойчивость посещаемости

@@ -47,16 +47,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import ru.mesh.foss.lock.PinLockScreen
-import ru.mesh.foss.widget.WidgetUpdater
-import ru.mesh.foss.lock.PinManager
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -66,6 +58,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import ru.mesh.foss.widget.WidgetUpdater
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +66,7 @@ class MainActivity : FragmentActivity() {
         val store = SessionStore(this)
         setContent {
             MeshRankerTheme {
-                AppRoot(store, this)
+                AppRoot(store)
             }
         }
     }
@@ -187,7 +180,7 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun AppRoot(store: SessionStore, activity: MainActivity) {
+fun AppRoot(store: SessionStore) {
     var token by remember { mutableStateOf(store.token ?: "") }
     var profile by remember { mutableStateOf<JSONObject?>(null) }
     var activeStudentId by remember { mutableStateOf(store.studentId) }
@@ -201,24 +194,6 @@ fun AppRoot(store: SessionStore, activity: MainActivity) {
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var locked by remember { mutableStateOf(PinManager.isEnabled(context)) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && PinManager.isEnabled(context)) {
-                locked = true
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    if (locked) {
-        PinLockScreen(activity = activity, onUnlocked = { locked = false })
-        return
-    }
-
     val client = remember {
         MeshClient(
             baseUrl = MeshCore.HOST,
@@ -488,6 +463,13 @@ fun MainScaffold(
     var marksSubjectName by remember { mutableStateOf<String?>(null) }
     var homeworkTarget by remember { mutableStateOf<HomeworkTarget?>(null) }
     var showMore by remember { mutableStateOf(false) }
+    var editNav by remember { mutableStateOf(false) }
+    var navLayout by remember { mutableStateOf(NavTabs.load(hapticContext)) }
+    fun applyNav(next: NavLayout) {
+        val clean = NavTabs.sanitize(next.bottom, next.more)
+        navLayout = clean
+        NavTabs.save(hapticContext, clean)
+    }
     val backStack = remember { mutableStateListOf<NavState>() }
 
     fun currentState() = NavState(
@@ -546,18 +528,15 @@ fun MainScaffold(
     val liquid = design == Design.LIQUID
     val frosted = design == Design.FROSTED
     val glassStyle = LocalGlassStyle.current
-    // Пять элементов — предел для нижней панели. Частые разделы остаются
-    // внизу, остальные уходят в «Ещё»: так подписи не сжимаются до нечитаемых.
-    val primaryTabs = listOf(
-        Triple("ranking", Words.Ranking.text, R.drawable.ic_nav_ranking),
-        Triple("marks", Words.GradesTab.text, R.drawable.ic_nav_marks),
-        Triple("homeworks", Words.Tasks.text, R.drawable.ic_nav_homeworks),
-        Triple("schedule", Words.ScheduleTab.text, R.drawable.ic_nav_schedule),
-    )
-    val navItems = primaryTabs + Triple("more", Words.More.text, R.drawable.ic_nav_more)
+    // Состав панели редактируется в «Ещё». По умолчанию — четыре частых раздела;
+    // панель всегда содержит не больше четырёх вкладок + «Ещё». Благодаря
+    // weight(1f) в таб-барах меньшее число вкладок распределяется поровну.
+    val navItems = navLayout.bottom.map { key ->
+        Triple(key, NavTabs.label(key), NavTabs.icon(key))
+    } + Triple("more", Words.More.text, R.drawable.ic_nav_more)
     val bottomSelected = when {
         showMore -> "more"
-        primaryTabs.any { it.first == currentTab } -> currentTab
+        navLayout.bottom.contains(currentTab) -> currentTab
         else -> "more"
     }
     fun onBottomSelect(key: String) {
@@ -803,26 +782,41 @@ fun MainScaffold(
 
     if (showMore) {
         ModalBottomSheet(
-            onDismissRequest = { showMore = false },
-            containerColor = MaterialTheme.colorScheme.surface,
+            onDismissRequest = {
+                showMore = false
+                editNav = false
+            },
+            // В liquid-дизайне шторка — та же стеклянная пластина, что и диалоги:
+            // редактирование не выбивается из материала и не трогает линзу таб-бара.
+            modifier = if (design == Design.LIQUID) Modifier.dialogGlass() else Modifier,
+            containerColor = if (design == Design.LIQUID) {
+                Color.Transparent
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
         ) {
-            MoreSheetItem(Words.Attendance.text, R.drawable.ic_nav_attendance) {
-                showMore = false
-                navigateTo(NavState(tab = "attendance"))
+            if (editNav) {
+                NavEditor(
+                    layout = navLayout,
+                    onChange = { applyNav(it) },
+                    onDone = { editNav = false },
+                )
+            } else {
+                ListItem(
+                    modifier = Modifier.fillMaxWidth().clickable { editNav = true },
+                    headlineContent = { Text(Words.EditTabs.text) },
+                    leadingContent = { Text("✎") },
+                )
+                HorizontalDivider()
+                navLayout.more.forEach { key ->
+                    MoreSheetItem(NavTabs.label(key), NavTabs.icon(key)) {
+                        showMore = false
+                        editNav = false
+                        navigateTo(NavState(tab = key))
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
             }
-            MoreSheetItem(Words.Moskvenok.text, R.drawable.ic_nav_moskvenok) {
-                showMore = false
-                navigateTo(NavState(tab = "moskvenok"))
-            }
-            MoreSheetItem(Words.MealsAndBalance.text, R.drawable.ic_nav_food) {
-                showMore = false
-                navigateTo(NavState(tab = "food"))
-            }
-            MoreSheetItem(Words.Settings.text, R.drawable.ic_settings) {
-                showMore = false
-                navigateTo(NavState(tab = "settings"))
-            }
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
