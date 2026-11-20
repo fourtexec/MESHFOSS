@@ -98,7 +98,8 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                 listOf(
                                     Triple(Design.PLAIN, Words.DesignPlain.text, Words.DesignPlainHint.text),
                                     Triple(Design.GLASS, Words.DesignGlass.text, Words.DesignGlassHint.text),
-                                    Triple(Design.LIQUID, Words.DesignLiquid.text, Words.DesignLiquidHint.text)
+                                    Triple(Design.LIQUID, Words.DesignLiquid.text, Words.DesignLiquidHint.text),
+                                    Triple(Design.FROSTED, Words.DesignFrosted.text, Words.DesignFrostedHint.text)
                                 ).forEach { (id, title, hint) ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth()

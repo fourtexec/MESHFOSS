@@ -159,11 +159,25 @@ internal enum class Words(
         "Verre liquide"
     ),
     DesignLiquidHint(
-        "Панели с мягкой кромкой и бликом от касания",
-        "Panels with a soft edge and a touch glint",
-        "Panelek éllel és érintési fénnyel",
-        "Paneles con borde suave y brillo al tocar",
-        "Panneaux à bord doux et éclat au toucher"
+        "Прозрачное стекло в стиле iOS: крупные заголовки и капсула вкладок с линзой",
+        "Clear iOS-style glass: large titles and a tab capsule with a lens",
+        "Átlátszó, iOS-stílusú üveg: nagy címek és lencsés fülsáv",
+        "Cristal transparente al estilo iOS: títulos grandes y barra de pestañas con lente",
+        "Verre transparent façon iOS : grands titres et barre d’onglets avec lentille"
+    ),
+    DesignFrosted(
+        "Матовое стекло",
+        "Frosted glass",
+        "Matt üveg",
+        "Cristal esmerilado",
+        "Verre dépoli"
+    ),
+    DesignFrostedHint(
+        "Плавающие матовые панели и плотные карточки на мягком переливающемся свечении",
+        "Floating frosted bars and solid cards over a softly drifting glow",
+        "Lebegő matt sávok és tömör kártyák lágyan áramló fényben",
+        "Barras esmeriladas flotantes y tarjetas sólidas sobre un suave resplandor fluido",
+        "Barres dépolies flottantes et cartes opaques sur une lueur douce et mouvante"
     ),
     ThemeName(
         "Название своей темы",

@@ -45,7 +45,9 @@ import androidx.compose.ui.unit.dp
  *  - [GLASS] — стеклянный стиль (glassmorphism): фон со свечениями, полупрозрачные
  *    контейнеры, блики на карточках ([Glass], [Modifier.glass], [GlassBackdrop]);
  *  - [LIQUID] — «жидкое стекло»: панели с градиентной кромкой и светом от касания
- *    ([glassPane], [GlassCard], [LiquidBackdrop]).
+ *    ([glassPane], [GlassCard], [LiquidBackdrop]);
+ *  - [FROSTED] — «матовое стекло» в духе Uxaoro: плавающие матовые шапка и нижняя
+ *    панель, плотные карточки с тенью, дрейфующие свечения акцента ([Frosted.kt]).
  *
  * Миграция со старого булевого `glass_enabled`: если `design` ещё не записан,
  * но стекло было включено явно — достаём «glass».
@@ -55,6 +57,7 @@ object Design {
     const val PLAIN = "plain"
     const val GLASS = "glass"
     const val LIQUID = "liquid"
+    const val FROSTED = "frosted"
     const val DEFAULT = PLAIN
 
     /** Старый ключ переключателя стеклянного стиля (PR #4) — только для миграции. */
@@ -165,6 +168,7 @@ val LocalGlassStyle = staticCompositionLocalOf { GlassStyle(dark = true, glows =
  */
 @Composable
 fun emphasisContainer(): Color {
+    if (LocalDesign.current == Design.FROSTED) return MaterialTheme.colorScheme.surfaceContainerHigh
     if (!LocalGlass.current) return MaterialTheme.colorScheme.surfaceContainerHigh
     return if (LocalGlassStyle.current.dark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f)
 }
@@ -299,95 +303,21 @@ fun Modifier.glassBar(dark: Boolean): Modifier = this.drawWithCache {
 /* Жидкое стекло (liquid glass) — codex/liquid-glass.                           */
 /* -------------------------------------------------------------------------- */
 
-private class GlassLight {
-    var touch by mutableStateOf<Offset?>(null)
-}
-
-private val LocalGlassLight = staticCompositionLocalOf<GlassLight?> { null }
-
 /**
- * Подложка «жидкого стекла»: мягкий свет из левого верхнего угла, отражение в
- * правом нижнем и свет, следящий за касанием. Фон рисует сама.
- */
-@Composable
-fun LiquidBackdrop(content: @Composable () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val lightSource = remember { GlassLight() }
-    Box(Modifier.fillMaxSize().pointerInput(lightSource) {
-        try {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    lightSource.touch = event.changes.firstOrNull { it.pressed }?.position
-                }
-            }
-        } finally {
-            lightSource.touch = null
-        }
-    }.background(scheme.background).drawWithCache {
-        val light = Brush.radialGradient(
-            listOf(scheme.primary.copy(alpha = .36f), Color.Transparent),
-            Offset(size.width * .12f, size.height * .08f), size.maxDimension * .65f
-        )
-        val reflection = Brush.radialGradient(
-            listOf(scheme.tertiary.copy(alpha = .24f), Color.Transparent),
-            Offset(size.width, size.height * .83f), size.maxDimension * .56f
-        )
-        onDrawBehind {
-            drawRect(light)
-            drawRect(reflection)
-        }
-    }) {
-        CompositionLocalProvider(LocalGlassLight provides lightSource, LocalContentColor provides scheme.onBackground, content = content)
-    }
-}
-
-/**
- * Панель «жидкого стекла»: градиентная заливка, светлая кромка и блик, который
- * перетекает между соседними панелями при касании, не перехватывая тапы.
- * Без дизайна [Design.LIQUID] модификатор ничего не делает.
+ * Панель «жидкого стекла» в стиле iOS ([liquidGlass]): прозрачное стекло с
+ * преломлением у кромки, зеркальным ободком и бликом от касания.
+ * В [Design.FROSTED] — плотная карточка «матового стекла» ([frostedCard]); в
+ * остальных дизайнах модификатор ничего не делает.
  */
 @Composable
 fun Modifier.glassPane(
     shape: Shape = MaterialTheme.shapes.large,
     tint: Color = MaterialTheme.colorScheme.surface
 ): Modifier {
+    if (LocalDesign.current == Design.FROSTED) return frostedCard(shape)
     if (LocalDesign.current != Design.LIQUID) return this
-    val scheme = MaterialTheme.colorScheme
-    val fill = Brush.linearGradient(listOf(
-        tint.copy(alpha = tint.alpha * .85f),
-        tint.copy(alpha = tint.alpha * .48f),
-        tint.copy(alpha = tint.alpha * .76f)
-    ))
-    val edge = Brush.linearGradient(
-        0f to Color.White.copy(alpha = .62f),
-        .32f to scheme.primary.copy(alpha = .12f),
-        .64f to scheme.primary.copy(alpha = .06f),
-        1f to scheme.primary.copy(alpha = .48f)
-    )
-    val lightSource = LocalGlassLight.current
-    var origin by remember { mutableStateOf(Offset.Zero) }
-    return onGloballyPositioned { origin = it.positionInRoot() }.clip(shape).background(fill).drawWithCache {
-        val sheen = Brush.radialGradient(
-            listOf(Color.White.copy(alpha = .13f), Color.Transparent),
-            center = Offset(size.width * .16f, -size.height * .3f),
-            radius = (size.width * .78f).coerceAtLeast(1f)
-        )
-        // The same light passes across adjacent panes without intercepting taps or scrolls.
-        val radius = 112.dp.toPx()
-        val glint = Brush.radialGradient(
-            listOf(Color.White.copy(alpha = .16f), Color.Transparent), Offset.Zero, radius
-        )
-        onDrawBehind {
-            drawRect(sheen)
-            lightSource?.touch?.let { touch ->
-                val center = touch - origin
-                drawContext.transform.translate(center.x, center.y)
-                drawCircle(glint, radius, Offset.Zero)
-                drawContext.transform.translate(-center.x, -center.y)
-            }
-        }
-    }.border(1.dp, edge, shape)
+    // Обычная поверхность — нейтральное стекло; любой другой цвет — оттенок стекла.
+    return liquidGlass(shape, if (tint == MaterialTheme.colorScheme.surface) Color.Unspecified else tint)
 }
 
 /**
@@ -397,6 +327,7 @@ fun Modifier.glassPane(
 @Composable
 fun Modifier.selectionPane(shape: Shape, tint: Color): Modifier = when (LocalDesign.current) {
     Design.LIQUID -> glassPane(shape, tint)
+    Design.FROSTED -> Modifier.clip(shape).background(tint).border(1.dp, frostedHairline(), shape)
     Design.GLASS -> Modifier.clip(shape).background(tint).glass(shape)
     else -> Modifier.clip(shape).background(tint)
 }
@@ -411,7 +342,10 @@ internal fun Modifier.dialogGlass(): Modifier {
     val shape = MaterialTheme.shapes.extraLarge
     val solid = background(MaterialTheme.colorScheme.surface.copy(alpha = 1f), shape)
     return when (LocalDesign.current) {
-        Design.LIQUID -> solid.glassPane(shape, MaterialTheme.colorScheme.surfaceContainerHigh)
+        // Диалог над затемнением: под стеклом — непрозрачная поверхность, текст не просвечивает.
+        Design.LIQUID -> solid.liquidGlass(shape, elevation = 20.dp, refract = false)
+        // Диалог над затемнением: почти непрозрачная матовая пластина, текст не просвечивает.
+        Design.FROSTED -> frostedSurface(shape, elevation = 18.dp, opacity = 0.96f)
         Design.GLASS -> solid.glass(shape)
         else -> solid
     }
@@ -436,6 +370,16 @@ fun GlassCard(
     when (LocalDesign.current) {
         Design.LIQUID -> Card(
             modifier = modifier.glassPane(shape, fill),
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = Color.Transparent,
+                contentColor = scheme.onSurface
+            ),
+            border = border,
+            content = content
+        )
+        Design.FROSTED -> Card(
+            modifier = modifier.frostedCard(shape, if (tint.isSpecified) tint else Color.Unspecified),
             shape = shape,
             colors = CardDefaults.cardColors(
                 containerColor = Color.Transparent,
