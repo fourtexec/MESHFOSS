@@ -40,7 +40,7 @@
 ## Веб-версия
 
 **MESHFOSS Web** — [meshfoss.fourtexec.site](https://meshfoss.fourtexec.site),
-исходники в репозитории [`photonest444/meshfossweb`](https://github.com/photonest444/meshfossweb).
+исходники в репозитории [`fourtexec/meshfossweb`](https://github.com/fourtexec/meshfossweb).
 
 ## Сборка
 
