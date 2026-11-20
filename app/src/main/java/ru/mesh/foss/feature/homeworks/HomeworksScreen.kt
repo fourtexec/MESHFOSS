@@ -2,6 +2,8 @@
 
 package ru.mesh.foss.feature.homeworks
 
+import ru.mesh.foss.app.CdzActivity
+
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
 import ru.mesh.foss.ui.*
@@ -38,7 +40,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextOverflow
 import org.json.JSONObject
 import java.util.Locale
 
@@ -47,6 +55,7 @@ fun HomeworksScreen(
     store: SessionStore,
     client: MeshClient,
     studentId: String?,
+    personId: String? = null,
     target: HomeworkTarget? = null,
     onTargetConsumed: () -> Unit = {}
 ) {
@@ -69,6 +78,15 @@ fun HomeworksScreen(
     // Локальные (оптимистичные) отметки «выполнено»: entryStudentId → сделано.
     var doneOverrides by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     var savingDone by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // ЦДЗ: homeworkEntryId → { uuid: карточка + result } (docs/mesh-cdz-api.md §5–6).
+    var cdzInfo by remember { mutableStateOf<Map<String, JSONObject>>(emptyMap()) }
+    var cdzLoading by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // ДЗ, чьё ЦДЗ открыли последним: при возврате в приложение перечитываем статус.
+    var cdzReturnEntry by remember { mutableStateOf<String?>(null) }
+    // Подтверждение запуска материала с таймером («Облако Знаний»).
+    var confirmLaunch by remember { mutableStateOf<Pair<String, JSONObject>?>(null) }
+    val cdzLimiter = remember { Semaphore(3) }
+    val prefs = remember(context) { context.getSharedPreferences("mesh_settings", Context.MODE_PRIVATE) }
     val from = MeshCore.addDays(selectedDate, -45)
     val to = MeshCore.addDays(selectedDate, 45)
 
@@ -94,25 +112,58 @@ fun HomeworksScreen(
         }
     }
 
-    fun openMaterial(homeworkEntryId: String, material: JSONObject) {
-        val directUrl = material.optString("url").trim()
-        if (directUrl.isNotBlank()) {
-            openUrl(uriHandler, directUrl, context)
-            return
+    /** Статус ЦДЗ одного ДЗ: расширенные карточки и результаты LRS. */
+    fun loadCdz(homework: JSONObject, force: Boolean = false) {
+        val entryId = homework.optString("homeworkEntryId")
+        if (entryId.isBlank() || personId.isNullOrBlank()) return
+        if (!hasCdz(homework)) return
+        if (!force && (cdzInfo.containsKey(entryId) || entryId in cdzLoading)) return
+        cdzLoading = cdzLoading + entryId
+        scope.launch {
+            try {
+                val info = cdzLimiter.withPermit {
+                    withContext(Dispatchers.IO) { client.getCdzStatus(homework, personId) }
+                }
+                cdzInfo = cdzInfo + (entryId to info)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Статус — дополнительная информация: карточка ДЗ остаётся рабочей.
+                if (!cdzInfo.containsKey(entryId)) cdzInfo = cdzInfo + (entryId to JSONObject())
+            } finally {
+                cdzLoading = cdzLoading - entryId
+            }
         }
+    }
+
+    /**
+     * Запуск материала. ЦДЗ открываем только через одноразовую ссылку
+     * `partners/v1/homeworks/launch` (§7): прямые ссылки без контекста ДЗ
+     * не засчитываются. Ссылку не кэшируем — для каждого открытия новая.
+     */
+    fun launchMaterial(homeworkEntryId: String, material: JSONObject) {
         val materialId = material.optString("uuid")
             .ifBlank { material.optString("materialId") }
             .trim()
-        if (homeworkEntryId.isBlank() || materialId.isBlank()) return
+        val directUrl = material.optString("url").trim()
+        val viaLaunch = homeworkEntryId.isNotBlank() && materialId.isNotBlank() &&
+            (material.optBoolean("isCdz") || directUrl.isBlank())
+        if (!viaLaunch) {
+            openUrl(uriHandler, directUrl, context)
+            return
+        }
         launchingMaterialId = materialId
         scope.launch {
             try {
                 val url = withContext(Dispatchers.IO) {
                     client.launchHomeworkMaterial(homeworkEntryId, materialId)
                 }
-                openUrl(uriHandler, url, context)
-            } catch (e: CancellationException) {
-                throw e
+                cdzReturnEntry = homeworkEntryId
+                if (prefs.getBoolean("cdz_in_app", true)) {
+                    context.startActivity(CdzActivity.intent(context, url, material.optString("title")))
+                } else {
+                    openUrl(uriHandler, url, context)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -120,6 +171,15 @@ fun HomeworksScreen(
             } finally {
                 launchingMaterialId = null
             }
+        }
+    }
+
+    fun openMaterial(homeworkEntryId: String, material: JSONObject) {
+        // «Облако Знаний» запускает таймер сразу при открытии — спрашиваем (§8, §12.6).
+        if (material.optBoolean("isCdz") && MeshCdz.startsTimer(material.optString("type"))) {
+            confirmLaunch = homeworkEntryId to material
+        } else {
+            launchMaterial(homeworkEntryId, material)
         }
     }
 
@@ -150,6 +210,50 @@ fun HomeworksScreen(
     }
 
     LaunchedEffect(studentId, selectedDate) { load() }
+
+    // Возврат из окна ЦДЗ или браузера: результат мог появиться в LRS.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val entry = cdzReturnEntry
+                if (entry != null) {
+                    cdzReturnEntry = null
+                    homeworks.firstOrNull { it.optString("homeworkEntryId") == entry }
+                        ?.let { loadCdz(it, force = true) }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    confirmLaunch?.let { (entryId, material) ->
+        AlertDialog(
+            onDismissRequest = { confirmLaunch = null },
+            title = { Text(Words.CdzTimerTitle.text) },
+            text = {
+                Column {
+                    Text(
+                        material.optString("title"),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(Words.CdzTimerWarning.text, style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    confirmLaunch = null
+                    launchMaterial(entryId, material)
+                }) { Text(Words.CdzBegin.text) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLaunch = null }) { Text(Words.Cancel.text) }
+            }
+        )
+    }
 
     LaunchedEffect(target) {
         val destination = target ?: return@LaunchedEffect
@@ -249,6 +353,8 @@ fun HomeworksScreen(
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(filtered) { index, h ->
                         val entryId = h.optString("entryStudentId").ifBlank { h.optString("id") }
+                        val homeworkEntryId = h.optString("homeworkEntryId")
+                        LaunchedEffect(homeworkEntryId, personId) { loadCdz(h) }
                         HomeworkCard(
                             h = h,
                             uriHandler = uriHandler,
@@ -259,7 +365,10 @@ fun HomeworksScreen(
                             onOpenMaterial = ::openMaterial,
                             isDone = doneOverrides[entryId] ?: h.optBoolean("isDone"),
                             savingDone = entryId.isNotBlank() && entryId in savingDone,
-                            onToggleDone = { target -> toggleDone(h, target) }
+                            onToggleDone = { target -> toggleDone(h, target) },
+                            cdz = cdzInfo[homeworkEntryId],
+                            cdzLoading = homeworkEntryId in cdzLoading,
+                            onOpenResult = { url -> openUrl(uriHandler, url, context) }
                         )
                     }
                 }
@@ -281,7 +390,10 @@ private fun HomeworkCard(
     onOpenMaterial: (String, JSONObject) -> Unit,
     isDone: Boolean,
     savingDone: Boolean,
-    onToggleDone: (Boolean) -> Unit
+    onToggleDone: (Boolean) -> Unit,
+    cdz: JSONObject? = null,
+    cdzLoading: Boolean = false,
+    onOpenResult: (String) -> Unit = {}
 ) {
     val description = h.optString("description").trim().let { if (it == ".") "" else it }
     val clipboardManager = LocalClipboardManager.current
@@ -289,7 +401,8 @@ private fun HomeworkCard(
     val due = h.optString("dueDate").takeIf { it.isNotBlank() && it != "null" }
     val materials = h.optJSONArray("materials")
     val attachments = h.optJSONArray("attachments")
-    val homeworkEntryId = h.optString("homeworkEntryId").ifBlank { h.optString("id") }
+    // Для запуска и LRS нужен именно homework_entry_id, а не homework_entry_student_id (§12.1).
+    val homeworkEntryId = h.optString("homeworkEntryId")
     val cardAlpha = if (dimmed) 0.45f else 1f
     // M3E-морфинг: у выполненного ДЗ углы пружинисто дорастают от medium (16dp,
     // как у обычной карточки) до 30dp — предел, при котором текст не обрезается.
@@ -388,59 +501,41 @@ private fun HomeworkCard(
                     }
                 if (visible.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        Words.MaterialsAndDigitalHomework.text,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    visible.forEach { material ->
-                        val title = material.optString("title").ifBlank {
-                            material.optString("typeName").ifBlank { Words.Material.text }
-                        }
-                        val url = material.optString("url").trim()
-                        val materialId = material.optString("uuid")
-                            .ifBlank { material.optString("materialId") }
-                            .trim()
-                        val canOpen = url.isNotBlank() || materialId.isNotBlank()
-                        val action = material.optString("actionName").trim()
-                        val typeLabel = material.optString("typeName").trim()
-                        val opening = launchingMaterialId != null && launchingMaterialId == materialId
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = 40.dp)
-                                .then(
-                                    if (canOpen) {
-                                        Modifier.clickable { onOpenMaterial(homeworkEntryId, material) }
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .padding(vertical = 4.dp)
-                        ) {
+                    val cdzItems = visible.filter { it.optBoolean("isCdz") }
+                    val doneCount = cdzItems.count { item ->
+                        cdz?.optJSONObject(item.optString("uuid"))?.optJSONObject("result")?.optBoolean("done") == true
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            Words.MaterialsAndDigitalHomework.text,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (cdzItems.isNotEmpty() && cdz != null && cdz.length() > 0) {
                             Text(
-                                "• $title",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                Words.CdzProgress(doneCount, cdzItems.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (doneCount == cdzItems.size) {
+                                    MaterialTheme.colorScheme.tertiary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
-                            val subline = when {
-                                opening -> Words.Opening.text
-                                action.isNotBlank() && canOpen -> Words.TapToOpen(action)
-                                action.isNotBlank() -> action
-                                typeLabel.isNotBlank() && canOpen -> Words.TapToOpen(typeLabel)
-                                typeLabel.isNotBlank() -> typeLabel
-                                canOpen -> Words.TapToOpenLabel.text
-                                else -> ""
-                            }
-                            if (subline.isNotBlank()) {
-                                Text(
-                                    subline,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 10.dp)
-                                )
-                            }
                         }
+                    }
+                    visible.forEach { material ->
+                        val uuid = material.optString("uuid")
+                        CdzMaterialRow(
+                            material = material,
+                            extended = cdz?.optJSONObject(uuid),
+                            statusLoading = cdzLoading && material.optBoolean("isCdz"),
+                            canLaunch = (homeworkEntryId.isNotBlank() && uuid.isNotBlank()) ||
+                                material.optString("url").isNotBlank(),
+                            opening = launchingMaterialId != null && launchingMaterialId == uuid,
+                            onOpen = { onOpenMaterial(homeworkEntryId, material) },
+                            onOpenResult = onOpenResult
+                        )
                     }
                 }
             }
@@ -510,5 +605,124 @@ private fun openUrl(uriHandler: UriHandler, url: String, context: Context) {
     if (url.isBlank()) return
     runCatching { uriHandler.openUri(url) }.onFailure {
         Toast.makeText(context, Words.CouldNotOpenLink.text, Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun hasCdz(homework: JSONObject): Boolean {
+    val materials = homework.optJSONArray("materials") ?: return false
+    return (0 until materials.length()).any { materials.optJSONObject(it)?.optBoolean("isCdz") == true }
+}
+
+/**
+ * Строка ЦДЗ в карточке ДЗ: название, тип и издатель, статус выполнения из LRS,
+ * баллы и кнопки «Пройти» / «Результат» — как на карточке веб-дневника.
+ */
+@Composable
+private fun CdzMaterialRow(
+    material: JSONObject,
+    extended: JSONObject?,
+    statusLoading: Boolean,
+    canLaunch: Boolean,
+    opening: Boolean,
+    onOpen: () -> Unit,
+    onOpenResult: (String) -> Unit
+) {
+    val isCdz = material.optBoolean("isCdz")
+    val title = material.optString("title").ifBlank {
+        extended?.optString("title")?.takeIf { it.isNotBlank() }
+            ?: material.optString("typeName").ifBlank { Words.Material.text }
+    }
+    val typeLabel = extended?.optString("typeName")?.takeIf { it.isNotBlank() }
+        ?: material.optString("typeName").trim()
+    val partner = extended?.optString("partnerName").orEmpty().trim()
+    val description = extended?.optString("description").orEmpty().trim()
+    val result = extended?.optJSONObject("result")
+    val done = result?.optBoolean("done") == true
+    val resultUrl = result?.optString("resultUrl").orEmpty()
+    val action = material.optString("actionName").trim().ifBlank { Words.CdzStart.text }
+    val scheme = MaterialTheme.colorScheme
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (done) scheme.tertiaryContainer.copy(alpha = 0.35f) else scheme.surfaceContainerHigh.copy(alpha = 0.6f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface
+            )
+            val meta = listOf(typeLabel, partner).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+            if (meta.isNotBlank()) {
+                Text(meta, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+            }
+            if (description.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isCdz) {
+                Spacer(Modifier.height(4.dp))
+                val status = when {
+                    result != null -> MeshCdz.statusText(result)
+                    statusLoading -> Words.CdzStatusLoading.text
+                    extended?.has("resultError") == true -> Words.CdzStatusFailed.text
+                    else -> ""
+                }
+                if (status.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (statusLoading && result == null) {
+                            LoadingIndicator(modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            (if (done) "✓ " else "") + status,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (done) scheme.tertiary else scheme.onSurfaceVariant,
+                            fontWeight = if (done) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                }
+                val score = MeshCdz.scoreText(result)
+                if (score.isNotBlank()) {
+                    Text(score, style = MaterialTheme.typography.labelMedium, color = scheme.primary)
+                }
+            }
+            if (canLaunch || resultUrl.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (canLaunch) {
+                        FilledTonalButton(
+                            onClick = onOpen,
+                            enabled = !opening,
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            if (opening) {
+                                LoadingIndicator(modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(Words.Opening.text)
+                            } else {
+                                Text(action)
+                            }
+                        }
+                    }
+                    if (resultUrl.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { onOpenResult(resultUrl) },
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) { Text(Words.CdzResult.text) }
+                    }
+                }
+            }
+        }
     }
 }

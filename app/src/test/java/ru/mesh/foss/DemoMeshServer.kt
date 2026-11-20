@@ -35,6 +35,12 @@ class DemoMeshServer(
         const val UUID_SIBLING = "22222222-2222-4222-8222-222222222222"
         const val DEMO_TOKEN = "mock-token-1"
 
+        /** Демо-страница партнёра ЦДЗ. */
+        const val DEMO_CDZ_PAGE = "/demo/cdz"
+
+        /** Служебный ключ: ответ отдаётся как есть (строка), а не JSON-объектом. */
+        private const val RAW_BODY = "__raw_body__"
+
         val SUBJECTS = listOf(
             1 to "Алгебра", 2 to "Геометрия", 3 to "Русский язык", 4 to "Литература",
             5 to "Английский язык", 6 to "История", 7 to "Обществознание", 8 to "География",
@@ -227,9 +233,11 @@ class DemoMeshServer(
                 val requestLine = reader.readLine() ?: return
                 val parts = requestLine.split(" ")
                 if (parts.size < 2) return
+                val method = parts[0].uppercase()
                 val path = parts[1]
                 var authorization = ""
                 var authToken = ""
+                var contentLength = 0
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) break
@@ -237,12 +245,35 @@ class DemoMeshServer(
                     when {
                         lower.startsWith("authorization:") -> authorization = line.substringAfter(':').trim()
                         lower.startsWith("auth-token:") -> authToken = line.substringAfter(':').trim()
+                        lower.startsWith("content-length:") -> contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
                     }
+                }
+                // Тело читаем посимвольно: в демо-запросах только ASCII-JSON.
+                val body = if (contentLength > 0) {
+                    val buffer = CharArray(contentLength)
+                    var read = 0
+                    while (read < contentLength) {
+                        val n = reader.read(buffer, read, contentLength - read)
+                        if (n < 0) break
+                        read += n
+                    }
+                    String(buffer, 0, read)
+                } else {
+                    ""
                 }
                 val token = authorization.removePrefix("Bearer").trim().ifBlank { authToken }
                 val bothAuth = authorization.isNotBlank() && authToken.isNotBlank()
-                val (status, payload) = route(path, token, bothAuth)
-                respond(socket, status, payload)
+                val (pathOnly, _) = query(path)
+                if (pathOnly == DEMO_CDZ_PAGE) {
+                    respondRaw(socket, 200, "text/html; charset=utf-8", demoCdzPage(path))
+                    return
+                }
+                val (status, payload) = route(path, token, method, body, bothAuth)
+                if (payload.has(RAW_BODY)) {
+                    respondRaw(socket, status, "application/json", payload.optString(RAW_BODY))
+                } else {
+                    respond(socket, status, payload)
+                }
             } catch (error: Exception) {
                 runCatching { respond(socket, 500, JSONObject().put("message", "demo error: ${error.message}")) }
             }
@@ -263,6 +294,32 @@ class DemoMeshServer(
         return path.substring(0, index) to params
     }
 
+    private fun respondRaw(socket: Socket, status: Int, contentType: String, text: String) {
+        val body = text.toByteArray(Charsets.UTF_8)
+        val header = buildString {
+            append("HTTP/1.1 $status ${if (status == 200) "OK" else if (status == 302) "Found" else "Error"}\r\n")
+            append("Content-Type: $contentType\r\n")
+            append("Content-Length: ${body.size}\r\n")
+            append("Connection: close\r\n\r\n")
+        }
+        val out: OutputStream = socket.getOutputStream()
+        out.write(header.toByteArray(Charsets.UTF_8))
+        out.write(body)
+        out.flush()
+    }
+
+    /** Простая страница вместо партнёра ЦДЗ в демо-режиме. */
+    private fun demoCdzPage(fullPath: String): String {
+        val (_, params) = query(fullPath)
+        val title = (cdzCatalog(params["material_id"].orEmpty())?.title ?: "ЦДЗ")
+            .replace("<", "&lt;")
+        return "<!doctype html><html lang=ru><meta charset=utf-8>" +
+            "<meta name=viewport content='width=device-width,initial-scale=1'>" +
+            "<body style='font-family:sans-serif;padding:24px;background:#101418;color:#e6e9ef'>" +
+            "<h2>$title</h2><p>Демо-режим: здесь открылся бы материал партнёра " +
+            "(«Облако Знаний» или тест Библиотеки МЭШ).</p></body></html>"
+    }
+
     private fun respond(socket: Socket, status: Int, payload: JSONObject) {
         val body = payload.toString().toByteArray(Charsets.UTF_8)
         val header = buildString {
@@ -277,7 +334,13 @@ class DemoMeshServer(
         out.flush()
     }
 
-    private fun route(fullPath: String, token: String, bothAuth: Boolean = false): Pair<Int, JSONObject> {
+    private fun route(
+        fullPath: String,
+        token: String,
+        method: String = "GET",
+        body: String = "",
+        bothAuth: Boolean = false,
+    ): Pair<Int, JSONObject> {
         val (path, params) = query(fullPath)
 
         // school.mos.ru: шлюз pass/entrances отдаёт 401, если пришли ОБА заголовка
@@ -484,9 +547,13 @@ class DemoMeshServer(
                         repeat(count) { index ->
                             val (subjectId, subjectName) = SUBJECTS[random.nextInt(SUBJECTS.size)]
                             val page = 10 + random.nextInt(150)
+                            val entryId = cursor.replace("-", "").toLong() * 100 + subjectId * 10 + index
                             payload.put(
                                 JSONObject()
                                     .put("homework_entry_student_id", "$cursor-$subjectId-$index")
+                                    .put("homework_entry_id", entryId)
+                                    .put("type", "oo")
+                                    .put("materials", if (index == 0) demoCdzMaterials(entryId) else JSONArray())
                                     .put("subject_id", subjectId)
                                     .put("subject_name", subjectName)
                                     .put("date_assigned_on", cursor)
@@ -530,8 +597,151 @@ class DemoMeshServer(
             MeshCore.Paths.ATTENDANCE -> 200 to JSONObject().put("attendance", JSONArray())
 
             MeshCore.Paths.VISIT_DURATIONS -> 200 to JSONObject().put("payload", JSONArray())
+            MeshCore.Paths.ADDITIONAL_MATERIALS -> {
+                if (method != "POST") return 404 to JSONObject().put("message", "POST only")
+                val request = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
+                val asked = request.optJSONArray("materials") ?: JSONArray()
+                val materials = JSONArray()
+                var entryStudentId: Any = JSONObject.NULL
+                for (i in 0 until asked.length()) {
+                    val item = asked.optJSONObject(i) ?: continue
+                    entryStudentId = item.opt("homework_entry_student_id") ?: JSONObject.NULL
+                    val info = cdzCatalog(item.optString("uuid")) ?: continue
+                    materials.put(
+                        JSONObject()
+                            .put("uuid", item.optString("uuid"))
+                            .put("type", info.type)
+                            .put("type_name", info.typeName)
+                            .put("title", info.title)
+                            .put("description", info.description)
+                            .put("action_id", 1)
+                            .put("action_name", "Пройти")
+                            .put("partner", JSONObject().put("id", 282).put("name", info.partner).put("icon_url", JSONObject.NULL))
+                            .put(
+                                "urls",
+                                JSONArray()
+                                    .put(JSONObject().put("type", "view").put("url", "https://uchebnik.mos.ru/material/demo"))
+                                    .put(JSONObject().put("type", "edit").put("url", "null"))
+                            )
+                    )
+                }
+                200 to JSONObject().put(
+                    "additional_materials",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("purpose", "for_home")
+                            .put(
+                                "material_groups",
+                                JSONArray().put(
+                                    JSONObject()
+                                        .put("selected_mode", "execute")
+                                        .put("homework_entry_student_id", entryStudentId)
+                                        .put("amount", materials.length())
+                                        .put("materials", materials)
+                                )
+                            )
+                    )
+                )
+            }
+
+            MeshCore.Paths.LRS_RESULTS -> {
+                val context = runCatching { JSONObject(params["context"].orEmpty()) }.getOrDefault(JSONObject())
+                val materialId = context.optString("material_id")
+                val content = JSONArray()
+                // Детерминированно: первый материал выполнен, второй — нет, третий — через раз.
+                val slot = materialId.substringAfterLast('-').toIntOrNull() ?: 9
+                val workId = context.optLong("work_id")
+                if (slot == 0 || (slot == 2 && workId % 2L == 0L)) {
+                    val max = if (slot == 0) 5 else 1
+                    val score = if (slot == 0) 4 else 1
+                    val items = JSONArray()
+                    repeat(max) { n ->
+                        items.put(
+                            JSONObject()
+                                .put("task_number", 800_000_000 + n)
+                                .put("score", if (n < score) 1 else 0)
+                                .put("max_score", 1)
+                        )
+                    }
+                    content.put(
+                        JSONObject()
+                            .put("result_id", 360_000_000 + slot)
+                            .put("final", true)
+                            .put("status", 2)
+                            .put("success", true)
+                            .put("started_at", MeshCore.addDays(today, -1) + "T15:39:29.694538Z")
+                            .put("duration", 106 + slot * 40)
+                            .put("recommended_mark", if (slot == 0) 4 else 1)
+                            .put("recommended_mark_scale", if (slot == 0) 5 else 1)
+                            .put("url_details", "${baseUrl()}$DEMO_CDZ_PAGE?material_id=$materialId&result=1")
+                            .put("items", items)
+                    )
+                }
+                200 to JSONObject()
+                    .put("content", content)
+                    .put("totalElements", content.length())
+                    .put("empty", content.length() == 0)
+            }
+
+            MeshCore.Paths.HOMEWORK_LAUNCH -> {
+                val entry = params["homework_entry_id"].orEmpty()
+                val material = params["material_id"].orEmpty()
+                // Как настоящий МЭШ: student_id вместо entry_id даёт 400 (§7.1).
+                if (entry.contains('-') || entry.isBlank() || material.isBlank()) {
+                    return 400 to JSONObject().put("code", 400).put("error_text", "argument \"content\" is null")
+                }
+                // 302 без Location, URL — в теле ответа.
+                302 to JSONObject().put(RAW_BODY, "${baseUrl()}$DEMO_CDZ_PAGE?material_id=$material&registration=${java.util.UUID.randomUUID()}")
+            }
+
 
             else -> 404 to JSONObject().put("message", "demo: unknown path $path")
         }
+    }
+
+    // ------------------------------------------------------------- ЦДЗ демо --
+
+    private data class DemoCdz(
+        val type: String,
+        val typeName: String,
+        val title: String,
+        val description: String,
+        val partner: String
+    )
+
+    private val cdzTemplates = listOf(
+        DemoCdz("fizikon_module", "Самостоятельная работа", "Воздух и его состав",
+            "Интерактивная работа с автоматической проверкой.", "Облако Знаний"),
+        DemoCdz("test_task_binding", "Задание", "Основные компоненты воздуха",
+            "Задание из Библиотеки МЭШ.", "Библиотека МЭШ"),
+        DemoCdz("test_spec_binding", "Тематический тест", "Входное тестирование",
+            "Тест по теме урока.", "Библиотека МЭШ")
+    )
+
+    /** uuid демо-ЦДЗ: cdz-<homework_entry_id>-<номер шаблона>. */
+    private fun cdzCatalog(uuid: String): DemoCdz? {
+        if (!uuid.startsWith("cdz-")) return null
+        val slot = uuid.substringAfterLast('-').toIntOrNull() ?: return null
+        return cdzTemplates.getOrNull(slot)
+    }
+
+    private fun demoCdzMaterials(entryId: Long): JSONArray {
+        val list = JSONArray()
+        val count = 1 + (entryId % 3).toInt()
+        for (slot in 0 until count) {
+            val info = cdzTemplates[slot]
+            list.put(
+                JSONObject()
+                    .put("uuid", "cdz-$entryId-$slot")
+                    .put("type", info.type)
+                    .put("selected_mode", "execute")
+                    .put("type_name", if (slot == 0) "Облако знаний" else "Прочее")
+                    .put("title", info.title)
+                    .put("urls", JSONArray())
+                    .put("action_id", 1)
+                    .put("action_name", "Пройти")
+            )
+        }
+        return list
     }
 }

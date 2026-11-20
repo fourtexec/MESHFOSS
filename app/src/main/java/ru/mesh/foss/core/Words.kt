@@ -1957,6 +1957,202 @@ internal enum class Words(
         "No se pudo abrir el material",
         "Impossible d’ouvrir le document"
     ),
+    CdzSelfWork(
+        "Самостоятельная работа",
+        "Independent work",
+        "Önálló munka",
+        "Trabajo independiente",
+        "Travail autonome"
+    ),
+    CdzTask(
+        "Задание",
+        "Task",
+        "Feladat",
+        "Tarea",
+        "Tâche"
+    ),
+    CdzThematicTest(
+        "Тематический тест",
+        "Topic test",
+        "Témazáró teszt",
+        "Prueba temática",
+        "Test thématique"
+    ),
+    CdzNotCompleted(
+        "Не выполнено",
+        "Not completed",
+        "Nincs teljesítve",
+        "No completado",
+        "Non terminé"
+    ),
+    CdzInProgress(
+        "Начато, не завершено",
+        "Started, not finished",
+        "Elkezdve, nincs befejezve",
+        "Iniciado, sin terminar",
+        "Commencé, non terminé"
+    ),
+    CdzCompleted(
+        "Выполнено",
+        "Completed",
+        "Teljesítve",
+        "Completado",
+        "Terminé"
+    ),
+    CdzCompletedAt(
+        "Выполнено %1\$s в %2\$s",
+        "Completed %1\$s at %2\$s",
+        "Teljesítve: %1\$s, %2\$s",
+        "Completado el %1\$s a las %2\$s",
+        "Terminé le %1\$s à %2\$s"
+    ),
+    CdzInDuration(
+        "за %s",
+        "in %s",
+        "%s alatt",
+        "en %s",
+        "en %s"
+    ),
+    CdzScore(
+        "%1\$s/%2\$s баллов",
+        "%1\$s/%2\$s points",
+        "%1\$s/%2\$s pont",
+        "%1\$s/%2\$s puntos",
+        "%1\$s/%2\$s points"
+    ),
+    CdzScoreOnly(
+        "%s баллов",
+        "%s points",
+        "%s pont",
+        "%s puntos",
+        "%s points"
+    ),
+    CdzMark(
+        "Оценка: %s",
+        "Mark: %s",
+        "Jegy: %s",
+        "Nota: %s",
+        "Note : %s"
+    ),
+    CdzAttempts(
+        "Попыток: %d",
+        "Attempts: %d",
+        "Próbálkozások: %d",
+        "Intentos: %d",
+        "Tentatives : %d"
+    ),
+    CdzResult(
+        "Результат",
+        "Result",
+        "Eredmény",
+        "Resultado",
+        "Résultat"
+    ),
+    CdzStart(
+        "Пройти",
+        "Start",
+        "Indítás",
+        "Empezar",
+        "Commencer"
+    ),
+    CdzStatusLoading(
+        "Проверяем выполнение…",
+        "Checking completion…",
+        "Teljesítés ellenőrzése…",
+        "Comprobando finalización…",
+        "Vérification de l’état…"
+    ),
+    CdzStatusFailed(
+        "Статус недоступен",
+        "Status unavailable",
+        "Állapot nem elérhető",
+        "Estado no disponible",
+        "Statut indisponible"
+    ),
+    CdzProgress(
+        "ЦДЗ: %1\$d из %2\$d выполнено",
+        "Digital homework: %1\$d of %2\$d done",
+        "Digitális házi: %1\$d / %2\$d kész",
+        "Tareas digitales: %1\$d de %2\$d completadas",
+        "Devoirs numériques : %1\$d sur %2\$d effectués"
+    ),
+    CdzTimerTitle(
+        "Начать работу?",
+        "Start the work?",
+        "Elkezdi a feladatot?",
+        "¿Empezar la tarea?",
+        "Commencer le travail ?"
+    ),
+    CdzTimerWarning(
+        "Материал «Облака Знаний» запускает таймер сразу после открытия. Ссылка одноразовая: чтобы вернуться к работе, откройте её снова из приложения.",
+        "This Oblako Znaniy material starts its timer as soon as it opens. The link is single-use: to return to the work, open it again from the app.",
+        "Az Oblako Znaniy tananyaga megnyitáskor azonnal elindítja az időzítőt. A link egyszer használatos: a folytatáshoz nyissa meg újra az alkalmazásból.",
+        "Este material de Oblako Znaniy inicia su temporizador nada más abrirse. El enlace es de un solo uso: para volver al trabajo, ábrelo de nuevo desde la aplicación.",
+        "Ce contenu d’Oblako Znaniy lance son minuteur dès l’ouverture. Le lien est à usage unique : pour revenir au travail, ouvrez-le à nouveau depuis l’application."
+    ),
+    CdzBegin(
+        "Начать",
+        "Begin",
+        "Kezdés",
+        "Comenzar",
+        "Démarrer"
+    ),
+    CdzWindowTitle(
+        "ЦДЗ",
+        "Digital homework",
+        "Digitális házi",
+        "Tareas digitales",
+        "Devoirs numériques"
+    ),
+    CdzOpenInBrowser(
+        "Открыть в браузере",
+        "Open in browser",
+        "Megnyitás böngészőben",
+        "Abrir en el navegador",
+        "Ouvrir dans le navigateur"
+    ),
+    CdzOpenInApp(
+        "ЦДЗ во встроенном окне",
+        "Digital homework in app window",
+        "Digitális házi az alkalmazásban",
+        "Tareas digitales en la app",
+        "Devoirs numériques dans l’application"
+    ),
+    CdzOpenInAppHint(
+        "Открывать ЦДЗ внутри приложения с вашей сессией МЭШ. Выключите, чтобы открывать в браузере.",
+        "Open digital homework inside the app with your MESH session. Turn off to open in the browser.",
+        "Digitális házi megnyitása az alkalmazáson belül a MESH-munkamenettel. Kapcsolja ki, ha böngészőben szeretné megnyitni.",
+        "Abre las tareas digitales dentro de la app con tu sesión de MESH. Desactívalo para abrirlas en el navegador.",
+        "Ouvrir les devoirs numériques dans l’application avec votre session MESH. Désactivez pour ouvrir dans le navigateur."
+    ),
+    CdzReusedLink(
+        "Ссылка запуска одноразовая — получаем новую…",
+        "The launch link is single-use — getting a new one…",
+        "Az indítólink egyszer használatos — új lekérése…",
+        "El enlace de inicio es de un solo uso — obteniendo uno nuevo…",
+        "Le lien de lancement est à usage unique — obtention d’un nouveau…"
+    ),
+    DurationHours(
+        "%d ч",
+        "%d h",
+        "%d ó",
+        "%d h",
+        "%d h"
+    ),
+    DurationMinutes(
+        "%d м",
+        "%d min",
+        "%d p",
+        "%d min",
+        "%d min"
+    ),
+    DurationSeconds(
+        "%d с",
+        "%d s",
+        "%d mp",
+        "%d s",
+        "%d s"
+    ),
     SelectAStudentToViewMeals(
         "Не указан ученик для раздела питания",
         "Select a student to view meals",

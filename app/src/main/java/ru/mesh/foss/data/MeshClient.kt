@@ -4,9 +4,13 @@ import ru.mesh.foss.core.*
 
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
+import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URLEncoder
+import java.net.URL
 import java.net.UnknownHostException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -439,6 +443,173 @@ class MeshClient(
     fun getSchedule(studentId: String?, date: String = MeshCore.today()): JSONArray {
         val json = asObject({ api().schedule(studentId, date, headers()) }, MeshCore.Paths.SCHEDULE)
         return MeshCore.normalizeSchedule(json, date)
+    }
+
+    // ------------------------------------------------------------------ ЦДЗ ----
+
+    /**
+     * Один HTTP-обмен с разбором ошибок сети и автообновлением токена по 401.
+     * Возвращает (status, body); коды ≥ 400 превращаются в [MeshCore.MeshError].
+     */
+    private fun exchange(
+        method: String,
+        path: String,
+        params: Map<String, Any?> = emptyMap(),
+        body: String? = null,
+        headerBuilder: () -> Map<String, String> = { headers() }
+    ): Pair<Int, String> {
+        val url = buildUrl(path, params)
+        var attempt = 0
+        val maxAttempts = if (autoRefresh) 2 else 1
+        while (attempt < maxAttempts) {
+            attempt++
+            val connection = try {
+                (URL(url).openConnection() as HttpURLConnection).apply {
+                    requestMethod = method
+                    connectTimeout = timeoutMs
+                    readTimeout = timeoutMs
+                    instanceFollowRedirects = false
+                    headerBuilder().forEach { (key, value) -> setRequestProperty(key, value) }
+                    if (body != null) {
+                        val bytes = body.toByteArray(Charsets.UTF_8)
+                        doOutput = true
+                        setFixedLengthStreamingMode(bytes.size)
+                        outputStream.use { it.write(bytes) }
+                    }
+                }
+            } catch (error: SocketTimeoutException) {
+                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
+            } catch (error: UnknownHostException) {
+                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
+            } catch (error: Exception) {
+                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
+            }
+            requestCount++
+            val status: Int
+            val text: String
+            try {
+                status = connection.responseCode
+                val stream = runCatching { connection.inputStream }.getOrNull() ?: connection.errorStream
+                text = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: ""
+            } catch (error: SocketTimeoutException) {
+                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
+            } catch (error: UnknownHostException) {
+                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
+            } catch (error: Exception) {
+                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
+            } finally {
+                connection.disconnect()
+            }
+            when {
+                status == 401 && attempt < maxAttempts -> {
+                    if (refreshToken() != null) continue
+                    throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
+                }
+                status == 401 -> throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
+                status == 403 -> throw MeshCore.MeshError(Words.AccessDenied.text, "forbidden", 403)
+                status == 404 -> throw MeshCore.MeshError(Words.MethodNotFound(path), "not-found", 404)
+                status >= 400 -> throw MeshCore.MeshError(Words.MeshErrorHttp(status), "http-$status", status)
+            }
+            return status to text
+        }
+        throw MeshCore.MeshError(Words.RequestFailed(path), "exhausted")
+    }
+
+    /**
+     * Заголовки `additional_materials`: веб шлёт их без Profile-Id/Profile-Type,
+     * но с `X-Mes-GlobalRoleId: 1` (docs/mesh-cdz-api.md §2).
+     */
+    private fun materialsHeaders(): Map<String, String> =
+        (headers() - "Profile-Id" - "Profile-Type") + ("X-Mes-GlobalRoleId" to MeshCore.ROLE_ID)
+
+    /**
+     * Расширенные карточки ЦДЗ: описание, издатель, ссылки (§5).
+     * @param entryStudentId `homework_entry_student_id`.
+     * @return карточки по `uuid` материала.
+     */
+    fun getAdditionalMaterials(entryStudentId: String?, materials: List<JSONObject>): Map<String, JSONObject> {
+        val entry = entryStudentId?.trim().orEmpty()
+        if (entry.isBlank() || materials.isEmpty()) return emptyMap()
+        val body = MeshCdz.additionalMaterialsBody(entry, materials)
+        if ((body.optJSONArray("materials")?.length() ?: 0) == 0) return emptyMap()
+        val (status, text) = exchange(
+            "POST",
+            MeshCore.Paths.ADDITIONAL_MATERIALS,
+            body = body.toString(),
+            headerBuilder = ::materialsHeaders
+        )
+        if (text.isBlank()) return emptyMap()
+        val json = runCatching { JSONObject(text) }.getOrElse {
+            throw MeshCore.MeshError(Words.InvalidResponseFromMesh.text, "invalid-json", status, it)
+        }
+        return MeshCdz.normalizeAdditionalMaterials(json)
+    }
+
+    /**
+     * Статус выполнения материала из LRS (§6).
+     * @param homeworkEntryId именно `homework_entry_id` — он же `work_id`.
+     */
+    fun getMaterialResult(materialId: String?, personId: String?, homeworkEntryId: String?): JSONObject {
+        val material = materialId?.trim().orEmpty()
+        val person = personId?.trim().orEmpty()
+        val entry = homeworkEntryId?.trim().orEmpty()
+        if (material.isBlank() || person.isBlank() || entry.isBlank()) {
+            throw MeshCore.MeshError(Words.MissingHomeworkMaterial.text, "bad-material")
+        }
+        val (status, text) = exchange(
+            "GET",
+            MeshCore.Paths.LRS_RESULTS,
+            mapOf("context" to MeshCdz.lrsContext(material, person, entry), "size" to 20)
+        )
+        if (text.isBlank()) return MeshCdz.normalizeLrsResults(null)
+        val json = runCatching { JSONObject(text) }.getOrElse {
+            throw MeshCore.MeshError(Words.InvalidResponseFromMesh.text, "invalid-json", status, it)
+        }
+        return MeshCdz.normalizeLrsResults(json)
+    }
+
+    /**
+     * Всё, что нужно карточке ДЗ про ЦДЗ: расширенные данные и статус каждого
+     * материала. Запросы LRS идут параллельно (по одному на материал, как в вебе).
+     *
+     * @return JSONObject `{ <uuid>: { …карточка §5…, result: {…} | null, resultError: "…" } }`.
+     *   Ошибка одного запроса не роняет остальные.
+     */
+    fun getCdzStatus(homework: JSONObject, personId: String?): JSONObject {
+        val all = homework.optJSONArray("materials") ?: JSONArray()
+        val cdz = (0 until all.length())
+            .mapNotNull { all.optJSONObject(it) }
+            .filter { it.optBoolean("isCdz") && it.optString("uuid").isNotBlank() }
+        val out = JSONObject()
+        if (cdz.isEmpty()) return out
+        val entryId = homework.optString("homeworkEntryId")
+        val entryStudentId = homework.optString("entryStudentId")
+
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(4, cdz.size + 1))
+        try {
+            val extendedFuture = pool.submit<Map<String, JSONObject>> {
+                runCatching { getAdditionalMaterials(entryStudentId, cdz) }.getOrDefault(emptyMap())
+            }
+            val resultFutures = cdz.associate { material ->
+                val uuid = material.optString("uuid")
+                uuid to pool.submit<Result<JSONObject>> {
+                    runCatching { getMaterialResult(uuid, personId, entryId) }
+                }
+            }
+            val extended = extendedFuture.get()
+            cdz.forEach { material ->
+                val uuid = material.optString("uuid")
+                val card = JSONObject(extended[uuid]?.toString() ?: "{}")
+                if (!card.has("uuid")) card.put("uuid", uuid)
+                val result = resultFutures[uuid]?.get()
+                result?.getOrNull()?.let { card.put("result", it) }
+                result?.exceptionOrNull()?.let { card.put("resultError", MeshCore.describeError(it)) }
+                out.put(uuid, card)
+            }
+        } finally {
+            pool.shutdown()
+        }
+        return out
     }
 
     // ------------------------------------------------------------------ ЕДА ----
