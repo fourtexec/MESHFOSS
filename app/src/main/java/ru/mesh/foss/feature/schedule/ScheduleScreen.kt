@@ -5,6 +5,7 @@ package ru.mesh.foss.feature.schedule
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
 import ru.mesh.foss.ui.*
+import ru.mesh.foss.feature.marks.MarkDetailDialog
 import ru.mesh.foss.R
 
 import androidx.compose.foundation.clickable

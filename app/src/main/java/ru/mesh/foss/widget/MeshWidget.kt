@@ -25,8 +25,8 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.dp
-import androidx.glance.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.mesh.foss.data.SessionStore
 import ru.mesh.foss.core.Words
 import ru.mesh.foss.app.MainActivity
