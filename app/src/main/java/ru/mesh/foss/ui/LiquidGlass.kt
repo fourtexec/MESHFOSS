@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.nativePaint
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -243,7 +244,7 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
  */
 fun Modifier.outerShadow(shape: Shape, color: Color, blur: Dp, offsetY: Dp): Modifier = drawWithCache {
     val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-    val paint = Paint().asFrameworkPaint().apply {
+    val paint = Paint().nativePaint.apply {
         isAntiAlias = true
         this.color = android.graphics.Color.BLACK
         setShadowLayer(blur.toPx(), 0f, offsetY.toPx(), color.toArgb())
