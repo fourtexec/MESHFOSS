@@ -1,5 +1,10 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.core.MeshCdz
+import ru.mesh.foss.core.MeshCore
+import ru.mesh.foss.core.UiLanguage
+import ru.mesh.foss.data.MeshClient
+
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After

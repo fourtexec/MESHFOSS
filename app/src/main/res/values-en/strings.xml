@@ -7,4 +7,8 @@
     <string name="notif_token_text">Session renewed automatically</string>
     <string name="notif_error_title">Sign in to MESH again</string>
     <string name="notif_error_text">Could not renew your token. Open the app and sign in again.</string>
+    <string name="widget_description">MESH lessons, schedule and homework</string>
+    <string name="widget_status_name">MESHFOSS - lesson now</string>
+    <string name="widget_schedule_name">MESHFOSS - schedule</string>
+    <string name="widget_homework_name">MESHFOSS - homework</string>
 </resources>

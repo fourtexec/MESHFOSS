@@ -7,4 +7,8 @@
     <string name="notif_token_text">Sesión renovada automáticamente</string>
     <string name="notif_error_title">Vuelve a acceder a MESH</string>
     <string name="notif_error_text">No se pudo renovar el token. Abre la aplicación y vuelve a acceder.</string>
+    <string name="widget_description">Clases, horario y tareas de MESH</string>
+    <string name="widget_status_name">MESHFOSS - clase ahora</string>
+    <string name="widget_schedule_name">MESHFOSS - horario</string>
+    <string name="widget_homework_name">MESHFOSS - tareas</string>
 </resources>

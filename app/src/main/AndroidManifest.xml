@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:name=".MeshApp"
+        android:name=".app.MeshApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
@@ -18,7 +18,7 @@
         android:theme="@style/Theme.MeshRanker">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".app.MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="true"
             android:launchMode="singleTask"
@@ -31,24 +31,60 @@
 
         <!-- Окно входа в МЭШ: перехватывает токен автоматически -->
         <activity
-            android:name=".MeshLoginActivity"
+            android:name=".feature.login.MeshLoginActivity"
             android:exported="false"
             android:label="@string/login_title"
             android:theme="@style/Theme.MeshRanker.Login" />
 
         <!-- Прохождение ЦДЗ: WebView с cookie сессии МЭШ (docs/mesh-cdz-api.md §7.2) -->
         <activity
-            android:name=".CdzActivity"
+            android:name=".app.CdzActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="false"
             android:theme="@style/Theme.MeshRanker.Login" />
 
         <!-- Второй способ: обычный вход на school.mos.ru с перехватом токена -->
         <activity
-            android:name=".SchoolLoginActivity"
+            android:name=".feature.login.SchoolLoginActivity"
             android:exported="false"
             android:label="@string/login_title"
             android:theme="@style/Theme.MeshRanker"
             android:windowSoftInputMode="adjustResize" />
+
+        <receiver
+            android:name=".widget.MeshWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_status_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/mesh_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.ScheduleWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_schedule_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/schedule_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.HomeworkWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_homework_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/homework_widget_info" />
+        </receiver>
     </application>
 </manifest>

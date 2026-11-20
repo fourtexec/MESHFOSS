@@ -7,4 +7,8 @@
     <string name="notif_token_text">Session prolongée automatiquement</string>
     <string name="notif_error_title">Reconnectez-vous à MESH</string>
     <string name="notif_error_text">Impossible de renouveler le jeton. Ouvrez l’application et reconnectez-vous.</string>
+    <string name="widget_description">Cours, emploi du temps et devoirs MESH</string>
+    <string name="widget_status_name">MESHFOSS - cours en cours</string>
+    <string name="widget_schedule_name">MESHFOSS - emploi du temps</string>
+    <string name="widget_homework_name">MESHFOSS - devoirs</string>
 </resources>

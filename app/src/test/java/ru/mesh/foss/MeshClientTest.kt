@@ -1,5 +1,8 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.core.MeshCore
+import ru.mesh.foss.data.MeshClient
+
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -113,6 +116,20 @@ class MeshClientTest {
         assertEquals(1, refreshed.size)
         assertNotEquals(DemoMeshServer.DEMO_TOKEN, client.token)
         assertTrue(client.token!!.startsWith("mock-token-"))
+    }
+
+    @Test
+    fun `посещаемость не шлёт оба заголовка авторизации одновременно`() {
+        val client = client()
+        client.signIn(DemoMeshServer.DEMO_TOKEN)
+
+        // pass/entrances отвечает 401, если пришли и Authorization, и Auth-Token.
+        // Раньше клиент слал оба — тест это ловит.
+        val visits = client.getVisitDurations(DemoMeshServer.UUID_ME, "2026-11-16", "2026-11-22")
+        assertEquals(0, visits.payload.size)
+
+        val attendance = client.getAttendance("17234613", "2026-11-16", "2026-11-22")
+        assertEquals(0, attendance.attendance.size)
     }
 
     @Test

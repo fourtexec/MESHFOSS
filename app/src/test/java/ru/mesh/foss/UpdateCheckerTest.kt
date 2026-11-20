@@ -1,5 +1,7 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.data.UpdateChecker
+
 import org.json.JSONArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
