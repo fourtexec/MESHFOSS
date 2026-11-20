@@ -1,5 +1,10 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.core.MeshCore
+import ru.mesh.foss.core.UiLanguage
+import ru.mesh.foss.core.Words
+import ru.mesh.foss.ui.AppTheme
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

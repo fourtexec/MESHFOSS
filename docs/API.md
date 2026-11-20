@@ -1,0 +1,117 @@
+# API-контракт МЭШ в MESHFOSS
+
+Все запросы идут на `https://school.mos.ru/`. Клиент — `ru.mesh.foss.data.MeshClient`,
+Retrofit-контракт — `ru.mesh.foss.data.api.MeshApiService`.
+
+## Заголовки
+
+`MeshCore.baseHeaders()` добавляет клиентские заголовки МЭШ, `MeshCore.authHeaders()`
+— авторизацию:
+
+- `Authorization: Bearer <token>` (если токен есть);
+- `Profile-Id` / `X-Mes-Profile-Id` (если известен профиль);
+- `X-Mes-Subsystem: familyweb`.
+
+Методы питания дополнительно получают cookie `aupd_token=<token>` и **не**
+получают заголовок `Authorization`, как на сайте МЭШ.
+
+## Ошибки и токен
+
+- `401` → одна попытка `GET /v2/token/refresh?roleId=1&subsystem=2` с текущим
+  токеном; при успехе исходный запрос повторяется.
+- Если обновить токен не удалось — `MeshError(code = "unauthorized")`.
+- `403` → `forbidden`, `404` → `not-found`, остальные коды → `http-<code>`.
+- Сетевые ошибки → `network`, таймаут → `timeout`.
+- Невалидный JSON → `invalid-json`.
+
+## Основные методы
+
+| Метод | Endpoint | Параметры |
+|---|---|---|
+| профиль | `GET /api/family/web/v1/profile` | — |
+| профиль по personId | `GET /api/gamification/v1/profiles` | `personId` |
+| предметы рейтинга | `GET /api/ej/rating/v1/rank/subjects` | `date`, `personId` |
+| рейтинг класса | `GET /api/ej/rating/v1/rank/class` | `personId`, `date`, `subjectId` |
+| оценки | `GET /api/family/web/v1/marks` | `student_id`, `from`, `to` |
+| деталь оценки | `GET /api/family/web/v1/marks/{markId}` | `person_id`, `markId` |
+| итоговые оценки | `GET /api/family/web/v1/final_marks/v2` | `person_id`, `student_id`, `academic_year_id`, `is_year_marks_only` |
+| ДЗ | `GET /api/family/web/v1/homeworks` | `student_id`, `from`, `to` |
+| ДЗ выполнено | `POST /api/family/web/v1/homeworks/{entryStudentId}/done` | `type` |
+| снять отметку ДЗ | `DELETE /api/family/web/v1/homeworks/{entryStudentId}/done` | `type` |
+| расписание | `GET /api/family/web/v1/schedule` | `student_id`, `date` |
+| питание: состояние | `GET /api/food/meals/v3/clients/allowed-food-state` | `clientId` |
+| питание: баланс | `GET /api/food/meals/v3/clients/balance` | `clientIds` |
+| питание: меню | `GET /api/food/meals/v3/menu/complexes` | `clientId`, `from`, `to`, `withPreorder` |
+| питание: заказы | `GET /api/food/meals/v3/orders` | `clientId`, `from`, `to`, `limit` |
+
+`clientId` в API питания — JSON-объект, сериализованный в query:
+`{"personId":"<guid>"}`.
+
+## Посещаемость
+
+### Пропуски по урокам
+
+```http
+GET /api/family/web/v1/attendance?student_id=<studentId>&from=<YYYY-MM-DD>&to=<YYYY-MM-DD>
+```
+
+DTO — `AttendanceResponse`:
+
+```json
+{
+  "attendance": [
+    {
+      "date": "2026-11-16",
+      "summary": "Болеет",
+      "lessons": [
+        {
+          "subject_id": 1,
+          "subject_name": "Алгебра",
+          "lesson_education_type": "LESSON",
+          "reason_id": 1,
+          "description": "Болеет",
+          "health_status": null
+        }
+      ]
+    }
+  ],
+  "days_count": 1,
+  "year_description": "2026/2027"
+}
+```
+
+### Фактические проходы
+
+```http
+GET /api/pass/entrances/v1/visit_durations?personId=<personId>&from=<YYYY-MM-DD>&to=<YYYY-MM-DD>
+```
+
+DTO — `VisitDurationsResponse`:
+
+```json
+{
+  "payload": [
+    {
+      "date": "2026-11-16",
+      "visits": [
+        {
+          "in": "08:42",
+          "out": "15:10",
+          "duration": "6 ч 28 мин",
+          "organizationShortName": "ГБОУ Школа №…",
+          "isIncomplete": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+Оба DTO лежат в `ru.mesh.foss.data.model.AttendanceModels`. Поля, которых нет в
+ответе, остаются `null`/пустыми списками; экран не падает.
+
+## Москвёнок и QR-вход
+
+QR-вход и «Москвёнок» используют отдельные сценарии (`QrLogin`, `MoskvenokApi`)
+и не входят в `MeshApiService`: там нужны cookie, редиректы и HTML-разбор.
+Они также не являются частью публичного REST-контракта МЭШ.

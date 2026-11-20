@@ -1,5 +1,7 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.core.MeshCore
+
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

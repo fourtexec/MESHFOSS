@@ -24,10 +24,11 @@ concurrency:
 
 env:
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-  ANDROID_PACKAGES: 'platforms;android-35 build-tools;35.0.0'
-  BUILD_TOOLS_VERSION: '35.0.0'
+  # API 37 публикуется как android-37.0, без псевдонима android-37.
+  ANDROID_PACKAGES: 'platforms;android-37.0 build-tools;36.0.0 build-tools;37.0.0'
+  BUILD_TOOLS_VERSION: '37.0.0'
   # Человекочитаемое представление списка пакетов для ключа кеша SDK.
-  ANDROID_SDK_CACHE_KEY: android-35-build-tools-35.0.0
+  ANDROID_SDK_CACHE_KEY: android-37.0-build-tools-36.0.0-37.0.0
 
 jobs:
   build:
@@ -95,7 +96,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-35
+            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-37.0
+            ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
             ${{ env.ANDROID_SDK_ROOT }}/build-tools/${{ env.BUILD_TOOLS_VERSION }}
           key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_CACHE_KEY }}-${{ hashFiles('.github/workflows/android.yml') }}
           restore-keys: |
