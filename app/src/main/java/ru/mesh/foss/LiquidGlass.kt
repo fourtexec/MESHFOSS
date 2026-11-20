@@ -42,7 +42,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import android.os.Build
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
@@ -77,6 +86,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -99,8 +109,23 @@ import androidx.compose.ui.unit.sp
  * выбранную вкладку ([LiquidTabBar]).
  */
 object Liquid {
-    /** Капсула — форма панели вкладок, линзы и кнопок. */
-    val Capsule = RoundedCornerShape(percent = 50)
+    /** Радиус панели вкладок. */
+    val BarRadius = 20.dp
+
+    /** Отступ линзы от края панели. */
+    val BarInset = 4.dp
+
+    /** Радиус линзы: концентричен панели (радиус панели минус отступ). */
+    val LensRadius = BarRadius - BarInset
+
+    /** Панель вкладок — квадрат со скруглёнными углами, а не капсула. */
+    val BarShape = RoundedCornerShape(BarRadius)
+
+    /** Линза под выбранной вкладкой. */
+    val LensShape = RoundedCornerShape(LensRadius)
+
+    /** Стеклянные кнопки: действия в шапке, «Питание». */
+    val ButtonShape = RoundedCornerShape(16.dp)
 
     fun isDark(background: Color) = background.luminance() < 0.45f
 }
@@ -110,6 +135,24 @@ private class GlassLight {
 }
 
 private val LocalGlassLight = staticCompositionLocalOf<GlassLight?> { null }
+
+/**
+ * Фон «жидкого стекла», записанный в слой. Стеклянные панели рисуют свой кусок
+ * этого слоя через шейдер преломления ([LiquidShader]) — так стекло по-настоящему
+ * искажает то, что под ним.
+ */
+private class LiquidBackdropSource {
+    /** Положение фона в окне. */
+    var origin by mutableStateOf(Offset.Zero)
+
+    /** Фон в половинном разрешении (пятна и так размыты) — то, что преломляют панели. */
+    var image by mutableStateOf<ImageBitmap?>(null)
+}
+
+/** Во сколько раз фон для преломления меньше экрана. */
+private const val BackdropScale = 2
+
+private val LocalLiquidBackdrop = staticCompositionLocalOf<LiquidBackdropSource?> { null }
 
 /**
  * Подложка «жидкого стекла»: насыщенные, сильно размытые пятна цветов темы —
@@ -125,6 +168,7 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
     val tertiary = scheme.tertiary
     val mid = lerp(primary, tertiary, 0.5f)
     val k = if (dark) 1f else 0.6f
+    val source = remember { LiquidBackdropSource() }
     Box(
         Modifier
             .fillMaxSize()
@@ -140,7 +184,11 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                     lightSource.touch = null
                 }
             }
-            .background(base)
+    ) {
+        Box(
+            Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { source.origin = it.positionInRoot() }
             .drawWithCache {
                 val w = size.width
                 val h = size.height
@@ -155,14 +203,26 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                 val a = blob(primary, 0.42f, w * 0.08f, h * 0.10f, r * 0.62f)
                 val b = blob(mid, 0.26f, w * 1.0f, h * 0.42f, r * 0.50f)
                 val c = blob(tertiary, 0.30f, w * 0.18f, h * 0.92f, r * 0.58f)
+                // Фон рисуется в картинку: его же, преломлённым, рисуют стеклянные панели.
+                val iw = (w / BackdropScale).toInt().coerceAtLeast(1)
+                val ih = (h / BackdropScale).toInt().coerceAtLeast(1)
+                val image = ImageBitmap(iw, ih)
+                CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(image), Size(iw.toFloat(), ih.toFloat())) {
+                    scale(1f / BackdropScale, 1f / BackdropScale, pivot = Offset.Zero) {
+                        drawRect(base, size = Size(w, h))
+                        drawRect(a, size = Size(w, h))
+                        drawRect(b, size = Size(w, h))
+                        drawRect(c, size = Size(w, h))
+                    }
+                }
+                source.image = image
                 onDrawBehind {
-                    drawRect(a)
-                    drawRect(b)
-                    drawRect(c)
+                    drawImage(image, dstSize = IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.Low)
                 }
             }
-    ) {
+        )
         CompositionLocalProvider(
+            LocalLiquidBackdrop provides source,
             LocalGlassLight provides lightSource,
             LocalContentColor provides scheme.onBackground,
             content = content
@@ -280,12 +340,18 @@ private fun DrawScope.fringeBrush(): Brush = Brush.sweepGradient(*FringeStops, c
  * Материал «жидкого стекла». [tint] слегка окрашивает стекло (выделение,
  * акцентная кнопка); без него стекло нейтральное. [elevation] — размер мягкой
  * внешней тени, 0 — без тени.
+ *
+ * На Android 13+ стекло по-настоящему преломляет фон под собой шейдером Liquid
+ * Glass Studio ([LiquidShader]): искажение у края, дисперсия, френель и блик.
+ * [refract] = false — без преломления (например, в диалоге: он живёт в другом
+ * окне, и слой фона туда не дотянуть). На старых версиях — прежняя отрисовка.
  */
 @Composable
 fun Modifier.liquidGlass(
     shape: Shape = MaterialTheme.shapes.large,
     tint: Color = Color.Unspecified,
-    elevation: Dp = 6.dp
+    elevation: Dp = 6.dp,
+    refract: Boolean = true
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
@@ -298,6 +364,10 @@ fun Modifier.liquidGlass(
     val specular = if (dark) 1f else 1.6f
     val lightSource = LocalGlassLight.current
     var origin by remember { mutableStateOf(Offset.Zero) }
+    val backdrop = LocalLiquidBackdrop.current
+    val refractive = refract && backdrop != null && LiquidShader.available
+    // Заливка стекла для шейдера: оттенок поверх прозрачной основы; альфа — доля заливки.
+    val glassTint = tintFill.compositeOver(clear)
     val base = if (elevation > 0.dp) outerShadow(shape, shadow, elevation * 1.6f, elevation * 0.45f) else this
     return base
         .onGloballyPositioned { origin = it.positionInRoot() }
@@ -328,11 +398,28 @@ fun Modifier.liquidGlass(
             val rimStroke = Stroke(width = 2.dp.toPx())
             val fringeStroke = Stroke(width = 5.dp.toPx())
             val fringe = Brush.sweepGradient(*FringeStops, center = Offset(size.width / 2, size.height / 2))
+            val radiusPx = (shape as? CornerBasedShape)?.topStart?.toPx(size, this) ?: (minOf(size.width, size.height) / 2)
             onDrawWithContent {
-                drawOutline(outline, clear)
-                if (tintFill.alpha > 0f) drawOutline(outline, tintFill)
-                refraction.forEach { (stroke, color) -> drawOutline(outline, color, style = stroke) }
-                drawSpecular(specular, spark = false)
+                val image = backdrop?.image
+                if (refractive && image != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // Под стеклом — кусок фона: BitmapShader в координатах панели.
+                    val under = android.graphics.BitmapShader(
+                        image.asAndroidBitmap(),
+                        android.graphics.Shader.TileMode.CLAMP,
+                        android.graphics.Shader.TileMode.CLAMP
+                    ).apply {
+                        setLocalMatrix(android.graphics.Matrix().apply {
+                            setScale(BackdropScale.toFloat(), BackdropScale.toFloat())
+                            postTranslate(backdrop.origin.x - origin.x, backdrop.origin.y - origin.y)
+                        })
+                    }
+                    drawRect(LiquidShader.brush(under, Offset.Zero, size, radiusPx, density, glassTint, PanelParams))
+                } else {
+                    drawOutline(outline, clear)
+                    if (tintFill.alpha > 0f) drawOutline(outline, tintFill)
+                    refraction.forEach { (stroke, color) -> drawOutline(outline, color, style = stroke) }
+                    drawSpecular(specular, spark = false)
+                }
                 lightSource?.touch?.let { touch ->
                     val c = touch - origin
                     drawContext.transform.translate(c.x, c.y)
@@ -340,11 +427,19 @@ fun Modifier.liquidGlass(
                     drawContext.transform.translate(-c.x, -c.y)
                 }
                 drawContent()
-                drawOutline(outline, fringe, style = fringeStroke, blendMode = BlendMode.Screen)
-                drawOutline(outline, rim, style = rimStroke)
+                if (!refractive) {
+                    drawOutline(outline, fringe, style = fringeStroke, blendMode = BlendMode.Screen)
+                    drawOutline(outline, rim, style = rimStroke)
+                }
             }
         }
 }
+
+/** Стекло панелей: тоньше и спокойнее линзы — под ним плавный фон, а не иконки. */
+private val PanelParams = LiquidShader.Params(thickness = 14f, offsetDp = 10f, dispersion = 5f)
+
+/** Линза: «квадрат со скруглением» (суперэллипс n = 4), толстое стекло, сильное преломление. */
+private val LensParams = LiquidShader.Params(roundness = 4f, thickness = 18f, offsetDp = 14f, dispersion = 5f, fresnelFactor = 0.25f)
 
 /**
  * Шапка в стиле iOS: крупный жирный заголовок прямо на фоне и действия в
@@ -376,7 +471,7 @@ fun LiquidTopBar(title: String, actions: @Composable RowScope.() -> Unit) {
             Row(
                 modifier = Modifier
                     .height(48.dp)
-                    .liquidGlass(Liquid.Capsule, elevation = 8.dp)
+                    .liquidGlass(Liquid.ButtonShape, elevation = 8.dp)
                     .padding(horizontal = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions
@@ -389,8 +484,8 @@ fun LiquidTopBar(title: String, actions: @Composable RowScope.() -> Unit) {
 data class BarNavItem(val key: String, val label: String, val icon: androidx.compose.ui.graphics.painter.Painter)
 
 /**
- * Плавающая капсула вкладок в стиле iOS с оптической «линзой» под выбранной
- * вкладкой.
+ * Плавающая панель вкладок (квадрат со скруглёнными углами) с оптической
+ * «линзой» под выбранной вкладкой.
  *
  * Линза — по мотивам «Glass Lens» (DesignBookmark): внутри неё три копии иконок,
  * каждая увеличена чуть сильнее (1×, 1.05×, 1.12×) и видна чуть ближе к ободку,
@@ -414,8 +509,8 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(66.dp)
-            .liquidGlass(Liquid.Capsule, elevation = 16.dp)
-            .padding(4.dp)
+            .liquidGlass(Liquid.BarShape, elevation = 16.dp)
+            .padding(Liquid.BarInset)
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val itemWidth = maxWidth / items.size.coerceAtLeast(1)
@@ -438,10 +533,43 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
             )
             val lensAlpha by animateFloatAsState(if (target >= 0) 1f else 0f, tween(180), label = "liquidLensAlpha")
             val showLens = target >= 0
+            // Android 13+: линза — шейдер Liquid Glass Studio прямо по слою иконок.
+            val shaderLens = LiquidShader.effectAvailable
+            val lensTint = if (dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
+            var rowOrigin by remember { mutableStateOf(Offset.Zero) }
             Row(
                 Modifier
                     .fillMaxSize()
+                    .onGloballyPositioned { rowOrigin = it.positionInWindow() }
+                    .graphicsLayer {
+                        if (LiquidPreview.enabled) {
+                            LiquidPreview.lens = if (!showLens) null else LensSnapshot(
+                                origin = rowOrigin + Offset(lensX.value.toPx(), 0f),
+                                size = Size(itemWidth.toPx(), size.height),
+                                radius = Liquid.LensRadius.toPx(),
+                                density = density,
+                                tint = lensTint.copy(alpha = lensTint.alpha * lensAlpha),
+                                params = LensParams.copy(offsetDp = LensParams.offsetDp * bend.value),
+                                zoom = zoom.value
+                            )
+                        }
+                        if (shaderLens && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            renderEffect = if (!showLens) null else LiquidShader.effect(
+                                origin = Offset(lensX.value.toPx(), 0f),
+                                size = Size(itemWidth.toPx(), size.height),
+                                radius = Liquid.LensRadius.toPx(),
+                                density = density,
+                                tint = lensTint.copy(alpha = lensTint.alpha * lensAlpha),
+                                params = LensParams.copy(offsetDp = LensParams.offsetDp * bend.value),
+                                zoom = zoom.value
+                            )
+                        }
+                    }
                     .drawWithContent {
+                        if (shaderLens || LiquidPreview.enabled) {
+                            drawContent()
+                            return@drawWithContent
+                        }
                         // Иконки записываются в слой: его же рисует линза, увеличенным.
                         icons.record { this@drawWithContent.drawContent() }
                         if (!showLens) {
@@ -454,7 +582,7 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                                         top = 0f,
                                         right = lensX.value.toPx() + itemWidth.toPx(),
                                         bottom = size.height,
-                                        cornerRadius = CornerRadius(size.height / 2)
+                                        cornerRadius = CornerRadius(Liquid.LensRadius.toPx())
                                     )
                                 )
                             }
@@ -477,7 +605,7 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(Liquid.Capsule)
+                            .clip(Liquid.LensShape)
                             .clickable(interactionSource = sources[i], indication = null) { onSelect(item.key) }
                     ) {
                         Icon(item.icon, contentDescription = item.label, tint = ink, modifier = Modifier.size(24.dp))
@@ -494,43 +622,82 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                     }
                 }
             }
-            Box(
+            if (!shaderLens && !LiquidPreview.enabled) Box(
                 Modifier
                     .offset { IntOffset(lensX.value.roundToPx(), 0) }
                     .width(itemWidth)
                     .fillMaxHeight()
                     .graphicsLayer { alpha = lensAlpha }
-                    .clip(Liquid.Capsule)
-                    .drawBehind { drawLens(icons, lensX.value.toPx(), zoom.value, bend.value, dark) }
+                    .clip(Liquid.LensShape)
+                    .drawBehind { drawLens(icons, lensX.value.toPx(), zoom.value, bend.value, dark, Liquid.LensShape) }
             )
         }
     }
 }
 
+/**
+ * Только для превью в тестах: в Robolectric нет RenderEffect с шейдером, поэтому
+ * линза не рисуется, а её текущие параметры (в координатах окна) сохраняются сюда —
+ * тест накладывает тот же шейдер на готовый кадр. В приложении выключено.
+ */
+internal object LiquidPreview {
+    var enabled = false
+    var lens: LensSnapshot? = null
+}
+
+internal data class LensSnapshot(
+    val origin: Offset,
+    val size: Size,
+    val radius: Float,
+    val density: Float,
+    val tint: Color,
+    val params: LiquidShader.Params,
+    val zoom: Float
+)
+
 /** Насколько сильнее увеличена каждая копия к ободку: середина, внешнее кольцо, ободок. */
 private val LensBend = floatArrayOf(1f, 1.05f, 1.12f)
 
 /**
- * Рисует линзу размером с текущую область: заливку, три увеличенные копии
- * [content] (слой строки иконок, левый край линзы в нём — [left]) с плавными
- * переходами между кольцами и оптику стекла поверх. [bendAmount] — доля изгиба
- * колец (0 — плоское стекло, 1 — как в Glass Lens).
+ * Маска «по расстоянию до края» для прямоугольной линзы: прозрачна у края
+ * (ближе [from] px), непрозрачна внутри (дальше [to] px), между ними — плавный
+ * переход. Составлена как произведение горизонтального и вертикального профилей
+ * и накладывается на текущий слой режимом [mode] (DstIn — оставить внутреннюю
+ * часть, DstOut — оставить кромку).
  */
-private fun DrawScope.drawLens(content: GraphicsLayer, left: Float, zoom: Float, bendAmount: Float, dark: Boolean) {
+private fun DrawScope.edgeMask(from: Float, to: Float, mode: BlendMode) {
     val w = size.width
     val h = size.height
-    val cx = w / 2
-    val cy = h / 2
+    fun profile(len: Float): Array<Pair<Float, Color>> {
+        val a = (from / len).coerceIn(0f, 0.5f)
+        val b = (to / len).coerceIn(a, 0.5f)
+        return arrayOf(
+            0f to Color.Transparent, a to Color.Transparent, b to Color.Black,
+            1f - b to Color.Black, 1f - a to Color.Transparent, 1f to Color.Transparent
+        )
+    }
+    drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), Paint().apply { blendMode = mode }) }
+    drawRect(Brush.horizontalGradient(*profile(w)))
+    drawRect(Brush.verticalGradient(*profile(h)), blendMode = BlendMode.DstIn)
+    drawIntoCanvas { it.restore() }
+}
+
+/**
+ * Рисует линзу формы [shape] размером с текущую область: заливку, три
+ * увеличенные копии [content] (слой строки иконок, левый край линзы в нём —
+ * [left]) и оптику стекла поверх. Кольца изгиба идут вдоль краёв: чем ближе к
+ * краю, тем сильнее увеличение — как у толстого стекла с прямыми гранями.
+ * [bendAmount] — доля изгиба (0 — плоское стекло, 1 — как в Glass Lens).
+ */
+private fun DrawScope.drawLens(content: GraphicsLayer, left: Float, zoom: Float, bendAmount: Float, dark: Boolean, shape: Shape) {
     val bounds = Rect(Offset.Zero, size)
+    val outline = shape.createOutline(size, layoutDirection, this)
     drawRect(if (dark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.05f))
-    val opaque = Color.Black
-    val clear = Color.Transparent
-    // Маски колец: каждая копия плавно уступает место следующей, без двоения.
-    val masks = arrayOf(
-        arrayOf(0f to opaque, 0.52f to opaque, 0.74f to clear, 1f to clear),
-        arrayOf(0f to clear, 0.52f to clear, 0.74f to opaque, 0.90f to clear, 1f to clear),
-        arrayOf(0f to clear, 0.74f to clear, 0.90f to opaque, 1f to opaque)
-    )
+    // Границы колец в px от края — те же доли, что у круглой линзы (52/74/90% радиуса).
+    val r = minOf(size.width, size.height) / 2
+    val inner = r * 0.48f
+    val middle = r * 0.26f
+    val rim = r * 0.10f
     LensBend.forEachIndexed { i, b ->
         val bend = 1f + (b - 1f) * bendAmount
         drawIntoCanvas { it.saveLayer(bounds, Paint()) }
@@ -538,40 +705,25 @@ private fun DrawScope.drawLens(content: GraphicsLayer, left: Float, zoom: Float,
             scale(zoom * bend, zoom * bend, pivot = center)
             translate(-left, 0f)
         }) { drawLayer(content) }
-        ellipseGradient(cx, cy, cx, cy, *masks[i], blendMode = BlendMode.DstIn)
+        // Каждая копия плавно уступает место следующей, без двоения.
+        when (i) {
+            0 -> edgeMask(middle, inner, BlendMode.DstIn)
+            1 -> {
+                edgeMask(rim, middle, BlendMode.DstIn)
+                edgeMask(middle, inner, BlendMode.DstOut)
+            }
+            else -> edgeMask(rim, middle, BlendMode.DstOut)
+        }
         drawIntoCanvas { it.restore() }
     }
-    // Полоса преломления: край толстого стекла чуть темнее.
-    ellipseGradient(
-        cx, cy, cx, cy,
-        0f to clear,
-        0.74f to clear,
-        0.87f to RefractionInk.copy(alpha = 0.06f),
-        0.94f to RefractionInk.copy(alpha = 0.13f),
-        0.98f to clear,
-        1f to clear
-    )
-    // Тонкий яркий ободок.
-    ellipseGradient(
-        cx, cy, cx, cy,
-        0f to Color.Transparent,
-        0.88f to Color.Transparent,
-        0.95f to Color.White.copy(alpha = 0.08f),
-        0.99f to Color.White.copy(alpha = 0.34f),
-        1f to Color.White.copy(alpha = 0.12f)
-    )
+    // Полоса преломления: край толстого стекла чуть темнее (обводки наполовину
+    // обрезаны формой, поэтому ширина вдвое больше видимой).
+    listOf(middle * 2 to 0.03f, middle to 0.045f, rim * 1.2f to 0.055f).forEach { (width, alpha) ->
+        drawOutline(outline, RefractionInk.copy(alpha = alpha), style = Stroke(width))
+    }
     drawSpecular(1f, spark = true)
-    // Цветная кайма у самой кромки, наложение «экран».
-    drawIntoCanvas { it.saveLayer(bounds, Paint().apply { blendMode = BlendMode.Screen }) }
-    drawRect(fringeBrush())
-    ellipseGradient(
-        cx, cy, cx, cy,
-        0f to clear,
-        0.88f to clear,
-        0.95f to opaque,
-        0.99f to clear,
-        1f to clear,
-        blendMode = BlendMode.DstIn
-    )
-    drawIntoCanvas { it.restore() }
+    // Цветная кайма у кромки, наложение «экран», и тонкий яркий ободок.
+    drawOutline(outline, fringeBrush(), style = Stroke(5.dp.toPx()), blendMode = BlendMode.Screen)
+    drawOutline(outline, Color.White.copy(alpha = 0.07f), style = Stroke(6.dp.toPx()))
+    drawOutline(outline, Color.White.copy(alpha = 0.32f), style = Stroke(2.2.dp.toPx()))
 }

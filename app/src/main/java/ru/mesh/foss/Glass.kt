@@ -343,7 +343,7 @@ internal fun Modifier.dialogGlass(): Modifier {
     val solid = background(MaterialTheme.colorScheme.surface.copy(alpha = 1f), shape)
     return when (LocalDesign.current) {
         // Диалог над затемнением: под стеклом — непрозрачная поверхность, текст не просвечивает.
-        Design.LIQUID -> solid.liquidGlass(shape, elevation = 20.dp)
+        Design.LIQUID -> solid.liquidGlass(shape, elevation = 20.dp, refract = false)
         // Диалог над затемнением: почти непрозрачная матовая пластина, текст не просвечивает.
         Design.FROSTED -> frostedSurface(shape, elevation = 18.dp, opacity = 0.96f)
         Design.GLASS -> solid.glass(shape)

@@ -625,7 +625,7 @@ fun MainScaffold(
                 ExtendedFloatingActionButton(
                     // В «матовом стекле» — «чернильная» кнопка (цвет текста на фоне) со скруглением 16dp;
                     // в «жидком стекле» — капсула из стекла, окрашенного акцентом, как prominent-кнопки iOS.
-                    modifier = if (liquid) Modifier.liquidGlass(Liquid.Capsule, tint = MaterialTheme.colorScheme.primary, elevation = 14.dp) else Modifier,
+                    modifier = if (liquid) Modifier.liquidGlass(Liquid.ButtonShape, tint = MaterialTheme.colorScheme.primary, elevation = 14.dp) else Modifier,
                     containerColor = when {
                         frosted -> MaterialTheme.colorScheme.onBackground
                         liquid -> Color.Transparent
@@ -639,7 +639,7 @@ fun MainScaffold(
                     elevation = if (liquid) FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp) else FloatingActionButtonDefaults.elevation(),
                     shape = when {
                         frosted -> Frosted.CardShape
-                        liquid -> Liquid.Capsule
+                        liquid -> Liquid.ButtonShape
                         else -> FloatingActionButtonDefaults.extendedFabShape
                     },
                     text = { Text(Words.Meals.text) },
