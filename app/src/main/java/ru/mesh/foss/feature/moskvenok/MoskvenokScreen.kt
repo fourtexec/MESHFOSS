@@ -121,7 +121,7 @@ fun MoskvenokScreen(store: SessionStore) {
             val left = expiresAt - System.currentTimeMillis()
             if (left <= 0L) {
                 remainingMs = 0L
-                MoskvenokLog.append("qr: устарел, нужен refresh")
+                MeshLog.log("Moskvenok", "qr: устарел, нужен refresh")
                 break
             }
             remainingMs = left
@@ -131,7 +131,7 @@ fun MoskvenokScreen(store: SessionStore) {
 
     suspend fun session(): String = withContext(Dispatchers.IO) {
         store.mosIdSession?.takeIf { it.isNotBlank() }?.let {
-            MoskvenokLog.append("session: кэш sid=$it")
+            MeshLog.log("Moskvenok", "session: кэш sid=$it")
             return@withContext it
         }
         val jar = store.authCookies?.let { raw ->
@@ -141,16 +141,16 @@ fun MoskvenokScreen(store: SessionStore) {
             }.getOrNull()
         }.orEmpty()
         if (jar.isEmpty()) {
-            MoskvenokLog.append("session: нет кук веб-входа (auth_cookies пусты)")
+            MeshLog.log("Moskvenok", "session: нет кук веб-входа (auth_cookies пусты)")
             throw MoskvenokApi.MosError("no-session", 401)
         }
         val sid = MoskvenokApi.obtainSession(jar, deviceId)
         if (sid == null) {
-            MoskvenokLog.append("session: obtainSession не вернул сессию")
+            MeshLog.log("Moskvenok", "session: obtainSession не вернул сессию")
             throw MoskvenokApi.MosError("no-session", 401)
         }
         store.mosIdSession = sid
-        MoskvenokLog.append("session: получена sid=$sid")
+        MeshLog.log("Moskvenok", "session: получена sid=$sid")
         sid
     }
 
@@ -165,7 +165,7 @@ fun MoskvenokScreen(store: SessionStore) {
         } catch (error: MoskvenokApi.MosError) {
             // Сессия протухла — получаем заново по кукам входа и повторяем.
             if (error.code != 401) throw error
-            MoskvenokLog.append("objects: 401 — переполучаем сессию")
+            MeshLog.log("Moskvenok", "objects: 401 — переполучаем сессию")
             store.mosIdSession = null
             val sid = session()
             sid to MoskvenokApi.objects(sid, deviceId, forceRefresh = force)
@@ -197,10 +197,10 @@ fun MoskvenokScreen(store: SessionStore) {
         } catch (error: Exception) {
             // Ошибка обновления QR не должна прятать уже показанный код.
             if (refreshQr) {
-                MoskvenokLog.append("load: objects ошибка при обновлении QR (игнор): $error")
+                MeshLog.log("Moskvenok", "load: objects ошибка при обновлении QR (игнор): $error")
                 return objects?.let { MoskvenokApi.isEnabled(it) } ?: false
             }
-            MoskvenokLog.append("load: objects ошибка: $error")
+            MeshLog.log("Moskvenok", "load: objects ошибка: $error")
             processing = false
             errorText = describeMoskvenok(error)
             return false
@@ -210,7 +210,7 @@ fun MoskvenokScreen(store: SessionStore) {
         // пока сервер не соберёт документы.
         if (objectsJson.optInt("refresh") != 0 && objectsJson.has("message")) {
             processing = true
-            MoskvenokLog.append("load: objects — 202 обработка")
+            MeshLog.log("Moskvenok", "load: objects — 202 обработка")
             return false
         }
         processing = false
@@ -218,12 +218,12 @@ fun MoskvenokScreen(store: SessionStore) {
         if (!enabledNow) {
             doc = null
             errorText = null
-            MoskvenokLog.append("load: isEnabled=false")
+            MeshLog.log("Moskvenok", "load: isEnabled=false")
             return false
         }
         val docId = MoskvenokApi.meshDocId(objectsJson, store.personId)
         if (docId == null) {
-            MoskvenokLog.append("load: isEnabled=true, но id документа нет")
+            MeshLog.log("Moskvenok", "load: isEnabled=true, но id документа нет")
             if (!refreshQr) errorText = describeMoskvenok(MoskvenokApi.MosError("no mesh document"))
             return true
         }
@@ -233,7 +233,7 @@ fun MoskvenokScreen(store: SessionStore) {
             }
             if (document.optInt("refresh") != 0 && document.has("message")) {
                 processing = true
-                MoskvenokLog.append("load: документ — 202 обработка")
+                MeshLog.log("Moskvenok", "load: документ — 202 обработка")
                 return true
             }
             processing = false
@@ -243,30 +243,30 @@ fun MoskvenokScreen(store: SessionStore) {
             while (document.optString("barcode_payload").isBlank() && payloadTry < 3) {
                 payloadTry++
                 delay(800)
-                MoskvenokLog.append("load: документ без payload, повтор $payloadTry (force-refresh)")
+                MeshLog.log("Moskvenok", "load: документ без payload, повтор $payloadTry (force-refresh)")
                 document = withContext(Dispatchers.IO) {
                     MoskvenokApi.document(sid, deviceId, docId, refresh = true)
                 }
                 if (document.optInt("refresh") != 0 && document.has("message")) {
                     processing = true
-                    MoskvenokLog.append("load: документ — 202 обработка (повтор)")
+                    MeshLog.log("Moskvenok", "load: документ — 202 обработка (повтор)")
                     return true
                 }
             }
             if (document.optString("barcode_payload").isBlank()) {
-                MoskvenokLog.append("load: payload так и не пришёл")
+                MeshLog.log("Moskvenok", "load: payload так и не пришёл")
                 throw MoskvenokApi.MosError("empty barcode")
             }
             doc = document
             errorText = null
             applyDocTiming(document)
-            MoskvenokLog.append(
+            MeshLog.log("Moskvenok", 
                 "load: isEnabled=true doc=$docId valid=${document.optLong("barcode_valid_time")} ms" +
                     (if (refreshQr) " (QR обновлён)" else "")
             )
         } catch (error: Exception) {
             // Падение documents не должно сбрасывать уже показанное состояние.
-            MoskvenokLog.append(
+            MeshLog.log("Moskvenok", 
                 "load: documents ошибка${if (refreshQr) " при обновлении QR (игнор)" else ""}: $error"
             )
             if (!refreshQr) errorText = describeMoskvenok(error)
@@ -294,21 +294,21 @@ fun MoskvenokScreen(store: SessionStore) {
                 // уже отдаёт type: mesh в groups — не шлём (в т.ч. на кнопке повтора).
                 val alreadyEnabled = objects?.let { MoskvenokApi.isEnabled(it) } == true
                 if (alreadyEnabled) {
-                    MoskvenokLog.append(
+                    MeshLog.log("Moskvenok", 
                         "enable: уже включено (type: mesh в groups) — POST не шлём, берём документ"
                     )
                 } else {
-                    MoskvenokLog.append(
+                    MeshLog.log("Moskvenok", 
                         """enable: POST /api/v3/edm/mp/settings/docs {"profile":[22],"favorites":[22]}"""
                     )
                     withContext(Dispatchers.IO) { MoskvenokApi.enable(session(), deviceId) }
-                    MoskvenokLog.append("enable: POST принят — берём документ по uuid (как official, flow)")
+                    MeshLog.log("Moskvenok", "enable: POST принят — берём документ по uuid (как official, flow)")
                 }
                 // Официальное приложение после POST сразу запрашивает документ по uuid
                 // и не перепроверяет groups — делаем так же.
                 val docId = MoskvenokApi.meshDocId(objects ?: JSONObject(), store.personId)
                 if (docId == null) {
-                    MoskvenokLog.append("enable: нет uuid ученика — документ не запросить")
+                    MeshLog.log("Moskvenok", "enable: нет uuid ученика — документ не запросить")
                     errorText = Words.MoskvenokEnableFailed.text
                 } else {
                     // Пока payload не пришёл — doc не ставим: иначе пустой квадрат.
@@ -328,10 +328,10 @@ fun MoskvenokScreen(store: SessionStore) {
                             }
                             fetched = document
                             if (document.optString("barcode_payload").isNotBlank()) {
-                                MoskvenokLog.append("enable: документ получен, попытка $attempt")
+                                MeshLog.log("Moskvenok", "enable: документ получен, попытка $attempt")
                                 break
                             }
-                            MoskvenokLog.append(
+                            MeshLog.log("Moskvenok", 
                                 "enable: документ, попытка $attempt — " +
                                     if (document.optInt("refresh") != 0) {
                                         "202 обработка"
@@ -340,7 +340,7 @@ fun MoskvenokScreen(store: SessionStore) {
                                     }
                             )
                         } catch (docError: Exception) {
-                            MoskvenokLog.append("enable: документ, попытка $attempt: $docError")
+                            MeshLog.log("Moskvenok", "enable: документ, попытка $attempt: $docError")
                         }
                     }
                     val document = fetched?.takeIf { it.optString("barcode_payload").isNotBlank() }
@@ -349,7 +349,7 @@ fun MoskvenokScreen(store: SessionStore) {
                         processing = false
                         applyDocTiming(document)
                         errorText = null
-                        MoskvenokLog.append(
+                        MeshLog.log("Moskvenok", 
                             "enable: QR doc=$docId " +
                                 "(objects включена: ${objects?.let { MoskvenokApi.isEnabled(it) } ?: false})"
                         )
@@ -357,13 +357,13 @@ fun MoskvenokScreen(store: SessionStore) {
                         // Документ не пришёл — сверяемся с objects и честно сообщаем.
                         val enabledNow = refreshAll(false)
                         if (!enabledNow && !processing && errorText == null) {
-                            MoskvenokLog.append("enable: не подтвердилось")
+                            MeshLog.log("Moskvenok", "enable: не подтвердилось")
                             errorText = Words.MoskvenokEnableFailed.text
                         }
                     }
                 }
             } catch (error: Exception) {
-                MoskvenokLog.append("enable: ошибка: $error")
+                MeshLog.log("Moskvenok", "enable: ошибка: $error")
                 errorText = describeMoskvenok(error)
             } finally {
                 enabling = false
@@ -394,7 +394,7 @@ fun MoskvenokScreen(store: SessionStore) {
             }
             if (due) {
                 lastRenew = now
-                MoskvenokLog.append("session: 202 не проходит — пересоздаём сессию (свежий sid)")
+                MeshLog.log("Moskvenok", "session: 202 не проходит — пересоздаём сессию (свежий sid)")
                 store.mosIdSession = null
             }
             refreshAll(false)
@@ -508,7 +508,7 @@ fun MoskvenokScreen(store: SessionStore) {
                             if (expired && qr != null) {
                                 FilledIconButton(
                                     onClick = {
-                                        MoskvenokLog.append("qr: нажат refresh — новый barcode_payload")
+                                        MeshLog.log("Moskvenok", "qr: нажат refresh — новый barcode_payload")
                                         load(refreshQr = true)
                                     },
                                     enabled = !qrRefreshing,

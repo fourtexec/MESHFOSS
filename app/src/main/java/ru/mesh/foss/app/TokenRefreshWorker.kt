@@ -56,12 +56,14 @@ class TokenRefreshWorker(
             )
             val fresh = client.refreshToken()
             if (fresh != null) {
+                MeshLog.log("AUTH", "worker: токен обновлён")
                 notify(
                     UiLanguage.context(applicationContext).getString(R.string.notif_token_title),
                     UiLanguage.context(applicationContext).getString(R.string.notif_token_text)
                 )
                 Result.success()
             } else {
+                MeshLog.log("AUTH", "worker: МЭШ не выдал новый токен")
                 notify(
                     UiLanguage.context(applicationContext).getString(R.string.notif_error_title),
                     UiLanguage.context(applicationContext).getString(R.string.notif_error_text)
@@ -70,6 +72,7 @@ class TokenRefreshWorker(
             }
         } catch (error: Exception) {
             Log.w(TAG, "Фоновое обновление не удалось: ${error.message}")
+            MeshLog.error("AUTH", error)
             Result.retry()
         }
     }

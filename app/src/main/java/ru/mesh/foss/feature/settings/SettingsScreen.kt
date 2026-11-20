@@ -62,7 +62,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
-    var moskvenokLog by remember { mutableStateOf(prefs.getBoolean("moskvenok_log", false)) }
+    var moskvenokLog by remember { mutableStateOf(MeshLog.enabled) }
     var showMoskvenokLog by remember { mutableStateOf(false) }
     var pinEnabled by remember { mutableStateOf(PinManager.isEnabled(context)) }
     var biometricEnabled by remember { mutableStateOf(PinManager.isBiometricEnabled(context)) }
@@ -319,8 +319,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                         checked = moskvenokLog,
                                         onCheckedChange = { value ->
                                             moskvenokLog = value
-                                            prefs.edit().putBoolean("moskvenok_log", value).apply()
-                                            MoskvenokLog.enabled = value
+                                            MeshLogStore.setEnabled(value)
                                         }
                                     )
                                 }
@@ -331,7 +330,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                         }
                                         OutlinedButton(
                                             onClick = {
-                                                MoskvenokLog.clear()
+                                                MeshLogStore.clear()
                                                 showMoskvenokLog = false
                                             }
                                         ) {
@@ -595,7 +594,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
     }
 
     if (showMoskvenokLog) {
-        val logText = remember { MoskvenokLog.read(context) }
+        val logText = remember { MeshLogStore.read(context) }
         val clipboard = LocalClipboardManager.current
         AlertDialog(
             modifier = Modifier.dialogGlass(),

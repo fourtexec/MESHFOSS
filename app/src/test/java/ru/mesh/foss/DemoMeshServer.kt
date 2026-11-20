@@ -240,7 +240,8 @@ class DemoMeshServer(
                     }
                 }
                 val token = authorization.removePrefix("Bearer").trim().ifBlank { authToken }
-                val (status, payload) = route(path, token)
+                val bothAuth = authorization.isNotBlank() && authToken.isNotBlank()
+                val (status, payload) = route(path, token, bothAuth)
                 respond(socket, status, payload)
             } catch (error: Exception) {
                 runCatching { respond(socket, 500, JSONObject().put("message", "demo error: ${error.message}")) }
@@ -276,8 +277,14 @@ class DemoMeshServer(
         out.flush()
     }
 
-    private fun route(fullPath: String, token: String): Pair<Int, JSONObject> {
+    private fun route(fullPath: String, token: String, bothAuth: Boolean = false): Pair<Int, JSONObject> {
         val (path, params) = query(fullPath)
+
+        // school.mos.ru: шлюз pass/entrances отдаёт 401, если пришли ОБА заголовка
+        // Authorization и Auth-Token, и принимает любой из них по отдельности.
+        if (bothAuth && path == MeshCore.Paths.VISIT_DURATIONS) {
+            return 401 to JSONObject().put("message", "Authorization and Auth-Token together")
+        }
 
         // обновление токена: нужен действующий токен
         if (path == MeshCore.Paths.TOKEN_REFRESH) {
@@ -519,6 +526,10 @@ class DemoMeshServer(
                 }
                 200 to JSONObject().put("payload", payload)
             }
+
+            MeshCore.Paths.ATTENDANCE -> 200 to JSONObject().put("attendance", JSONArray())
+
+            MeshCore.Paths.VISIT_DURATIONS -> 200 to JSONObject().put("payload", JSONArray())
 
             else -> 404 to JSONObject().put("message", "demo: unknown path $path")
         }

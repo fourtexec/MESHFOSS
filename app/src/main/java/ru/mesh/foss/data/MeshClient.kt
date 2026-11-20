@@ -127,30 +127,57 @@ class MeshClient(
         while (attempt < maxAttempts) {
             attempt++
             requestCount++
+            val call = callFactory()
+            if (MeshLog.enabled) MeshLog.log("HTTP", "→ " + describe(call.request()))
             val response = try {
-                callFactory().execute()
+                call.execute()
             } catch (error: SocketTimeoutException) {
+                MeshLog.error("HTTP", error)
                 throw networkError(error)
             } catch (error: UnknownHostException) {
+                MeshLog.error("HTTP", error)
                 throw networkError(error)
             } catch (error: IOException) {
+                MeshLog.error("HTTP", error)
                 throw networkError(error)
             } catch (error: Exception) {
+                MeshLog.error("HTTP", error)
                 throw networkError(error)
             }
             if (response.isSuccessful) {
+                if (MeshLog.enabled) {
+                    MeshLog.log("HTTP", "← ${response.code()} ${call.request().method} ${call.request().url}")
+                }
                 return response.body()
                     ?: throw MeshCore.MeshError(Words.InvalidResponseFromMesh.text, "invalid-json", response.code())
             }
             val code = response.code()
-            response.errorBody()?.close()
+            val errorText = if (MeshLog.enabled) {
+                runCatching { response.errorBody()?.string() }.getOrNull()
+            } else {
+                null
+            }
+            if (errorText == null) response.errorBody()?.close()
+            if (MeshLog.enabled) {
+                val tail = errorText?.take(300)?.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
+                MeshLog.log("HTTP", "← $code ${call.request().method} ${call.request().url}$tail")
+            }
             if (code == 401 && attempt < maxAttempts) {
+                MeshLog.log("AUTH", "401 — обновляю токен: ${call.request().url}")
                 if (refreshToken() != null) continue
                 throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
             }
             throw httpError(code, path)
         }
         throw MeshCore.MeshError(Words.RequestFailed(path), "exhausted")
+    }
+
+    /** Строка запроса с заголовками; токены и cookie замаскирует [Sensitive]. */
+    private fun describe(request: Request): String {
+        val headers = request.headers.names().joinToString(" ") { name ->
+            "$name: ${request.header(name)}"
+        }
+        return "${request.method} ${request.url} $headers"
     }
 
     private fun toObject(element: JsonElement?): JSONObject? {
@@ -182,22 +209,29 @@ class MeshClient(
         val current = token?.takeIf { it.isNotBlank() } ?: return null
         return try {
             requestCount++
+            MeshLog.log("AUTH", "→ refresh token")
             val response = api()
                 .refreshToken(MeshCore.ROLE_ID, MeshCore.SUBSYSTEM_ID, refreshHeaders(current))
                 .execute()
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) {
+                MeshLog.log("AUTH", "refresh: HTTP ${response.code()}")
+                return null
+            }
             val body = response.body()?.string().orEmpty()
             val fresh = MeshCore.extractTokenFromText(body)
                 ?: MeshCore.extractTokenFromUrl(body)
                 ?: looseToken(body)
             if (!fresh.isNullOrBlank() && fresh != current) {
+                MeshLog.log("AUTH", "refresh: ok")
                 token = fresh
                 onToken?.invoke(fresh)
                 fresh
             } else {
+                MeshLog.log("AUTH", "refresh: токен не получен")
                 null
             }
         } catch (error: Exception) {
+            MeshLog.error("AUTH", error)
             null
         }
     }
@@ -482,7 +516,13 @@ class MeshClient(
     fun getVisitDurations(personId: String?, from: String, to: String): VisitDurationsResponse {
         val id = personId?.trim().orEmpty()
         if (id.isBlank()) throw MeshCore.MeshError(Words.SelectAStudentToViewAttendance.text, "bad-student")
-        return execute({ api().visitDurations(id, from, to, headers()) }, MeshCore.Paths.VISIT_DURATIONS)
+        // Шлюз pass/entrances отвечает 401, если пришли ОБА заголовка
+        // Authorization и Auth-Token, и принимает любой из них по отдельности
+        // (проверено на school.mos.ru). Поэтому здесь — только Bearer.
+        return execute(
+            { api().visitDurations(id, from, to, headers(includeAuthToken = false)) },
+            MeshCore.Paths.VISIT_DURATIONS
+        )
     }
 
     /** Имя ученика по personId (с кэшем — на класс обычно один запрос на человека). */

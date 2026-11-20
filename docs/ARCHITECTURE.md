@@ -60,6 +60,22 @@ core       ──►  (ничего из перечисленного)
 5. `TokenRefreshWorker` раз в 12 часов продлевает сессию через тот же
    `MeshClient` и `SessionStore`.
 
+## Журнал
+
+Единый журнал приложения разделён на три части:
+
+- `core/MeshLog` — ядро без Android: очередь строк, метка времени, санк-вывод
+  через `sink`; при выключенном журнале вызовы почти бесплатны;
+- `core/Sensitive` — общая редакция секретов: `Authorization`/`Auth-Token`,
+  cookie, sessionid, OAuth `code`/`state`, `Profile-Id`, ПИИ и JWT. Regex
+  компилируются поштучно и обёрнуты в `runCatching`, поэтому некорректный
+  шаблон не роняет приложение;
+- `data/MeshLogStore` — Android-сторона: переключатель в Настройках, запись в
+  `filesDir/mesh.log` (усечение) и logcat (`adb logcat -s MeshLog`).
+
+`MeshClient` пишет все HTTP-запросы под тегом `HTTP`, продление токена — под
+`AUTH`; экран «Москвёнок» — под тегом `Moskvenok`.
+
 ## Посещаемость
 
 `feature/attendance` разделён на три части:
@@ -73,6 +89,11 @@ core       ──►  (ничего из перечисленного)
 
 - `GET /api/family/web/v1/attendance?student_id=…&from=…&to=…`
 - `GET /api/pass/entrances/v1/visit_durations?personId=…&from=…&to=…`
+
+Шлюз `pass/entrances` отвечает `401`, если пришли **оба** заголовка
+`Authorization` и `Auth-Token`, и принимает любой из них по отдельности.
+Поэтому `visit_durations` запрашивается с `includeAuthToken = false` (только
+Bearer); для `family/web` допустимы оба.
 
 ## Локальная блокировка
 

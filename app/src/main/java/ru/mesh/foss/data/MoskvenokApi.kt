@@ -54,59 +54,13 @@ object MoskvenokApi {
     /** code = 401 — сессия невалидна (нужно получить заново); -1 — сессии нет вообще. */
     class MosError(message: String, val code: Int = 0) : Exception(message)
 
-    /** Синк логирования (задаётся MoskvenokLog.init): запросы, ответы, ошибки. */
-    @Volatile
-    var logger: ((String) -> Unit)? = null
+    private fun log(line: String) = MeshLog.log("Moskvenok", line)
 
-    private fun log(line: String) {
-        logger?.invoke(line)
-    }
+    /** Маска секрета — общая для всего журнала ([Sensitive]). */
+    internal fun mask(value: String): String = Sensitive.mask(value)
 
-    /** Маска секрета в логе: первые 4 символа + многоточие. */
-    internal fun mask(value: String): String =
-        if (value.length <= 4) "***" else value.take(4) + "…"
-
-    /**
-     * Чувствительное в логе убирается на входе в файл/logcat: sid и sessionid,
-     * параметры OAuth (code/state/session_id), ПИИ из personal и fields,
-     * barcode_payload (содержимое QR).
-     */
-    internal fun scrub(input: String): String {
-        var out = input
-        // sid=…, sessionid=…, session_id=… (в т.ч. внутри URL).
-        out = SID_ASSIGN.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
-        // x-sessionid: … (решения экрана, а не wire — там маскируется на месте).
-        out = SESSION_HEADER.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
-        // Параметры OAuth (code/state) в URL.
-        out = OAUTH_PARAM.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
-        // sessionid в путях login_callback/{device}::{sid}.
-        out = CALLBACK_SID.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
-        // ПИИ и payload в JSON-ответах.
-        out = PII_KEY.replace(out) { m ->
-            if (m.groupValues[2].isEmpty()) m.value else m.value.replace(m.groupValues[2], "***")
-        }
-        out = PERSONAL_BLOCK.replace(out) { m -> m.groupValues[1] + "\"***\"" }
-        out = FIELDS_BLOCK.replace(out) { m -> m.groupValues[1] + "\"***\"" }
-        return out
-    }
-
-    private val SID_ASSIGN =
-        Regex("((?:x-)?(?:session[_-]?id|sid)[=:]\\s*)([A-Za-z0-9]+)", RegexOption.IGNORE_CASE)
-    private val OAUTH_PARAM =
-        Regex("([?&](?:code|state)=)([^&\\s\"']+)", RegexOption.IGNORE_CASE)
-    private val CALLBACK_SID =
-        Regex("(/login_callback/[^/?\\s]*::)([A-Za-z0-9]+)")
-    private val SESSION_HEADER =
-        Regex("(x-sessionid:\\s*)(\\S+)", RegexOption.IGNORE_CASE)
-    private val PII_KEY = Regex(
-        "\"(email|phone|lastname|firstname|patronymic|first_name|last_name|middle_name|" +
-            "barcode_payload|password|token)\"\\s*:\\s*\"([^\"]*)\"",
-        RegexOption.IGNORE_CASE
-    )
-    // Экранирование { и ] обязательно: Android-regex (ICU) строже JVM и
-    // падает на «голых» скобках — тесты на JVM это не ловят (краш при старте).
-    private val PERSONAL_BLOCK = Regex("(\"personal\"\\s*:\\s*)\\{[^{}]*\\}")
-    private val FIELDS_BLOCK = Regex("(\"fields\"\\s*:\\s*)\\[[^\\[\\]]*\\]")
+    /** Редакция чувствительных данных — общая для всего журнала ([Sensitive]). */
+    internal fun scrub(input: String): String = Sensitive.scrub(input)
 
     // ------------------------------------------------------------- сессия --
 

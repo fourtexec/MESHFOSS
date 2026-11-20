@@ -2126,18 +2126,18 @@ internal enum class Words(
         "La carte n’a pas été activée. Actualisez l’écran ou réessayez."
     ),
     MoskvenokLog(
-        "Лог Москвёнка",
-        "Moskvenok log",
-        "Moskvenok napló",
-        "Registro de Moskvenok",
-        "Journal Moskvenok"
+        "Журнал приложения",
+        "Application log",
+        "Alkalmazásnapló",
+        "Registro de la aplicación",
+        "Journal de l’application"
     ),
     MoskvenokLogHint(
-        "Запросы, ответы и ошибки экрана «Москвёнок».",
-        "Requests, responses and errors of the Moskvenok screen.",
-        "A Moskvenok képernyő kérései, válaszai és hibái.",
-        "Solicitudes, respuestas y errores de la pantalla Moskvenok.",
-        "Requêtes, réponses et erreurs de l’écran Moskvenok."
+        "Запросы, ответы, ошибки и события приложения.",
+        "Requests, responses, errors and app events.",
+        "Kérések, válaszok, hibák és alkalmazásesemények.",
+        "Solicitudes, respuestas, errores y eventos de la aplicación.",
+        "Requêtes, réponses, erreurs et événements de l’application."
     ),
     ShowMoskvenokLog(
         "Показать лог",
@@ -2161,11 +2161,11 @@ internal enum class Words(
         "Copier le journal"
     ),
     MoskvenokLogEmpty(
-        "Лог пуст. Включите переключатель и повторите действие на экране «Москвёнок».",
-        "The log is empty. Turn on the toggle and repeat an action on the Moskvenok screen.",
-        "A napló üres. Kapcsolja be a kapcsolót, és ismételjen meg egy műveletet a Moskvenok képernyőn.",
-        "El registro está vacío. Active el interruptor y repita una acción en la pantalla Moskvenok.",
-        "Le journal est vide. Activez l’interrupteur et répétez une action sur l’écran Moskvenok."
+        "Журнал пуст. Включите переключатель и повторите действие.",
+        "The log is empty. Turn on the toggle and repeat an action.",
+        "A napló üres. Kapcsolja be a kapcsolót, és ismételjen meg egy műveletet.",
+        "El registro está vacío. Active el interruptor y repita una acción.",
+        "Le journal est vide. Activez l’interrupteur et répétez une action."
     ),
     Attendance(
         "Посещаемость",

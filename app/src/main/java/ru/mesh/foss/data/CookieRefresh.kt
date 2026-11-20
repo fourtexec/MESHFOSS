@@ -68,21 +68,32 @@ object CookieRefresh {
         val cookies = LinkedHashMap(jar)
         val old = cookies["aupd_token"]
         if (old.isNullOrBlank()) return null
+        MeshLog.log("AUTH", "cookie refresh: старт (${cookies.size} кук)")
 
         // 1. Старт: school.mos.ru отдаёт ссылку на OAuth entry.
         var response = get("$SCHOOL/v3/auth/sudir/login", "$SCHOOL/", cookies)
         val oauth = response.location?.let { resolve(response.url, it) }
             ?: oauthUrlFromHtml(response.body)
-            ?: return null
+            ?: run {
+                MeshLog.log("AUTH", "cookie refresh: не найден OAuth URL")
+                return null
+            }
 
         // 2. OAuth entry: сервер по доверенным кукам сразу отдаёт code.
         response = get(oauth, "$SCHOOL/", cookies)
         val callback = response.location?.let { resolve(response.url, it) } ?: return null
-        if (!isCallbackUrl(callback)) return null
+        if (!isCallbackUrl(callback)) {
+            MeshLog.log("AUTH", "cookie refresh: OAuth не дошёл до callback")
+            return null
+        }
 
         // 3. Callback: новый токен приходит в Set-Cookie.
         get(callback, oauth, cookies)
-        val fresh = cookies["aupd_token"]?.takeIf { it.isNotBlank() && it != old } ?: return null
+        val fresh = cookies["aupd_token"]?.takeIf { it.isNotBlank() && it != old } ?: run {
+            MeshLog.log("AUTH", "cookie refresh: МЭШ не обновил aupd_token")
+            return null
+        }
+        MeshLog.log("AUTH", "cookie refresh: токен обновлён")
         return Result(fresh, cookies)
     }
 
