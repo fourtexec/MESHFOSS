@@ -328,15 +328,13 @@ fun FrostedTopBar(title: String, actions: @Composable RowScope.() -> Unit) {
     }
 }
 
-/** Пункт нижней панели «матового стекла». */
-data class FrostedNavItem(val key: String, val label: String, val icon: Painter)
 
 /**
  * Плавающая матовая нижняя панель: выбранная вкладка залита акцентом, под
  * подписью — точка, выбранная вкладка слегка увеличивается пружиной.
  */
 @Composable
-fun FrostedNavBar(items: List<FrostedNavItem>, selected: String, onSelect: (String) -> Unit) {
+fun FrostedNavBar(items: List<BarNavItem>, selected: String, onSelect: (String) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()

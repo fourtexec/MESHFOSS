@@ -90,20 +90,28 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     }
     val glassStyle = remember(themeId, baseColors) { Glass.style(themeId, baseColors) }
     // В стекле карточки скруглены сильнее (20dp) — крупные мягкие углы, как у пластины.
-    // В «матовом стекле» — ровные 16dp у карточек, как в Uxaoro.
-    val shapes = remember(glass, frosted) {
+    // В «матовом стекле» — ровные 16dp у карточек, как в Uxaoro; в «жидком стекле» —
+    // крупные концентричные скругления, как в iOS 26.
+    val shapes = remember(glass, frosted, liquid) {
         Shapes(
             extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
             small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            medium = androidx.compose.foundation.shape.RoundedCornerShape(if (glass) 20.dp else 16.dp),
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(if (glass || liquid) 20.dp else 16.dp),
             large = androidx.compose.foundation.shape.RoundedCornerShape(
                 when {
                     glass -> 28.dp
                     frosted -> 16.dp
+                    liquid -> 26.dp
                     else -> 24.dp
                 }
             ),
-            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(if (frosted) 24.dp else 32.dp)
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(
+                when {
+                    frosted -> 24.dp
+                    liquid -> 34.dp
+                    else -> 32.dp
+                }
+            )
         )
     }
 
@@ -542,6 +550,10 @@ fun MainScaffold(
                 FrostedTopBar(screenTitle, topActions)
                 return@Scaffold
             }
+            if (liquid) {
+                LiquidTopBar(screenTitle, topActions)
+                return@Scaffold
+            }
             TopAppBar(
                 // В стекле и liquid-дизайне шапка прозрачная: под ней виден фон со свечениями.
                 colors = if (glass || liquid) {
@@ -561,7 +573,15 @@ fun MainScaffold(
         bottomBar = {
             if (frosted) {
                 FrostedNavBar(
-                    items = navItems.map { (key, label, iconRes) -> FrostedNavItem(key, label, painterResource(iconRes)) },
+                    items = navItems.map { (key, label, iconRes) -> BarNavItem(key, label, painterResource(iconRes)) },
+                    selected = currentTab,
+                    onSelect = { navigateTo(NavState(tab = it)) }
+                )
+                return@Scaffold
+            }
+            if (liquid) {
+                LiquidTabBar(
+                    items = navItems.map { (key, label, iconRes) -> BarNavItem(key, label, painterResource(iconRes)) },
                     selected = currentTab,
                     onSelect = { navigateTo(NavState(tab = it)) }
                 )
@@ -571,14 +591,11 @@ fun MainScaffold(
                 modifier = when {
                     // Нижняя панель в стекле — стеклянная пластина с тонкой светлой кромкой сверху.
                     glass -> Modifier.glassBar(glassStyle.dark)
-                    // В liquid-дизайне панель — плавающая стеклянная пластина без системных отступов.
-                    liquid -> Modifier.navigationBarsPadding().padding(horizontal = 10.dp, vertical = 4.dp).glassPane()
                     else -> Modifier
                 },
-                windowInsets = if (liquid) WindowInsets(0, 0, 0, 0) else ShortNavigationBarDefaults.windowInsets,
+                windowInsets = ShortNavigationBarDefaults.windowInsets,
                 containerColor = when {
                     glass -> androidx.compose.ui.graphics.Color.White.copy(alpha = if (glassStyle.dark) 0.06f else 0.55f)
-                    liquid -> Color.Transparent
                     else -> ShortNavigationBarDefaults.containerColor
                 }
             ) {
@@ -606,10 +623,25 @@ fun MainScaffold(
                     fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
             ) {
                 ExtendedFloatingActionButton(
-                    // В «матовом стекле» — «чернильная» кнопка (цвет текста на фоне) со скруглением 16dp.
-                    containerColor = if (frosted) MaterialTheme.colorScheme.onBackground else FloatingActionButtonDefaults.containerColor,
-                    contentColor = if (frosted) MaterialTheme.colorScheme.background else contentColorFor(FloatingActionButtonDefaults.containerColor),
-                    shape = if (frosted) Frosted.CardShape else FloatingActionButtonDefaults.extendedFabShape,
+                    // В «матовом стекле» — «чернильная» кнопка (цвет текста на фоне) со скруглением 16dp;
+                    // в «жидком стекле» — капсула из стекла, окрашенного акцентом, как prominent-кнопки iOS.
+                    modifier = if (liquid) Modifier.liquidGlass(Liquid.Capsule, tint = MaterialTheme.colorScheme.primary, elevation = 14.dp) else Modifier,
+                    containerColor = when {
+                        frosted -> MaterialTheme.colorScheme.onBackground
+                        liquid -> Color.Transparent
+                        else -> FloatingActionButtonDefaults.containerColor
+                    },
+                    contentColor = when {
+                        frosted -> MaterialTheme.colorScheme.background
+                        liquid -> MaterialTheme.colorScheme.onBackground
+                        else -> contentColorFor(FloatingActionButtonDefaults.containerColor)
+                    },
+                    elevation = if (liquid) FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp) else FloatingActionButtonDefaults.elevation(),
+                    shape = when {
+                        frosted -> Frosted.CardShape
+                        liquid -> Liquid.Capsule
+                        else -> FloatingActionButtonDefaults.extendedFabShape
+                    },
                     text = { Text(Words.Meals.text) },
                     icon = {
                         Icon(
