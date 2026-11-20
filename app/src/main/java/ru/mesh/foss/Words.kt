@@ -173,11 +173,11 @@ internal enum class Words(
         "Verre dépoli"
     ),
     DesignFrostedHint(
-        "Плавающие матовые панели и плотные карточки на мягком переливающемся свечении",
-        "Floating frosted bars and solid cards over a softly drifting glow",
-        "Lebegő matt sávok és tömör kártyák lágyan áramló fényben",
-        "Barras esmeriladas flotantes y tarjetas sólidas sobre un suave resplandor fluido",
-        "Barres dépolies flottantes et cartes opaques sur une lueur douce et mouvante"
+        "Настоящее размытие фона: матовые панели и карточки на мягком свечении",
+        "Real backdrop blur: frosted bars and cards over a softly drifting glow",
+        "Valódi háttérelmosás: matt sávok és kártyák lágyan áramló fényben",
+        "Desenfoque real del fondo: barras y tarjetas esmeriladas sobre un suave resplandor",
+        "Vrai flou d’arrière-plan : barres et cartes dépolles sur une lueur douce"
     ),
     ThemeName(
         "Название своей темы",
@@ -1566,11 +1566,53 @@ internal enum class Words(
         "Restauration impossible. Connectez-vous par QR."
     ),
     SignInWithAQrLink(
-        "Способ 1. Вход по QR-ссылке",
+        "Вход по QR-ссылке",
         "Sign in with a QR link",
         "Belépés QR-hivatkozással",
         "Acceder con enlace QR",
         "Connexion par lien QR"
+    ),
+    QrSignInDescription(
+        "МЭШ создаст одноразовую ссылку и откроет её в браузере. Войдите там и вернитесь в приложение — оно завершит вход само.",
+        "MESH creates a one-time link and opens it in your browser. Sign in there and return to the app; it will finish signing in automatically.",
+        "A MESH egyszeri hivatkozást készít, és megnyitja a böngészőben. Jelentkezzen be ott, majd térjen vissza az alkalmazásba — a belépés automatikusan befejeződik.",
+        "MESH creará un enlace de un solo uso y lo abrirá en el navegador. Inicia sesión allí y vuelve a la aplicación; el acceso terminará automáticamente.",
+        "MESH crée un lien à usage unique et l’ouvre dans le navigateur. Connectez-vous-y puis revenez dans l’application ; la connexion se terminera automatiquement."
+    ),
+    SignInInBrowserAndReturn(
+        "Войдите через браузер и вернитесь в приложение — вход завершится автоматически.",
+        "Sign in through the browser and return to the app; sign-in will finish automatically.",
+        "Jelentkezzen be a böngészőben, majd térjen vissza az alkalmazásba — a belépés automatikusan befejeződik.",
+        "Inicia sesión en el navegador y vuelve a la aplicación; el acceso terminará automáticamente.",
+        "Connectez-vous dans le navigateur puis revenez dans l’application ; la connexion se terminera automatiquement."
+    ),
+    QrBrowserOpensIn(
+        "Браузер откроется через %d с…",
+        "The browser will open in %d s…",
+        "A böngésző %d másodperc múlva nyílik meg…",
+        "El navegador se abrirá en %d s…",
+        "Le navigateur s’ouvrira dans %d s…"
+    ),
+    BigQrSignInButton(
+        "Войти по QR-ссылке",
+        "Sign in with a QR link",
+        "Belépés QR-hivatkozással",
+        "Acceder con enlace QR",
+        "Se connecter par lien QR"
+    ),
+    ExperimentalSignInMethods(
+        "Нестабильные способы входа",
+        "Unstable sign-in methods",
+        "Instabil belépési módok",
+        "Métodos de acceso inestables",
+        "Méthodes de connexion instables"
+    ),
+    ExperimentalSignInWarning(
+        "Экспериментальные способы. Используйте их, только если вход по QR-ссылке не работает.",
+        "Experimental methods. Use them only if QR-link sign-in does not work.",
+        "Kísérleti módok. Csak akkor használja őket, ha a QR-hivatkozásos belépés nem működik.",
+        "Métodos experimentales. Úsalos solo si el acceso con enlace QR no funciona.",
+        "Méthodes expérimentales. Utilisez-les uniquement si la connexion par lien QR ne fonctionne pas."
     ),
     ASavedSessionLetsYouSignInAutomatically(
         "Приложение войдёт само по сохранённой сессии, если куки от прошлого входа ещё живы. ",

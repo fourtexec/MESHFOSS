@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -417,10 +418,11 @@ private class QrLoginClient {
 }
 
 /**
- * UI «Способа 1»: восстановить сессию по кукам либо получить ссылку, открыть её, дождаться токена.
+ * Главный вход: восстановить сессию по кукам либо получить QR-ссылку,
+ * открыть её и дождаться токена.
  */
 @Composable
-fun QrLoginPanel(onLogin: (String) -> Unit) {
+fun QrLoginPanel(onLogin: (String) -> Unit, loading: Boolean = false) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var running by remember { mutableStateOf(false) }
@@ -431,17 +433,38 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
     var emailInput by remember { mutableStateOf("") }
     val emailDeferred = remember { mutableStateOf<CompletableDeferred<String?>?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
+    var autoOpenJob by remember { mutableStateOf<Job?>(null) }
+    var countdown by remember { mutableIntStateOf(0) }
     val store = remember { SessionStore(context) }
     var restoring by remember { mutableStateOf(false) }
     var restoreHint by remember { mutableStateOf<String?>(null) }
 
+    fun launchBrowser(value: String) {
+        val opened = runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(value)))
+        }.isSuccess
+        if (!opened) error = Words.CouldNotOpenLink.text
+    }
+
+    fun openLinkNow(value: String) {
+        autoOpenJob?.cancel()
+        autoOpenJob = null
+        countdown = 0
+        launchBrowser(value)
+    }
+
     fun cancel() {
         job?.cancel()
         job = null
+        autoOpenJob?.cancel()
+        autoOpenJob = null
+        countdown = 0
         emailDeferred.value = null
         running = false
         awaitingEmail = false
+        link = null
         status = ""
+        error = null
     }
 
     fun start() {
@@ -449,6 +472,7 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
         running = true
         error = null
         link = null
+        countdown = 0
         status = Words.PreparingQrSession.text
         awaitingEmail = false
         emailInput = ""
@@ -457,7 +481,22 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
             try {
                 client.run(
                     timeoutMs = 300_000,
-                    onLink = { link = it },
+                    onLink = { value ->
+                        link = value
+                        status = Words.SignInInBrowserAndReturn.text
+                        // Даём пользователю прочитать подсказку и сами открываем
+                        // браузер через три секунды.
+                        autoOpenJob?.cancel()
+                        autoOpenJob = scope.launch {
+                            for (seconds in 3 downTo 1) {
+                                countdown = seconds
+                                delay(1_000)
+                            }
+                            countdown = 0
+                            autoOpenJob = null
+                            if (link == value) launchBrowser(value)
+                        }
+                    },
                     onStatus = { status = it },
                     onEmailCodeRequired = {
                         awaitingEmail = true
@@ -478,6 +517,9 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                                 store.authCookies = JSONObject(snapshot).toString()
                             }
                         }
+                        autoOpenJob?.cancel()
+                        autoOpenJob = null
+                        countdown = 0
                         running = false
                         link = null
                         status = ""
@@ -489,6 +531,10 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
                 throw e
             } catch (e: Exception) {
                 error = e.message ?: Words.QrSignInFailed.text
+                autoOpenJob?.cancel()
+                autoOpenJob = null
+                countdown = 0
+                link = null
                 running = false
                 awaitingEmail = false
             }
@@ -525,101 +571,93 @@ fun QrLoginPanel(onLogin: (String) -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().glassPane().padding(20.dp)) {
         Text(
             Words.SignInWithAQrLink.text,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
-            Words.ASavedSessionLetsYouSignInAutomatically.text +
-                Words.OtherwiseRequestALinkOpenItAndApprove.text,
-            style = MaterialTheme.typography.bodySmall,
+            Words.QrSignInDescription.text,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         restoreHint?.let { hint ->
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
             Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.height(8.dp))
-        var menuExpanded by remember { mutableStateOf(false) }
-        SplitButtonLayout(
-            leadingButton = {
-                SplitButtonDefaults.OutlinedLeadingButton(
-                    onClick = { start() },
-                    enabled = !running && !restoring
-                ) {
-                    Text(
-                        when {
-                            restoring -> Words.RestoringSession.text
-                            running -> Words.WaitingForConfirmation.text
-                            else -> Words.GetLink.text
-                        }
-                    )
-                }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = {
+                val value = link
+                if (value != null) openLinkNow(value) else start()
             },
-            trailingButton = {
-                Box {
-                    SplitButtonDefaults.OutlinedTrailingButton(
-                        checked = menuExpanded,
-                        onCheckedChange = { menuExpanded = it },
-                        enabled = link != null || running
-                    ) {
-                        Text("▾", style = MaterialTheme.typography.titleMedium)
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(Words.OpenLink.text) },
-                            enabled = link != null,
-                            onClick = {
-                                menuExpanded = false
-                                link?.let { value ->
-                                    runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(value)))
-                                    }
-                                }
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(Words.CancelQrSignIn.text) },
-                            enabled = running,
-                            onClick = {
-                                menuExpanded = false
-                                cancel()
-                            }
-                        )
-                    }
-                }
-            },
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
+            enabled = !restoring && !loading && (!running || link != null),
+            shape = MaterialTheme.shapes.extraLarge,
+            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
+        ) {
+            if (restoring || (running && link == null)) {
+                LoadingIndicator(modifier = Modifier.size(22.dp))
+            } else {
+                Icon(
+                    painter = painterResource(R.drawable.ic_qr_code),
+                    contentDescription = null,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                when {
+                    restoring -> Words.RestoringSession.text
+                    loading -> Words.SignInToMesh.text
+                    running && link == null -> Words.PreparingQrSession.text
+                    link != null -> Words.OpenLink.text
+                    else -> Words.BigQrSignInButton.text
+                },
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
 
         link?.let { value ->
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
                 value,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable {
-                    runCatching {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(value)))
-                    }
-                }
+                modifier = Modifier.clickable { openLinkNow(value) }
             )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                Words.SignInInBrowserAndReturn.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (countdown > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    Words.QrBrowserOpensIn(countdown),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
-        if (running && status.isNotBlank()) {
+        if (running && link == null && status.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
             Text(
                 status,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        if (running) {
+            TextButton(onClick = { cancel() }) {
+                Text(Words.CancelQrSignIn.text)
+            }
         }
 
         if (awaitingEmail) {

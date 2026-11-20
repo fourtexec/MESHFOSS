@@ -46,8 +46,9 @@ import androidx.compose.ui.unit.dp
  *    контейнеры, блики на карточках ([Glass], [Modifier.glass], [GlassBackdrop]);
  *  - [LIQUID] — «жидкое стекло»: панели с градиентной кромкой и светом от касания
  *    ([glassPane], [GlassCard], [LiquidBackdrop]);
- *  - [FROSTED] — «матовое стекло» в духе Uxaoro: плавающие матовые шапка и нижняя
- *    панель, плотные карточки с тенью, дрейфующие свечения акцента ([Frosted.kt]).
+ *  - [FROSTED] — «матовое стекло» в духе Uxaoro: плавающие шапка и нижняя панель,
+ *    карточки с настоящим backdrop-размытием и дрейфующие свечения акцента
+ *    ([Frosted.kt]).
  *
  * Миграция со старого булевого `glass_enabled`: если `design` ещё не записан,
  * но стекло было включено явно — достаём «glass».
@@ -306,8 +307,8 @@ fun Modifier.glassBar(dark: Boolean): Modifier = this.drawWithCache {
 /**
  * Панель «жидкого стекла» в стиле iOS ([liquidGlass]): прозрачное стекло с
  * преломлением у кромки, зеркальным ободком и бликом от касания.
- * В [Design.FROSTED] — плотная карточка «матового стекла» ([frostedCard]); в
- * остальных дизайнах модификатор ничего не делает.
+ * В [Design.FROSTED] — карточка «матового стекла» с backdrop-blur ([frostedCard]);
+ * в остальных дизайнах модификатор ничего не делает.
  */
 @Composable
 fun Modifier.glassPane(
@@ -345,7 +346,7 @@ internal fun Modifier.dialogGlass(): Modifier {
         // Диалог над затемнением: под стеклом — непрозрачная поверхность, текст не просвечивает.
         Design.LIQUID -> solid.liquidGlass(shape, elevation = 20.dp, refract = false)
         // Диалог над затемнением: почти непрозрачная матовая пластина, текст не просвечивает.
-        Design.FROSTED -> frostedSurface(shape, elevation = 18.dp, opacity = 0.96f)
+        Design.FROSTED -> frostedSurface(shape, elevation = 18.dp, opacity = 0.96f, blur = false)
         Design.GLASS -> solid.glass(shape)
         else -> solid
     }

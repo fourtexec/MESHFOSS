@@ -40,6 +40,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +61,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -70,9 +76,10 @@ import kotlin.math.sin
  * Переносится только оформление, поведение экранов не меняется:
  *  - почти нейтральный фон (тёмный с лёгкой сине-фиолетовой ноткой или светлый) и
  *    медленно дрейфующие свечения цвета акцента — [FrostedBackdrop];
- *  - плотные (непрозрачные) карточки со скруглением 16dp и тенью, окрашенной в
- *    акцент, — [Modifier.frostedCard]; матовость оставлена «хрому», чтобы
- *    содержимое читалось спокойно;
+ *  - настоящее backdrop-размытие через Haze: панели и карточки размывают то, что
+ *    находится под ними, и добавляют стеклянную tint-плёнку с мелким шумом;
+ *  - карточки со скруглением 16dp и тенью, окрашенной в акцент, —
+ *    [Modifier.frostedCard];
  *  - плавающие матовые шапка и нижняя панель со скруглением 14dp, светлой кромкой и
  *    бликом сверху — [FrostedTopBar], [FrostedNavBar];
  *  - выбранная вкладка — заливка акцентом («таблетка») с точкой под подписью;
@@ -87,6 +94,15 @@ object Frosted {
 
     /** Скругление плавающих шапки и нижней панели. */
     val ChromeShape = RoundedCornerShape(14.dp)
+
+    /** Сила размытия фона под матовым стеклом. */
+    val BlurRadius = 24.dp
+
+    /** Радиус для плавающих панелей: они крупнее карточек, поэтому стекло глубже. */
+    val PanelBlurRadius = 30.dp
+
+    /** Мелкая «изморозь» Haze: делает стекло шероховатым, а не просто полупрозрачным. */
+    const val FrostNoise = 0.075f
 
     fun isDark(scheme: ColorScheme) = scheme.background.luminance() < 0.45f
 
@@ -145,6 +161,12 @@ object Frosted {
 }
 
 /**
+ * Снимок фона, который размывают матовые поверхности. null — Haze недоступен,
+ * тогда остаётся прежняя полупрозрачная заливка без blur.
+ */
+private val LocalFrostedHaze = staticCompositionLocalOf<HazeState?> { null }
+
+/**
  * Тень карточек и панелей: в тёмной теме — почти чёрная, в светлой — мягкая с
  * оттенком акцента. Под полупрозрачной пластиной тень просвечивает сквозь заливку,
  * поэтому для неё берётся вариант слабее ([translucent]).
@@ -165,8 +187,9 @@ fun frostedHairline(): Color =
     if (Frosted.isDark(MaterialTheme.colorScheme)) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.70f)
 
 /**
- * Плотная карточка «матового стекла»: непрозрачная заливка и тень с оттенком
- * акцента. [tint] — своя заливка (например, подсветка выбранного элемента).
+ * Карточка «матового стекла»: настоящее backdrop-размытие Haze и полупрозрачная
+ * tint-плёнка поверх него. [tint] — своя заливка (например, подсветка выбранного
+ * элемента). Без источника фона (в диалоге/превью) остаётся мягкая заливка.
  */
 @Composable
 fun Modifier.frostedCard(
@@ -175,26 +198,49 @@ fun Modifier.frostedCard(
     elevation: Dp = 8.dp
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
-    // Карточка всегда непрозрачна: полупрозрачный оттенок накладываем на заливку,
-    // иначе сквозь него просвечивала бы тень.
+    val dark = Frosted.isDark(scheme)
     val card = scheme.surfaceContainerLow.copy(alpha = 1f)
     val fill = if (tint != Color.Unspecified) tint.compositeOver(card) else card
     val shadow = frostedShadow()
-    return this
+    val haze = LocalFrostedHaze.current
+    val base = this
         .shadow(elevation, shape, ambientColor = shadow, spotColor = shadow)
         .clip(shape)
-        .background(fill, shape)
+    if (haze == null) return base.background(fill, shape)
+    // Haze рисует размытый фон, затем полупрозрачный tint. Непрозрачная заливка
+    // убила бы эффект, поэтому стекло оставляет фон видимым.
+    val glassTint = fill.copy(alpha = if (dark) 0.58f else 0.64f)
+    return base
+        .hazeEffect(haze) {
+            blurRadius = Frosted.BlurRadius
+            noiseFactor = Frosted.FrostNoise
+            backgroundColor = glassTint.copy(alpha = 0.06f)
+            tints = listOf(HazeTint(glassTint))
+            fallbackTint = HazeTint(fill.copy(alpha = 0.94f))
+        }
+        .background(
+            Brush.verticalGradient(
+                listOf(
+                    Color.White.copy(alpha = if (dark) 0.055f else 0.18f),
+                    Color.Transparent,
+                    Color.White.copy(alpha = if (dark) 0.02f else 0.06f)
+                )
+            ),
+            shape
+        )
 }
 
 /**
- * Матовая пластина: полупрозрачная заливка, блик сверху и светлая кромка. Для
- * шапки, нижней панели и диалогов.
+ * Матовая пластина: размытый фон, tint, блик сверху и светлая кромка. Для шапки
+ * и нижней панели. [blur] = false — для диалогов в отдельном окне, где источника
+ * фона нет; тогда пластина остаётся почти непрозрачной.
  */
 @Composable
 fun Modifier.frostedSurface(
     shape: Shape = Frosted.ChromeShape,
     elevation: Dp = 8.dp,
-    opacity: Float? = null
+    opacity: Float? = null,
+    blur: Boolean = true
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Frosted.isDark(scheme)
@@ -203,10 +249,22 @@ fun Modifier.frostedSurface(
     val fill = base.copy(alpha = alpha)
     val sheen = if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.55f)
     val shadow = frostedShadow(translucent = alpha < 0.95f)
-    return this
+    val haze = LocalFrostedHaze.current
+    val styled = this
         .shadow(elevation, shape, ambientColor = shadow, spotColor = shadow)
         .clip(shape)
-        .background(fill, shape)
+    val glass = if (blur && haze != null) {
+        styled.hazeEffect(haze) {
+            blurRadius = Frosted.PanelBlurRadius
+            noiseFactor = Frosted.FrostNoise
+            backgroundColor = fill.copy(alpha = 0.08f)
+            tints = listOf(HazeTint(fill.copy(alpha = if (dark) 0.62f else 0.68f)))
+            fallbackTint = HazeTint(fill)
+        }
+    } else {
+        styled.background(fill, shape)
+    }
+    return glass
         .background(Brush.verticalGradient(listOf(sheen, Color.Transparent, Color.Transparent)), shape)
         .border(1.dp, frostedHairline(), shape)
 }
@@ -238,6 +296,7 @@ fun FrostedBackdrop(content: @Composable () -> Unit) {
     val glowC = scheme.primary.copy(alpha = 0.06f)
     val sheen = scheme.primary.copy(alpha = 0.025f)
     val still = systemAnimationsOff()
+    val hazeState = rememberHazeState()
     // Множители фаз ниже кратны 0.1, поэтому за 20π все свечения проходят целое число
     // циклов и перезапуск анимации не даёт скачка. Скорость — 2π за 26 с.
     val driftState: State<Float> = if (still) {
@@ -250,49 +309,78 @@ fun FrostedBackdrop(content: @Composable () -> Unit) {
             label = "frostedDrift"
         )
     }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(base)
-            .drawBehind {
-                val drift = driftState.value
-                val w = size.width.coerceAtLeast(1f)
-                val h = size.height.coerceAtLeast(1f)
-                fun glow(color: Color, center: Offset, radius: Float, mid: Float) {
-                    drawRect(
-                        Brush.radialGradient(
-                            listOf(color, color.copy(alpha = color.alpha * mid), Color.Transparent),
-                            center = center,
-                            radius = radius
+    Box(Modifier.fillMaxSize()) {
+        // Отдельный слой-источник: Haze снимает с него blur для панелей и карточек.
+        // Свечения крупные и мягкие, поэтому рисуем пару более плотных «пятен» —
+        // именно по ним видно, что стекло действительно размывает фон.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .hazeSource(hazeState)
+                .background(base)
+                .drawBehind {
+                    val drift = driftState.value
+                    val w = size.width.coerceAtLeast(1f)
+                    val h = size.height.coerceAtLeast(1f)
+                    fun glow(color: Color, center: Offset, radius: Float, mid: Float) {
+                        drawRect(
+                            Brush.radialGradient(
+                                listOf(color, color.copy(alpha = color.alpha * mid), Color.Transparent),
+                                center = center,
+                                radius = radius
+                            )
                         )
+                    }
+                    glow(
+                        glowA,
+                        Offset(w * (0.22f + 0.10f * sin(drift)), h * (0.14f + 0.08f * cos(drift * 0.7f))),
+                        w * if (dark) 0.78f else 0.95f,
+                        0.45f
                     )
+                    glow(
+                        glowB,
+                        Offset(w * (0.80f + 0.08f * cos(drift * 0.9f)), h * (0.52f + 0.10f * sin(drift * 0.6f))),
+                        w * if (dark) 0.70f else 0.85f,
+                        0.40f
+                    )
+                    glow(
+                        glowC,
+                        Offset(w * (0.46f + 0.12f * sin(drift * 0.5f + 1.2f)), h * (0.96f + 0.03f * cos(drift * 0.8f))),
+                        w * if (dark) 0.85f else 0.95f,
+                        0.45f
+                    )
+                    // Плотные кольца акцента: их край заметно смягчается под стеклом.
+                    val ring = scheme.primary.copy(alpha = if (dark) 0.20f else 0.16f)
+                    drawCircle(
+                        Brush.radialGradient(
+                            listOf(Color.Transparent, ring, Color.Transparent),
+                            center = Offset(w * 0.82f, h * 0.15f),
+                            radius = w * 0.24f
+                        ),
+                        radius = w * 0.24f,
+                        center = Offset(w * 0.82f, h * 0.15f)
+                    )
+                    drawCircle(
+                        Brush.radialGradient(
+                            listOf(Color.Transparent, ring.copy(alpha = ring.alpha * 0.8f), Color.Transparent),
+                            center = Offset(w * 0.12f, h * 0.78f),
+                            radius = w * 0.20f
+                        ),
+                        radius = w * 0.20f,
+                        center = Offset(w * 0.12f, h * 0.78f)
+                    )
+                    if (dark) {
+                        // Лёгкий блик сверху приподнимает зону шапки над чёрным фоном.
+                        drawRect(Brush.verticalGradient(listOf(sheen, Color.Transparent), startY = 0f, endY = h * 0.45f))
+                    }
                 }
-                glow(
-                    glowA,
-                    Offset(w * (0.22f + 0.10f * sin(drift)), h * (0.14f + 0.08f * cos(drift * 0.7f))),
-                    w * if (dark) 0.78f else 0.95f,
-                    0.45f
-                )
-                glow(
-                    glowB,
-                    Offset(w * (0.80f + 0.08f * cos(drift * 0.9f)), h * (0.52f + 0.10f * sin(drift * 0.6f))),
-                    w * if (dark) 0.70f else 0.85f,
-                    0.40f
-                )
-                glow(
-                    glowC,
-                    Offset(w * (0.46f + 0.12f * sin(drift * 0.5f + 1.2f)), h * (0.96f + 0.03f * cos(drift * 0.8f))),
-                    w * if (dark) 0.85f else 0.95f,
-                    0.45f
-                )
-                if (dark) {
-                    // Лёгкий блик сверху приподнимает зону шапки над чёрным фоном.
-                    drawRect(Brush.verticalGradient(listOf(sheen, Color.Transparent), startY = 0f, endY = h * 0.45f))
-                }
-            }
-    ) {
+        )
         // Прозрачные Scaffold/Surface берут цвет текста отсюда — иначе он был бы чёрным.
-        CompositionLocalProvider(LocalContentColor provides scheme.onBackground, content = content)
+        CompositionLocalProvider(
+            LocalFrostedHaze provides hazeState,
+            LocalContentColor provides scheme.onBackground,
+            content = content
+        )
     }
 }
 
@@ -364,8 +452,9 @@ fun FrostedNavBar(items: List<BarNavItem>, selected: String, onSelect: (String) 
                         scaleX = scale
                         scaleY = scale
                     }
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(pill)
+                    // Подпись не обрезаем формой «таблетки»: у «Расписания» и «ДЗ»
+                    // иначе срезаются края на узких экранах.
+                    .background(pill, RoundedCornerShape(11.dp))
                     .clickable { onSelect(item.key) }
                     .padding(horizontal = 2.dp, vertical = 5.dp)
             ) {

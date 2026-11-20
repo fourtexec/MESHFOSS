@@ -732,6 +732,7 @@ fun MainScaffold(
 @Composable
 fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
     var tokenInput by remember { mutableStateOf("") }
+    var experimental by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val url = MeshCore.loginUrl()
     val webLogin = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -747,80 +748,123 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
     ) {
         Box(Modifier.align(Alignment.End)) { LanguagePicker() }
         Text(Words.SignInToMesh.text, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
 
-        // Способ 1 — QR: панель сама чинит устаревший токен по сохранённым кукам
-        // и только при неудаче показывает QR-ссылку.
-        QrLoginPanel(onLogin = onLogin)
+        // Основной и единственный видимый способ входа — одноразовая QR-ссылка.
+        // Панель сама чинит устаревший токен по сохранённым кукам.
+        QrLoginPanel(onLogin = onLogin, loading = loading)
 
-        Spacer(Modifier.height(24.dp))
-        Column(Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
-            Text(
-                Words.SignInOnTheMeshWebsite.text,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onBackground
+        Spacer(Modifier.height(20.dp))
+        // Остальные способы спрятаны за красной кнопкой инструментов.
+        Button(
+            onClick = { experimental = true },
+            enabled = !loading,
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            ),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_tools),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp)
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                Words.SignInAtSchoolMosRuThisWindow.text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = {
-                    webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
-                },
-                enabled = !loading,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(Words.OpenSchoolMosRu.text)
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Column(Modifier.fillMaxWidth().glassPane().padding(16.dp)) {
-            Text(
-                Words.EnterATokenManually.text,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = Words.Open(url),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                }
-            )
-            Text(
-                Words.CopyTheTokenFromThePageAndPaste.text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = tokenInput,
-                onValueChange = { tokenInput = it },
-                label = { Text(Words.MeshToken.text) },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = { onLogin(tokenInput) },
-                enabled = !loading && tokenInput.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                else Text(Words.SignInWithToken.text)
-            }
+            Spacer(Modifier.width(10.dp))
+            Text(Words.ExperimentalSignInMethods.text, style = MaterialTheme.typography.titleSmall)
         }
 
         error?.let {
             Spacer(Modifier.height(12.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
         }
+    }
+
+    if (experimental) {
+        AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = Color.Transparent,
+            onDismissRequest = { experimental = false },
+            title = { Text(Words.ExperimentalSignInMethods.text) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        Words.ExperimentalSignInWarning.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Text(
+                        Words.SignInOnTheMeshWebsite.text,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        Words.SignInAtSchoolMosRuThisWindow.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            experimental = false
+                            webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
+                        },
+                        enabled = !loading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(Words.OpenSchoolMosRu.text)
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        Words.EnterATokenManually.text,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = Words.Open(url),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }
+                    )
+                    Text(
+                        Words.CopyTheTokenFromThePageAndPaste.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = tokenInput,
+                        onValueChange = { tokenInput = it },
+                        label = { Text(Words.MeshToken.text) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            experimental = false
+                            onLogin(tokenInput)
+                        },
+                        enabled = !loading && tokenInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (loading) LoadingIndicator(modifier = Modifier.size(20.dp))
+                        else Text(Words.SignInWithToken.text)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { experimental = false }) {
+                    Text(Words.Close.text)
+                }
+            }
+        )
     }
 }
