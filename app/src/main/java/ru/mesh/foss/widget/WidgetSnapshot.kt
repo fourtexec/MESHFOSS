@@ -35,6 +35,25 @@ data class WidgetLesson(
     }
 }
 
+data class WidgetHomework(
+    val subject: String = "",
+    val description: String = "",
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("subject", subject)
+        .put("description", description)
+
+    companion object {
+        fun fromJson(json: JSONObject?): WidgetHomework? {
+            if (json == null) return null
+            return WidgetHomework(
+                subject = json.optString("subject"),
+                description = json.optString("description"),
+            )
+        }
+    }
+}
+
 /**
  * Компактные данные домашнего виджета: только то, что реально нужно на
  * главном экране — расписание на день и невыполненное ДЗ.
@@ -47,6 +66,7 @@ data class WidgetSnapshot(
     val childName: String = "",
     val date: String = "",
     val lessons: List<WidgetLesson> = emptyList(),
+    val homeworks: List<WidgetHomework> = emptyList(),
     val pendingHomework: Int = 0,
     val updatedAt: Long = 0L,
 ) {
@@ -54,6 +74,7 @@ data class WidgetSnapshot(
         .put("childName", childName)
         .put("date", date)
         .put("lessons", JSONArray().putAll(lessons.map { it.toJson() }))
+        .put("homeworks", JSONArray().putAll(homeworks.map { it.toJson() }))
         .put("pendingHomework", pendingHomework)
         .put("updatedAt", updatedAt)
 
@@ -77,10 +98,20 @@ data class WidgetSnapshot(
                     )
                 }
             }
+            var homeworks = (0 until (json.optJSONArray("homeworks")?.length() ?: 0))
+                .mapNotNull { json.optJSONArray("homeworks")?.optJSONObject(it) }
+                .mapNotNull { WidgetHomework.fromJson(it) }
+            if (homeworks.isEmpty()) {
+                // Старый снимок: ДЗ было только внутри урока.
+                homeworks = lessons.flatMap { lesson ->
+                    lesson.homework.map { text -> WidgetHomework(lesson.subject, text) }
+                }
+            }
             return WidgetSnapshot(
                 childName = json.optString("childName"),
                 date = json.optString("date"),
                 lessons = lessons,
+                homeworks = homeworks,
                 pendingHomework = json.optInt("pendingHomework"),
                 updatedAt = json.optLong("updatedAt"),
             )

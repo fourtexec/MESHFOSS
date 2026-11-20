@@ -7,5 +7,8 @@
     <string name="notif_token_text">A munkamenet automatikusan megújult</string>
     <string name="notif_error_title">Jelentkezzen be újra a MESH-be</string>
     <string name="notif_error_text">A token nem újítható meg. Nyissa meg az alkalmazást és jelentkezzen be újra.</string>
-    <string name="widget_description">Aktuális és következő óra visszaszámlálással, házi feladatok</string>
+    <string name="widget_description">MESH órák, órarend és házi feladatok</string>
+    <string name="widget_status_name">MESHFOSS - óra most</string>
+    <string name="widget_schedule_name">MESHFOSS - órarend</string>
+    <string name="widget_homework_name">MESHFOSS - házi feladatok</string>
 </resources>

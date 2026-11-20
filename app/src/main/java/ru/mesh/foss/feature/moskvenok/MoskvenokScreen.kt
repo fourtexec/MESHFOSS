@@ -10,10 +10,6 @@ import ru.mesh.foss.data.*
 import ru.mesh.foss.ui.*
 import ru.mesh.foss.R
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -55,8 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -109,7 +103,7 @@ fun MoskvenokScreen(store: SessionStore) {
 
     val payload = doc?.optString("barcode_payload").orEmpty()
     val expired = expiresAt > 0L && remainingMs <= 0L
-    val qr = remember(payload) { if (payload.isBlank()) null else encodeQr(payload) }
+    val qr = remember(payload) { if (payload.isBlank()) null else encodeQrBitmap(payload) }
 
     // Отсчёт до устаревания: абсолютное время, переживает уход в фон.
     LaunchedEffect(expiresAt) {
@@ -686,40 +680,6 @@ private fun formatClock(millis: Long): String {
     }
 }
 
-/** Кодирует payload в QR (zxing) с тихой зоной и рисует Bitmap. */
-private fun encodeQr(payload: String): Bitmap? = try {
-    val matrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 0, 0)
-    val quiet = 4
-    val scale = (1024 / (matrix.width + quiet * 2)).coerceAtLeast(1)
-    val side = (matrix.width + quiet * 2) * scale
-    val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    canvas.drawColor(Color.WHITE)
-    val paint = Paint().apply {
-        color = Color.BLACK
-        isAntiAlias = false
-    }
-    val offset = quiet * scale
-    for (y in 0 until matrix.height) {
-        var x = 0
-        while (x < matrix.width) {
-            if (matrix.get(x, y)) {
-                var run = x + 1
-                while (run < matrix.width && matrix.get(run, y)) run++
-                canvas.drawRect(
-                    (offset + x * scale).toFloat(),
-                    (offset + y * scale).toFloat(),
-                    (offset + run * scale).toFloat(),
-                    (offset + (y + 1) * scale).toFloat(),
-                    paint
-                )
-                x = run
-            } else {
-                x++
-            }
-        }
-    }
-    bitmap
-} catch (error: Exception) {
+ catch (error: Exception) {
     null
 }

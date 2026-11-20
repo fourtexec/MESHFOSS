@@ -2307,6 +2307,13 @@ internal enum class Words(
         "Tareas: %d",
         "Devoirs : %d"
     ),
+    QrLinkCodeHint(
+        "QR-код этой ссылки",
+        "QR code for this link",
+        "A hivás QR-kódja",
+        "Código QR de este enlace",
+        "Code QR de ce lien"
+    ),
     WidgetAtLesson(
         "Сейчас урок",
         "Lesson now",
@@ -2348,6 +2355,27 @@ internal enum class Words(
         "Következő %s — %s",
         "Siguiente a las %s — %s",
         "Suivant à %s — %s"
+    ),
+    WidgetMoreLessons(
+        "И ещё: %d",
+        "And %d more",
+        "És még %d",
+        "Y %d más",
+        "Et %d de plus"
+    ),
+    WidgetNoHomework(
+        "Невыполненного ДЗ нет",
+        "No pending homework",
+        "Nincs elvégzetlen házi",
+        "No hay tareas pendientes",
+        "Aucun devoir en attente"
+    ),
+    WidgetMoreHomework(
+        "И ещё: %d",
+        "And %d more",
+        "És még %d",
+        "Y %d más",
+        "Et %d de plus"
     ),
     WidgetUpdated(
         "Обновлено %s",

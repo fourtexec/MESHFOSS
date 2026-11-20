@@ -22,6 +22,7 @@ import ru.mesh.foss.feature.settings.*
 
 import android.app.Activity
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -44,6 +45,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.fragment.app.FragmentActivity
@@ -839,6 +841,8 @@ private fun MoreSheetItem(label: String, iconRes: Int, onClick: () -> Unit) {
 fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
     var tokenInput by remember { mutableStateOf("") }
     var experimental by remember { mutableStateOf(false) }
+    var qrLink by remember { mutableStateOf<String?>(null) }
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
     val url = MeshCore.loginUrl()
     val webLogin = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -858,7 +862,7 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
 
         // Основной и единственный видимый способ входа — одноразовая QR-ссылка.
         // Панель сама чинит устаревший токен по сохранённым кукам.
-        QrLoginPanel(onLogin = onLogin, loading = loading)
+        QrLoginPanel(onLogin = onLogin, loading = loading, onLink = { qrLink = it })
 
         Spacer(Modifier.height(20.dp))
         // Остальные способы спрятаны за красной кнопкой инструментов.
@@ -901,7 +905,19 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(18.dp))
+                    // На горизонтальном экране QR уже показан рядом со ссылкой.
+                    if (!landscape) {
+                        qrLink?.let { link ->
+                            Text(
+                                Words.QrLinkCodeHint.text,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            QrCodeImage(link, size = 160.dp)
+                            Spacer(Modifier.height(18.dp))
+                        }
+                    }
                     Text(
                         Words.SignInOnTheMeshWebsite.text,
                         style = MaterialTheme.typography.titleSmall,

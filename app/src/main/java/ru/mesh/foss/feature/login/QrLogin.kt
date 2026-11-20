@@ -9,6 +9,7 @@ import ru.mesh.foss.R
 import ru.mesh.foss.app.MainActivity
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -428,11 +430,17 @@ private class QrLoginClient {
  * открыть её и дождаться токена.
  */
 @Composable
-fun QrLoginPanel(onLogin: (String) -> Unit, loading: Boolean = false) {
+fun QrLoginPanel(
+    onLogin: (String) -> Unit,
+    loading: Boolean = false,
+    onLink: (String?) -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var running by remember { mutableStateOf(false) }
     var link by remember { mutableStateOf<String?>(null) }
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    LaunchedEffect(link) { onLink(link) }
     var status by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var awaitingEmail by remember { mutableStateOf(false) }
@@ -628,13 +636,28 @@ fun QrLoginPanel(onLogin: (String) -> Unit, loading: Boolean = false) {
 
         link?.let { value ->
             Spacer(Modifier.height(10.dp))
-            Text(
-                value,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable { openLinkNow(value) }
-            )
+            if (landscape) {
+                // На горизонтальном экране QR рядом со ссылкой, а не в инструментах.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.weight(1f).clickable { openLinkNow(value) }
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    QrCodeImage(value, size = 104.dp)
+                }
+            } else {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { openLinkNow(value) }
+                )
+            }
             Spacer(Modifier.height(6.dp))
             Text(
                 Words.SignInInBrowserAndReturn.text,

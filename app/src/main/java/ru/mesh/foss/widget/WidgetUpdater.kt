@@ -4,6 +4,7 @@ import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
 
 import android.content.Context
+import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,15 +50,24 @@ object WidgetUpdater {
             )
         }.sortedBy { minutesOfDay(it.begin) ?: Int.MAX_VALUE }
 
+        val homeworkItems = pending.map { item ->
+            WidgetHomework(
+                subject = item.string("subjectName").orEmpty(),
+                description = item.string("description").orEmpty(),
+            )
+        }.filter { it.subject.isNotBlank() || it.description.isNotBlank() }.take(8)
+
         val snapshot = WidgetSnapshot(
             childName = store.studentName.orEmpty(),
             date = today,
             lessons = lessons,
+            homeworks = homeworkItems,
             pendingHomework = pending.size,
             updatedAt = System.currentTimeMillis(),
         )
         store.saveWidgetSnapshot(snapshot.toJson().toString())
-        runCatching { MeshWidget().updateAll(context) }
+        val widgets: List<GlanceAppWidget> = listOf(MeshWidget(), ScheduleWidget(), HomeworkWidget())
+        widgets.forEach { widget -> runCatching { widget.updateAll(context) } }
     }
 
     private fun JSONObject.string(key: String): String? =
