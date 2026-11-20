@@ -383,7 +383,10 @@ fun MoskvenokScreen(store: SessionStore) {
             loadedObjects == null ->
                 if (error != null) MoskvenokErrorCard(error) { load() } else MoskvenokLoader()
             // 202 «Идет обработка документов» — сервер собирает документы.
-            processing && doc == null -> MoskvenokProcessingCard()
+            processing && doc == null -> MoskvenokProcessingCard(
+                onRetry = { enableMoskvenok() },
+                retrying = enabling
+            )
             // QR показываем, пока есть документ: включение подтверждается именно
             // им (официальное приложение не смотрит groups после POST).
             doc == null && !MoskvenokApi.isEnabled(loadedObjects) -> GlassCard(
@@ -572,7 +575,7 @@ private fun MoskvenokLoader() {
 }
 
 @Composable
-private fun MoskvenokProcessingCard() {
+private fun MoskvenokProcessingCard(onRetry: () -> Unit, retrying: Boolean) {
     GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -585,6 +588,19 @@ private fun MoskvenokProcessingCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // Серверная обработка может зависнуть — повторный POST settings/docs
+            // перепоставляет документы в очередь (то же, что жмёт official).
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onRetry, enabled = !retrying) {
+                if (retrying) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(Words.MoskvenokRetryEnable.text)
+            }
         }
     }
 }

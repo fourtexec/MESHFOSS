@@ -2020,6 +2020,13 @@ internal enum class Words(
         "Procesando documentos…",
         "Traitement des documents…"
     ),
+    MoskvenokRetryEnable(
+        "Повторить включение",
+        "Retry enabling",
+        "Engedélyezés újra",
+        "Reintentar activación",
+        "Réessayer l’activation"
+    ),
     MoskvenokQrExpired(
         "Код устарел",
         "Code expired",
