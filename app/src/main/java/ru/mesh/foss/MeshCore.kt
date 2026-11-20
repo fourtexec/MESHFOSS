@@ -38,6 +38,15 @@ object MeshCore {
         const val HOMEWORKS = "/api/family/web/v1/homeworks"
         const val HOMEWORK_LAUNCH = "/api/ej/partners/v1/homeworks/launch"
 
+        /** ЦДЗ: расширенные карточки материалов (ссылки, издатель, описание) — POST. */
+        const val ADDITIONAL_MATERIALS = "/api/family/materials/v1/additional_materials"
+
+        /** ЦДЗ: статус выполнения материала из LRS (xAPI). */
+        const val LRS_RESULTS = "/api/lrs/v2/results"
+
+        /** Карточка урока с ДЗ и материалами. */
+        const val LESSON_SCHEDULE_ITEMS = "/api/family/web/v1/lesson_schedule_items"
+
         /** Отметка домашнего задания «выполнено» (POST) / снятие отметки (DELETE). */
         fun homeworkDone(entryStudentId: String): String = "$HOMEWORKS/$entryStudentId/done"
         const val SCHEDULE = "/api/family/web/v1/schedule"
@@ -879,17 +888,22 @@ object MeshCore {
             val type = material.optString("type")
             val title = asString(firstDefined(material.opt("title"), material.opt("name")))
             val urls = materialUrls(material)
+            val isCdz = MeshCdz.isCdz(material)
             materials.put(
                 JSONObject()
                     .put("type", type)
-                    .put("typeName", material.optString("type_name"))
+                    .put("typeName", MeshCdz.typeLabel(type, material.optString("type_name")))
                     .put("title", title)
                     .put("actionId", material.optInt("action_id"))
                     .put("actionName", material.optString("action_name"))
                     .put("uuid", material.optString("uuid"))
                     // Для launch-запроса МЭШ нужен uuid цифрового материала.
                     .put("materialId", asString(firstDefined(material.opt("uuid"), material.opt("id"))))
-                    .put("url", urls.firstOrNull().orEmpty())
+                    .put("selectedMode", material.optString("selected_mode"))
+                    .put("isCdz", isCdz)
+                    // Ссылки ЦДЗ без контекста ДЗ не засчитываются (§5 docs/mesh-cdz-api.md),
+                    // поэтому прямой url у ЦДЗ не отдаём — только запуск через launch.
+                    .put("url", if (isCdz) "" else urls.firstOrNull().orEmpty())
                     .put("urls", JSONArray(urls))
             )
             // Файлы МЭШ приходят внутри materials с type=attachments.

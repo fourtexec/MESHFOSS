@@ -709,6 +709,7 @@ fun MainScaffold(
                         store,
                         client,
                         studentId,
+                        personId = personId,
                         target = homeworkTarget,
                         onTargetConsumed = { homeworkTarget = null }
                     )

@@ -51,6 +51,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
+    var cdzInApp by remember { mutableStateOf(prefs.getBoolean("cdz_in_app", true)) }
     var moskvenokLog by remember { mutableStateOf(prefs.getBoolean("moskvenok_log", false)) }
     var showMoskvenokLog by remember { mutableStateOf(false) }
     var updateChannel by remember {
@@ -221,6 +222,29 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                         onCheckedChange = { value ->
                                             hapticsEnabled = value
                                             prefs.edit().putBoolean("haptics_enabled", value).apply()
+                                        }
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            Words.CdzOpenInApp.text,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            Words.CdzOpenInAppHint.text,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = cdzInApp,
+                                        onCheckedChange = { value ->
+                                            cdzInApp = value
+                                            prefs.edit().putBoolean("cdz_in_app", value).apply()
                                         }
                                     )
                                 }
