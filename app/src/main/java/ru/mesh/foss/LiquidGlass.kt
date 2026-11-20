@@ -596,7 +596,7 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                                     }
                                     if (!change.pressed) {
                                         if (dragged) {
-                                            val chosen = ((lensX + itemWidthPx / 2f) / itemWidthPx)
+                                            val chosen = (lensX / itemWidthPx)
                                                 .roundToInt()
                                                 .coerceIn(0, items.lastIndex)
                                             activeIndex = chosen
