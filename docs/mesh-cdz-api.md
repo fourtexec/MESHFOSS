@@ -2,9 +2,12 @@
 
 Документ описывает, какие эндпоинты использует веб-дневник `school.mos.ru`, чтобы
 показать домашнее задание с цифровыми материалами (ЦДЗ), узнать статус их
-выполнения и запустить материал на прохождение. Всё снято с живой сессии
-ученика 20.11.2026 на примере ДЗ по химии на вторник 24.11.2026 (8 класс), веб-дневник
-версии 4.26.1.
+выполнения, запустить материал, получить задания, отправить ответы, завершить
+попытку и посмотреть свои ответы. Всё снято с живой сессии ученика 20.11.2026
+на примере ДЗ по химии на вторник 24.11.2026 (8 класс), веб-дневник версии
+4.26.1. Для съёмки отправки ответов были пройдены дополнительные попытки:
+«Облако Знаний» (1 ответ, завершено) и тест «Основные компоненты воздуха»
+(попытка № 2).
 
 > Идентификаторы в примерах заменены на плейсхолдеры: `{student_id}`,
 > `{person_id}` и т. п. Значения токенов и подписей не приводятся.
@@ -39,8 +42,16 @@ school.mos.ru (дневник)
         ▼
      /api/launcher/v1/launch?activity_url=…&context=<JWT>&registration=…&role=student
         │  OAuth school.mos.ru/v1/oauth/authorize?client_id=<партнёр>
-        ├──► mes-physicon.mos.ru  →  appmes.oblakoz.ru/api/mobilev1/*   («Облако Знаний»)
-        └──► uchebnik.mos.ru/exam/challenge/{id}  →  /webtests/exam/rest/secure/*   (тесты МЭШ)
+        ├──► mes-physicon.mos.ru            («Облако Знаний», §8)
+        │      вопросы: cdn.oblakoz.ru/IMUMKContent/…  (проверка в плеере)
+        │      POST appmes.oblakoz.ru/api/mobilev1/resulttc   ответ / завершение (xAPI)
+        │      POST appmes.oblakoz.ru/api/mobilev1/journal2   журнал попытки
+        └──► uchebnik.mos.ru/exam/challenge/{id}   (тесты МЭШ, §9)
+               POST /acl/api/session/v2/refresh                         свой токен uchebnik
+               POST /webtests/exam/rest/secure/challenge/{id}/start-attempt   попытка + задания
+               POST /webtests/exam/rest/secure/challenge/task/answer          ответ
+               POST /webtests/exam/rest/secure/challenge/{id}/complete_attempt
+               GET  /webtests/exam/rest/secure/challenge/{id}/attempt/{a}/result
                           │
                           ▼
               результат пишется в LRS (xAPI), откуда его читает /api/lrs/v2/results
@@ -480,53 +491,182 @@ key = SHA256_hex( sessionKey + url + userLogin + data )
 // url — полный URL метода, напр. "https://appmes.oblakoz.ru/api/mobilev1/journal2"
 ```
 
+Формула подтверждена на живом запросе `resulttc`: подпись, посчитанная по ней,
+совпала с той, которую отправил плеер. `uid` — это `userLogin`.
+
 Особенность: в `journal2` в функцию передаётся объект, а не строка, поэтому
 последнее слагаемое — буквально `"[object Object]"`. При проверке сервер
 принял и такой вариант, и подпись по JSON-строке `data`. Насколько строго
 сервер проверяет `key` в остальных методах, мы не проверяли.
 
-Методы, вызванные при открытии ЦДЗ:
+Методы, которые вызывает плеер:
 
 | Метод | `data` | Назначение |
 |---|---|---|
-| `journal2` | `{"course":"16058","registration":"{uuid}"}` | журнал прогресса по курсу |
-| `resulttc` | xAPI-запрос, см. ниже | отправка statements/state (прокси в LRS) |
+| `journal2` | `{"course":"16058","registration":"{uuid}"}` | журнал попытки: баллы и ответы по сценам |
+| `resulttc` | xAPI-запрос, см. ниже | **отправка ответа** и завершение работы (прокси в LRS) |
 | `addlit` | `{"ModuleExternalId":"{courseExtID}"}` | адаптивный трек |
 | `newfeedback2` | `{}` (через `FormData`) | есть ли новые сообщения обратной связи |
 | `trace` | `{moduleId, session, journalLoadMs, envLoadMs, sceneId, sceneLoadMs}` | телеметрия загрузки |
 
-Ответ `journal2` до начала работы:
+При ошибке любой метод отвечает `{"result":"Error","errorCode":…}`.
 
-```json
-{"startTime":"0001-01-01T00:00:00","score":0,"scoreMax":5,"spentTime":"PT0S","results":[],"result":"Ok"}
+### 8.2. Откуда берутся вопросы
+
+Курс состоит из сцен (одна сцена — одно задание). Список сцен — в манифесте
+`https://mes-physicon.mos.ru/content/manifest/{courseID}`: это JS-файл
+`var contentActivity='<?xml …><manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1" …>'`
+(IMS Content Packaging / SCORM 2004). В плеере он доступен как `CourseConfig.items`.
+В примере пять сцен:
+
+| `scene_id` | Название |
+|---|---|
+| `552388` | Состав воздуха |
+| `552389` | Значение компонентов воздуха |
+| `552390` | Изменение состава воздуха с высотой |
+| `552391` | Свойства воздуха |
+| `552393` | Вещества, загрязняющие воздух |
+
+Содержимое сцены лежит в `https://cdn.oblakoz.ru/IMUMKContent/{courseID}/content/{scene_id}/{scene_id}.js`
+как `var content{scene_id}='…'`: это XML вида `<page subtype="singlechoice">…`,
+обфусцированный сдвигом символов. Правильность ответа **проверяет сам плеер**
+(в браузере), а на сервер уходит уже готовый вердикт и баллы (см. 8.3). Формат
+этого XML и способ его расшифровки мы намеренно не документируем. Для своего
+клиента разумнее открывать официальный плеер в WebView (§7.2), чем рисовать
+задания самим.
+
+### 8.3. Отправка ответа (`resulttc`, verb `responded`)
+
+Снято вживую: ответ на сцену 552388, вариант 1 («Азот»).
+
+```
+POST https://appmes.oblakoz.ru/api/mobilev1/resulttc
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+X-AppPlatform: windesktop
+
+uid={userLogin}&data={JSON ниже}&key={SHA256(sessionKey + url + userLogin + data)}
 ```
 
-При ошибке приходит `{"result":"Error","errorCode":…}`.
+`data`:
 
-`resulttc` оборачивает xAPI-запросы. Формат ниже восстановлен по коду `web.js`:
-сами тела в сети мы не перехватывали, потому что задания не решались.
+```json
+{
+  "method": "POST",
+  "url": "/statements",
+  "content": [{
+    "context": {
+      "registration": "eb119a24-252c-41b4-bc85-754cd57c528b",
+      "instructor": { "mbox": "mailto:…" },
+      "extensions": {}
+    },
+    "module": "552388",
+    "progress": 100,
+    "timestamp": "2026-11-20T17:32:36.188Z",
+    "actor":  { "mbox": "mailto:{userLogin}" },
+    "verb":   { "id": "http://adlnet.gov/expapi/verbs/responded" },
+    "object": { "id": "http://fizikon.ru/Physicon_IMUMK_Course_375209/552388/" },
+    "result": {
+      "score": { "raw": 1, "max": 1, "scaled": 1 },
+      "success": true,
+      "completion": true,
+      "response": {
+        "state": "answered",
+        "result": "correct",
+        "choices": { "varianttext1": true, "varianttext2": false, "varianttext3": false, "varianttext4": false },
+        "write": {}
+      },
+      "duration": "PT0H0M17S",
+      "category": { "cs.2.2.3": 1, "cs.2.4.3": 1, "cce.7.2.2.13": 1 }
+    }
+  }]
+}
+```
+
+- `registration` — тот же UUID, что пришёл в ссылке запуска (§7.1).
+- `choices` — выбранные варианты (`varianttextN`, нумерация из XML сцены).
+  Для заданий со вводом текста заполняется `write`.
+- `category` — коды элементов содержания (кодификатор), к которым относится задание.
+
+Ответ: `{"data":"744711e2-e5d4-40a1-9136-d818219ceb75","result":"Ok","errorMessage":null}`,
+где `data` — id сохранённого statement (он же `StatementId` в `journal2`).
+
+Кнопка «Заново» в плеере позволяет ответить на сцену ещё раз; это ещё один `responded`.
+
+### 8.4. Завершение работы (`resulttc`, verb `completed`)
+
+Иконка выхода → «Пропущено N заданий… Если завершить работу, то у
+невыполненных заданий будет выставлен 0%. Эту работу нельзя отложить и
+доделать позже» → «Завершить».
+
+```json
+{
+  "method": "POST",
+  "url": "/statements",
+  "content": [{
+    "timestamp": "2026-11-20T17:33:47.521Z",
+    "actor":  { "mbox": "mailto:{userLogin}" },
+    "verb":   { "id": "http://adlnet.gov/expapi/verbs/completed" },
+    "object": { "id": "http://fizikon.ru/Physicon_IMUMK_Course_375209" },
+    "result": {
+      "duration": "PT0H1M28S",
+      "score": { "raw": 1, "max": 5, "scaled": 0.2 }
+    },
+    "context": { "registration": "eb119a24-252c-41b4-bc85-754cd57c528b", "extensions": {} }
+  }]
+}
+```
+
+Ответ: `{"data":"59301aec-…","result":"Ok","errorMessage":null}`. После этого
+плеер показывает итог («Отметка 2 · Время 01:28 · Набрано 20%»), а в LRS
+дневника (§6) появляется запись `final: true`, `recommended_mark: 1`,
+`recommended_mark_scale: 5`, `items` по сценам.
+
+По коду `web.js` существуют ещё два варианта:
 
 ```jsonc
-// попытка / ответ на сцену
+// «Отложить» работу
 { "method": "POST", "url": "/statements",
-  "content": [{ "timestamp": "…", "actor": {"mbox": "mailto:{userLogin}"},
-                "verb": {"id": "http://adlnet.gov/expapi/verbs/attempted"},
-                "object": {"id": "http://fizikon.ru/{course}/{module}"},
-                "result": {"completion": false, "duration": "PT…"} }] }
+  "content": [{ "verb": {"id": "http://adlnet.gov/expapi/verbs/suspended"},
+                "object": {"id": "http://fizikon.ru/{courseExtID}"},
+                "result": {"duration": "PT…"}, "context": {"registration": "{uuid}"} }] }
 
-// завершение работы («Завершить работу»)
-{ "method": "POST", "url": "/statements",
-  "content": [{ "verb": {"id": "http://adlnet.gov/expapi/verbs/completed"},
-                "object": {"id": "http://fizikon.ru/{course}"},
-                "result": {"duration": "PT…", "score": {"raw": 3, "max": 5, "scaled": 0.6}},
-                "context": {"registration": "{uuid}"} }] }
-
-// «Отложить»: verb .../suspended
-// прогресс модуля
+// прогресс модуля (state API)
 { "method": "POST", "url": "/activities/state",
   "data": {"activityid": "http://fizikon.ru/{module}", "agent": {"mbox": "mailto:{userLogin}"}, "stateid": "progress"},
   "content": {"module": "…", "progress": 100} }
 ```
+
+### 8.5. Получение ответов попытки (`journal2`)
+
+Тот же запрос, что при старте (8.1), после ответа возвращает журнал попытки:
+
+```jsonc
+{
+  "startTime": "2026-11-20T17:32:19.187",
+  "score": 1,
+  "scoreMax": 5,
+  "spentTime": "PT1M28S",
+  "results": [
+    {
+      "module": "552388",                      // scene_id
+      "status": "correct",
+      "score": 1, "scoreMax": 1, "weight": 1,
+      "spentTime": "PT17S",
+      "timestamp": "2026-11-20T17:32:36.187Z",
+      "StatementId": "744711e2-e5d4-40a1-9136-d818219ceb75",
+      "value": "{\"state\":\"answered\",\"result\":\"correct\",\"choices\":{\"varianttext1\":true,…}}",  // JSON-строка = result.response
+      "isCheckedByAi": false,
+      "state": "", "step": ""
+    }
+  ],
+  "result": "Ok"
+}
+```
+
+До первого ответа: `{"startTime":"0001-01-01T00:00:00","score":0,"scoreMax":5,"spentTime":"PT0S","results":[],"result":"Ok"}`.
+
+Журнал привязан к `registration`, то есть к одной попытке. Каждый запуск через
+§7 даёт новый `registration` и, значит, новую пустую попытку.
 
 Кроме этих, в `web.js` есть `getresult`, `nextadaptscene`, `setbookmark`,
 `deletebookmark`, `attach`, `attachdl`, `attachdelete`, `listfiles`,
@@ -539,36 +679,255 @@ key = SHA256_hex( sessionKey + url + userLogin + data )
 
 ## 9. Тесты Библиотеки МЭШ (test_task_binding / test_spec_binding)
 
-SPA `https://uchebnik.mos.ru/exam/`. Страницы:
+SPA `https://uchebnik.mos.ru/exam/`, бэкенд `https://uchebnik.mos.ru/webtests/exam/rest/secure`.
+Всё ниже снято вживую на попытке № 2 задания «Основные компоненты воздуха»
+(`challenge_id = 150651852`, одно задание).
 
-- прохождение: `/exam/challenge/{challenge_id}`
-- результат попытки: `/exam/challenge/{challenge_id}/attempt/{attempt_id}`
-  (это `url_details` из §6)
+Страницы:
 
-Запросы при открытии результата:
+- старт и прохождение: `/exam/challenge/{challenge_id}?activityId=…&actor=…&authurl=…&context=<JWT>&endpoint=…&fetch=…&registration=…&role=student`
+  (сюда приводит лаунчер §7.2; эти параметры потом уходят в `start-attempt`)
+- результат попытки: `/exam/challenge/{challenge_id}/attempt/{attempt_id}` (это `url_details` из §6)
 
-| Запрос | Назначение |
+### 9.1. Авторизация uchebnik
+
+У uchebnik **свой токен**, это не `aupd_token` дневника, и свой `Profile-Id`
+(в примере не равен `student_id` из дневника).
+
+```
+POST https://uchebnik.mos.ru/acl/api/session/v2/refresh
+(cookie сессии uchebnik.mos.ru, которые ставит цепочка лаунчера)
+```
+
+Ответ:
+
+```json
+{ "accessTokenEom": "<JWT, ~1200 символов>", "accessTokenAupd": "<JWT, ~870 символов>", "profileId": "<8 цифр>" }
+```
+
+SPA кладёт `accessTokenEom` в cookie `auth_token`, разбирает его payload
+(`usr` → `User-Id`, `prf[]` → профиль с `id == profileId`) и дальше шлёт на
+все `/webtests/exam/rest/secure/*`:
+
+| Заголовок | Значение |
 |---|---|
-| `GET /exam/config.json`, `GET /exam/abConfig.json` | конфиг SPA |
-| `POST /acl/api/session/v2/refresh` | поднимает или обновляет сессию uchebnik по cookie |
-| `GET /webtests/exam/rest/secure/auth/aclx/user_info` | профиль пользователя |
-| `GET /webtests/exam/rest/secure/challenge/task/answers?challenge_id={id}&challenge_attempt_id={attempt_id}` | ответы и проверка по попытке |
-
-Заголовки для `/webtests/exam/rest/secure/*` (по коду `main.module_*.js`):
-
-| Заголовок | Источник |
-|---|---|
-| `Auth-Token` | cookie `auth_token` на `uchebnik.mos.ru` |
-| `Profile-Id` | cookie `Profile-Id` |
-| `User-Id` | cookie `User-Id` |
+| `Authorization` | `Bearer {accessTokenEom}` |
+| `Profile-Id` | `{profileId}` |
+| `Profile` | `{"id":<profileId>,"type":"student"}` |
+| `User-Id` | `usr` из JWT |
+| `X-Mes-Subsystem` | `testw` |
 | `Accept` | `application/json;charset=UTF-8` |
-| `Content-Type` | `application/json` |
+| `Content-Type` | `application/json` (кроме multipart-запросов) |
 
-Без этих заголовков (только cookie) — `401`. `auth_token` для uchebnik — JWT,
-его payload содержит `usr` (user id) и `prf[]` (профили `{id, type}`).
+Без этих заголовков (только cookie) — `401`. В коде SPA есть и вариант с
+заголовком `Auth-Token` (режим ЭЖД и имперсонация), но в живом прохождении
+ушёл `Authorization: Bearer`.
 
-Сам процесс прохождения теста (старт попытки, отправка ответов) мы не снимали,
-чтобы не тратить попытку по невыполненному «Входному тестированию».
+### 9.2. Информация о тесте
+
+```
+GET /webtests/exam/rest/secure/challenge/{challenge_id}/info
+```
+
+```json
+{
+  "title": "Цифровое Домашнее Задание",
+  "subject_ids": [31937343],
+  "use_case": "HOMEWORK",
+  "allowed_tries": 0,
+  "available_time_in_minutes": 0,
+  "task_total_count": 1,
+  "available_from": "2000-01-01T00:00:00Z",
+  "available_until": "3000-01-01T00:00:00Z",
+  "can_reanswer": true,
+  "answer_order_random": true,
+  "is_task_order_random": false,
+  "number_of_attempt": 2,
+  "last_attempt_id": null,
+  "last_attempt_started_at": null,
+  "attempt_time_limit_type": "FIXED"
+}
+```
+
+`allowed_tries: 0` и `available_time_in_minutes: 0` означают «без ограничений»
+(в UI: «Количество попыток: Не ограничено», «Время на попытку: Нет»).
+
+Прочее: `GET /webtests/exam/rest/secure/auth/aclx/user_info` →
+`{user_id, user_name, staff_id, person_id, rgn_id, user_profiles:[{id, profile_name, profile_original_name}]}`.
+
+### 9.3. Старт попытки и получение заданий
+
+Кнопка «Приступить к прохождению: попытка № N»:
+
+```
+POST /webtests/exam/rest/secure/challenge/{challenge_id}/start-attempt
+Content-Type: application/json
+```
+
+```json
+{
+  "actorParam": "{\"objectType\":\"Agent\",\"account\":{\"name\":\"77:{person_id}\"}}",
+  "registrationParam": "ff384c85-3204-407b-9949-1e73b285a651",
+  "activityIdParam": "https://uchebnik.mos.ru/exam/challenge/150651852",
+  "resultOverviewUrl": "https://uchebnik.mos.ru/exam/challenge/150651852/attempt/{attemptId}",
+  "resultManagementUrl": "https://uchebnik.mos.ru/exam/challenge/150651852/context/{assignmentContextId}/attempt/{attemptId}",
+  "context": "<JWT context из ссылки лаунчера>",
+  "contextCorrupted": false
+}
+```
+
+Именно `context` и `registrationParam` привязывают попытку к ДЗ: без них
+результат не попадёт в LRS дневника. `{attemptId}` и `{assignmentContextId}`
+передаются буквально, как шаблон.
+
+Ответ — сразу все задания попытки (отдельного «получить задания» нет):
+
+```jsonc
+{
+  "challenge_attempt_id": 409578240,
+  "challenge_attempt_started_at": "2026-11-20T17:29:32.524495Z",
+  "current_date_time": "2026-11-20T17:29:32.527278Z",
+  "groups_context_info": {},
+  "tasks_how_to_beat": {},
+  "challenge_test_groups": [
+    {
+      "test_group_num": 0,
+      "view_mode": "SINGLE_TASK",
+      "challenge_tasks": [
+        {
+          "id": 802577977,                       // challenge_task_id
+          "task_order": 0,
+          "question_elements": [
+            { "type": "content/text", "text": "Основными компонентами воздуха являются",
+              "content": [], "text_styles": [], "block_styles": [] }
+          ],
+          "answer": {
+            "type": "answer/single",
+            "options_order": "random",
+            "options": [
+              { "id": "a9hdqt", "type": "option_type/default", "text": "кислород и азот",
+                "content": [], "text_styles": [], "block_styles": [] }
+              // … ещё 3 варианта
+            ],
+            "right_answer": { "id": null },      // во время попытки правильный ответ не отдаётся
+            "reference_right_answer": null,
+            "text_input_rules": null
+          },
+          "user_answer": null,                   // при продолжении попытки — сохранённый ответ
+          "answer_feedback": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+Типы ответа (`answer.type` / `@answer_type`): в примере `answer/single`; по
+коду SPA есть и другие (множественный выбор, ввод, свободный ответ с
+файлами). Справочник: `GET /webtests/exam/rest/secure/meta/answer_type`.
+
+### 9.4. Отправка ответа
+
+Кнопка «Ответить» (и «Изменить ответ» — тот же запрос повторно):
+
+```
+POST /webtests/exam/rest/secure/challenge/task/answer
+Content-Type: multipart/form-data; boundary=…
+```
+
+Одна часть `request` с `Content-Type: application/json`:
+
+```json
+{
+  "challenge_task_id": 802577977,
+  "challenge_attempt_id": 409578240,
+  "answer": { "@answer_type": "answer/single", "id": "a9hdqt" }
+}
+```
+
+`answer` = `{"@answer_type": <answer.type>, ...user_answer}`. Для `answer/single`
+это `id` выбранного варианта. Для свободного ответа (`FREE`) рядом добавляются
+части `files` (по одной на файл).
+
+Ответ: `{"type":"EMPTY"}`. Правильность во время попытки **не сообщается**.
+
+### 9.5. Завершение попытки
+
+«Завершить» → «Вы уверены, что хотите выйти?» → «Подтвердить» →
+«Вы уверены, что хотите завершить тестирование?» → «Завершить»:
+
+```
+POST /webtests/exam/rest/secure/challenge/{challenge_id}/complete_attempt
+{"challenge_id":150651852}
+```
+
+Ответ: `{}`. Сразу после этого SPA запрашивает результат (9.6) и показывает
+окно «Нам важно ваше мнение» (отзыв, `POST /webtests/exam/rest/secure/attempt/feedback/{id}`,
+необязателен).
+
+Результат сразу появляется в LRS дневника (§6) с тем же `registration`.
+
+### 9.6. Результат и ответы попытки
+
+```
+GET /webtests/exam/rest/secure/challenge/{challenge_id}/attempt/{attempt_id}/result
+GET /webtests/exam/rest/secure/challenge/task/answers?challenge_id={challenge_id}&challenge_attempt_id={attempt_id}
+```
+
+Оба возвращают одно и то же (у `task/answers` есть ещё `can_assess_task_ids: []`):
+
+```jsonc
+{
+  "use_case": "HOMEWORK",
+  "attempt_info": {
+    "attempt_id": 409578240,
+    "attempt_num": 2,
+    "start_attempt": "2026-11-20T17:29:32.524495Z",
+    "complete_attempt": "2026-11-20T17:30:54.612004Z",
+    "time_duration": 82087,                 // мс
+    "percent_complete": 100,
+    "person_id": "{person_id}",
+    "max_score": 1,
+    "got_score": 1,
+    "amount_correct_answer": 1,
+    "amount_partially_correct_answer": 0,
+    "amount_wrong_answer": 0,
+    "amount_waiting_review_answer": 0,
+    "amount_missed_answer": 0
+  },
+  "results": [
+    {
+      "test_group_num": 0,
+      "view_mode": "SINGLE_TASK",
+      "challenge_tasks": [
+        {
+          "id": 802577977,
+          "task_order": 0,
+          "score": 1, "max_score": 1, "criteria_score": null,
+          "status": "DONE",
+          "result_impact": "INCLUDED",
+          "question_elements": [ … ],         // как в 9.3
+          "answer": { "type": "answer/single", "options": [ … ], "right_answer": { "id": null }, … },
+          "user_answer": { "@answer_type": "answer/single", "id": "a9hdqt" },
+          "answer_feedback": { "type": "JUST_CORRECTNESS", "correctness": "CORRECT" }
+        }
+      ]
+    }
+  ],
+  "groups_context_info": {},
+  "tasks_how_to_beat": {},
+  "tasks_how_to_verify": {},
+  "evaluation_criteria": []
+}
+```
+
+- `answer_feedback.type: "JUST_CORRECTNESS"` — тест показывает только
+  «верно/неверно» (`correctness`: `CORRECT` / … ), а правильный вариант
+  (`right_answer`) и после завершения остаётся `null`.
+- Остальные методы из кода SPA: `GET /challenge/{id}/assignments/my[?attemptId=]`,
+  `GET /challenge/assignment/context/{id}/result`,
+  `POST /challenge/task/answer/estimation` (ручная оценка учителем),
+  `POST /challenge/generate_by/{task|spec|binding}` (создание испытания).
 
 ## 10. Тематическое планирование
 
@@ -606,7 +965,13 @@ theme_frame_ids, controllable_items }] }] }] }]`.
 | `material uuid` | `30f933ab-…` | `materials[]` | launch `material_id`, LRS `material_id`, `additional_materials` |
 | `plan_id` | `21980303` | урок | `lesson_plans` |
 | `challenge_id` / `cms_uuid` | `150651852` / `e7cf…` | `urls[].activity_url` | страницы uchebnik |
-| `registration` | UUID | ответ launch | LRS, плеер партнёра |
+| `registration` | UUID | ответ launch | LRS, плеер партнёра, `start-attempt.registrationParam`, xAPI `context.registration` |
+| uchebnik `profileId` | 8 цифр | `session/v2/refresh` | `Profile-Id`, `Profile` на uchebnik |
+| `challenge_attempt_id` | `409578240` | `start-attempt` | `task/answer`, `…/attempt/{id}/result`, `task/answers` |
+| `challenge_task_id` | `802577977` | `start-attempt` → `challenge_tasks[].id` | `task/answer` |
+| option `id` | `a9hdqt` | `answer.options[].id` | `task/answer` → `answer.id` |
+| `scene_id` / `module` | `552388` | манифест курса | xAPI `module`, `object.id`, `journal2.results[].module` |
+| `userLogin`, `sessionKey` | `…@school.imumk.ru`, 64 hex | HTML плеера (`var data`) | `uid`, подпись `key` |
 
 ## 12. Подводные камни
 
@@ -621,9 +986,21 @@ theme_frame_ids, controllable_items }] }] }] }]`.
    пользователь залогинен, или прокидывать cookie `aupd_token` в WebView.
 5. Ссылки из `additional_materials.urls[]` не содержат `context`: прохождение
    по ним не засчитается в ДЗ.
-6. Открытие материала «Облака Знаний» сразу запускает таймер работы.
-7. Статус «выполнено» по ЦДЗ на карточках веб берёт из LRS (`/api/lrs/v2/results`).
+6. Открытие материала «Облака Знаний» сразу запускает попытку. Если закрыть
+   плеер, ничего не ответив, в LRS всё равно появляется завершённая
+   (`final: true`) попытка с 0 баллов. Так произошло с двумя запусками при
+   снятии этой документации.
+7. У uchebnik.mos.ru свой токен и свой `Profile-Id` (`/acl/api/session/v2/refresh`);
+   `aupd_token` дневника туда не подходит.
+8. Тест МЭШ во время попытки не говорит, верен ли ответ (`{"type":"EMPTY"}`),
+    и даже после завершения не раскрывает правильный вариант
+    (`answer_feedback.type: JUST_CORRECTNESS`, `right_answer.id: null`).
+9. В «Облаке Знаний», наоборот, ответ проверяет сам плеер, а на сервер
+    уходит готовый вердикт (`result: "correct"`, `score`).
+10. В LRS хранятся все попытки (`content[]`); какая из них идёт в оценку,
+    решает дневник/учитель, API этого не показывает.
+11. Статус «выполнено» по ЦДЗ на карточках веб берёт из LRS (`/api/lrs/v2/results`).
    В примере у ДЗ `is_done: false`, хотя один из трёх материалов уже выполнен:
    `is_done` — это галочка ДЗ целиком, а не статус ЦДЗ.
-8. Веб кеширует ответы (React Query). Повторное открытие той же карточки
+12. Веб кеширует ответы (React Query). Повторное открытие той же карточки
    может не дать сетевых запросов, и это нормально.
