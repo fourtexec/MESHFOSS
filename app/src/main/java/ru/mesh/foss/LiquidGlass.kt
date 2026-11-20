@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -500,8 +499,8 @@ data class BarNavItem(val key: String, val label: String, val icon: androidx.com
  * каждая увеличена чуть сильнее (1×, 1.05×, 1.12×) и видна чуть ближе к ободку,
  * так что изображение выгибается наружу, как в выпуклом стекле. Поверх — тёмная
  * полоса преломления, тонкий яркий ободок, блики и цветная кайма. Линза плывёт к
- * вкладке на мягкой пружине, как капля воды, а при перетаскивании следует за пальцем
- * и увеличивает иконку. Выбор вкладки — по отпусканию.
+ * вкладке на мягкой пружине, как капля воды, а при перетаскивании следует за пальцем.
+ * Выбор вкладки — по отпусканию.
  */
 @Composable
 fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -> Unit) {
@@ -509,7 +508,6 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
     val dark = Liquid.isDark(scheme.background)
     val index = items.indexOfFirst { it.key == selected }
     val sources = remember(items.size) { List(items.size) { MutableInteractionSource() } }
-    val pressedIndex = sources.map { it.collectIsPressedAsState() }.indexOfFirst { it.value }
     val icons = rememberGraphicsLayer()
     Box(
         Modifier
@@ -532,7 +530,13 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                 mutableFloatStateOf(selectedIndex * itemWidthPx)
             }
             var dragging by remember { mutableStateOf(false) }
-            val lensTarget = if (pressedIndex >= 0) pressedIndex else selectedIndex
+            // Позиция, к которой линза должна приехать после нажатия/отпускания.
+            // Не берём pressed-состояние у clickable: при перехвате drag оно может
+            // остаться «зажатым», и линза застревает на месте.
+            var activeIndex by remember { mutableStateOf<Int?>(null) }
+            val lensTarget = activeIndex ?: selectedIndex
+            // Внешняя навигация (кнопка, FAB) меняет selected — отпускаем ручной target.
+            LaunchedEffect(selectedIndex) { activeIndex = null }
             LaunchedEffect(lensTarget, itemWidthPx, dragging) {
                 if (!dragging) {
                     // Пружина «капли» из Glass Lens: жёсткость 180, затухание 17.
@@ -543,18 +547,9 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                     ) { value, _ -> lensX = value }
                 }
             }
-            val pressed = pressedIndex >= 0 || dragging
-            val zoom = animateFloatAsState(
-                if (pressed) 1.3f else 1f,
-                spring(dampingRatio = 0.806f, stiffness = 260f),
-                label = "liquidLensZoom"
-            )
-            // В покое линза почти не гнёт изображение, при нажатии — в полную силу.
-            val bend = animateFloatAsState(
-                if (pressed) 1f else 0.3f,
-                spring(dampingRatio = 0.806f, stiffness = 260f),
-                label = "liquidLensBend"
-            )
+            // Линза не увеличивает иконки: двигается только стекло, как в iOS.
+            val zoom = 1f
+            val bend = 0.3f
             val lensAlpha by animateFloatAsState(if (items.isEmpty()) 0f else 1f, tween(180), label = "liquidLensAlpha")
             val showLens = items.isNotEmpty()
             // Android 13+: линза — шейдер Liquid Glass Studio прямо по слою иконок.
@@ -567,14 +562,18 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                     .onGloballyPositioned { rowOrigin = it.positionInWindow() }
                     .pointerInput(items.size, itemWidthPx) {
                         if (items.isEmpty()) return@pointerInput
-                        try {
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                val startX = down.position.x
-                                val pointerId = down.id
-                                var dragged = false
-                                var grabOffset = 0f
-                                val maxX = (size.width - itemWidthPx).coerceAtLeast(0f)
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val startX = down.position.x
+                            val pointerId = down.id
+                            var dragged = false
+                            var grabOffset = 0f
+                            val maxX = (size.width - itemWidthPx).coerceAtLeast(0f)
+                            val downIndex = (down.position.x / itemWidthPx)
+                                .toInt()
+                                .coerceIn(0, items.lastIndex)
+                            activeIndex = downIndex
+                            try {
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == pointerId } ?: break
@@ -583,29 +582,34 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                                     ) {
                                         dragged = true
                                         dragging = true
-                                        // Запоминаем, где палец схватил линзу: без этого
-                                        // она прыгает в центр под пальцем и «дёргается».
-                                        grabOffset = lensX - change.position.x
+                                        // Смещение считаем от центра вкладки, на которой
+                                        // начался жест: линза не прыгает и не отстаёт.
+                                        grabOffset = downIndex * itemWidthPx - startX
                                     }
                                     if (dragged) {
                                         // Линза едет за пальцем с сохранённым смещением;
-                                        // за края панели не уходит.
-                                        lensX = (change.position.x + grabOffset).coerceIn(0f, maxX)
-                                        change.consume()
+                                        // у центров вкладок слегка «прилипает» и замедляется.
+                                        val raw = (change.position.x + grabOffset).coerceIn(0f, maxX)
+                                        lensX = magnetizeLens(raw, itemWidthPx)
+                                        // Up не потребляем: clickable должен снять press-состояние.
+                                        if (change.pressed) change.consume()
                                     }
                                     if (!change.pressed) {
                                         if (dragged) {
                                             val chosen = ((lensX + itemWidthPx / 2f) / itemWidthPx)
                                                 .roundToInt()
                                                 .coerceIn(0, items.lastIndex)
+                                            activeIndex = chosen
                                             onSelect(items[chosen].key)
                                         }
                                         break
                                     }
                                 }
+                            } finally {
+                                // awaitEachGesture живёт между жестами, поэтому сбрасываем
+                                // флаг здесь, иначе линза «застревает» после первого drag.
+                                dragging = false
                             }
-                        } finally {
-                            dragging = false
                         }
                     }
                     .graphicsLayer {
@@ -616,8 +620,8 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                                 radius = Liquid.LensRadius.toPx(),
                                 density = density,
                                 tint = lensTint.copy(alpha = lensTint.alpha * lensAlpha),
-                                params = LensParams.copy(offsetDp = LensParams.offsetDp * bend.value),
-                                zoom = zoom.value
+                                params = LensParams.copy(offsetDp = LensParams.offsetDp * bend),
+                                zoom = zoom
                             )
                         }
                         if (shaderLens && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -627,8 +631,8 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                                 radius = Liquid.LensRadius.toPx(),
                                 density = density,
                                 tint = lensTint.copy(alpha = lensTint.alpha * lensAlpha),
-                                params = LensParams.copy(offsetDp = LensParams.offsetDp * bend.value),
-                                zoom = zoom.value
+                                params = LensParams.copy(offsetDp = LensParams.offsetDp * bend),
+                                zoom = zoom
                             )
                         }
                     }
@@ -698,10 +702,25 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                     .fillMaxHeight()
                     .graphicsLayer { alpha = lensAlpha }
                     .clip(Liquid.LensShape)
-                    .drawBehind { drawLens(icons, lensX, zoom.value, bend.value, dark, Liquid.LensShape) }
+                    .drawBehind { drawLens(icons, lensX, zoom, bend, dark, Liquid.LensShape) }
             )
         }
     }
+}
+
+/**
+ * Лёгкое магнитное притяжение к центрам вкладок. В середине пункта линза
+ * движется примерно на 30% медленнее пальца, между пунктами — один в один.
+ * Так перетаскивание остаётся плавным, но ощущается «щелчками».
+ */
+private fun magnetizeLens(raw: Float, itemWidthPx: Float): Float {
+    if (itemWidthPx <= 0f) return raw
+    val nearest = (raw / itemWidthPx).roundToInt() * itemWidthPx
+    val offset = (raw - nearest) / itemWidthPx
+    val proximity = (1f - kotlin.math.abs(offset) * 2f).coerceIn(0f, 1f)
+    // smoothstep: мягкий вход/выход из зоны притяжения.
+    val pull = proximity * proximity * (3f - 2f * proximity) * 0.32f
+    return raw + (nearest - raw) * pull
 }
 
 /**
