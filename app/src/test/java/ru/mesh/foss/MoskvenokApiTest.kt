@@ -15,9 +15,9 @@ class MoskvenokApiTest {
 
     private val objectsJson = JSONObject(
         """
-        {"personal": {"lastname": "БОРОВСКИЙ РУКИЕ", "firstname": "ДАНИИЛ"},
+        {"personal": {"lastname": "ИВАНОВ", "firstname": "ИВАН"},
          "groups": [{"title": "Москвёнок", "items": [
-            {"id": "combined/mesh/0345c036-12a8-4757-a00b-9555588736e1_mesh_bal",
+            {"id": "combined/mesh/11111111-2222-4333-8444-555555555555_mesh_bal",
              "title": "Москвёнок", "subtitle": "Баланс: 0,00 ₽",
              "type": "mesh", "active": true}],
            "favorite": true, "category": [2]}],
@@ -42,7 +42,7 @@ class MoskvenokApiTest {
     @Test
     fun meshDocIdIsTakenFromObjectsResponse() {
         assertEquals(
-            "combined/mesh/0345c036-12a8-4757-a00b-9555588736e1_mesh_bal",
+            "combined/mesh/11111111-2222-4333-8444-555555555555_mesh_bal",
             MoskvenokApi.meshDocId(objectsJson, "someone-else")
         )
     }
@@ -51,19 +51,19 @@ class MoskvenokApiTest {
     fun meshDocIdFallsBackToStudentUuid() {
         val empty = JSONObject("""{"groups": []}""")
         assertEquals(
-            "combined/mesh/0345c036-12a8-4757-a00b-9555588736e1_mesh_bal",
-            MoskvenokApi.meshDocId(empty, "0345c036-12a8-4757-a00b-9555588736e1")
+            "combined/mesh/11111111-2222-4333-8444-555555555555_mesh_bal",
+            MoskvenokApi.meshDocId(empty, "11111111-2222-4333-8444-555555555555")
         )
         assertNull(MoskvenokApi.meshDocId(empty, null))
         assertNull(MoskvenokApi.meshDocId(empty, "  "))
         // Числовой studentId МЭШ не годится — только UUID.
-        assertNull(MoskvenokApi.meshDocId(empty, "37050212"))
+        assertNull(MoskvenokApi.meshDocId(empty, "12345678"))
     }
 
     @Test
     fun scrubMasksSessionAndPersonalData() {
-        val line = "session: got sid=1qqfos472uya2epxu79ow36tuxjl42g0"
-        assertFalse(MoskvenokApi.scrub(line).contains("1qqfos472uya2epxu79ow36tuxjl42g0"))
+        val line = "session: got sid=abcdef0123456789abcdef0123456789"
+        assertFalse(MoskvenokApi.scrub(line).contains("abcdef0123456789abcdef0123456789"))
         val response =
             """response: {"personal": {"email": "user@example.com"}, "phone": "+79990001122"}"""
         val scrubbed = MoskvenokApi.scrub(response)
@@ -71,6 +71,10 @@ class MoskvenokApiTest {
         assertFalse(scrubbed.contains("+79990001122"))
         val qr = """{"barcode_payload": "ABC123"}"""
         assertFalse(MoskvenokApi.scrub(qr).contains("ABC123"))
+        // sessionid в путях login_callback/{device}::{sid}.
+        val callback =
+            "→ GET https://id.mos.ru/api/v1/edm/auth/login_callback/0011223344556677::abcdef0123456789abcdef0123456789?code=QUJDRA"
+        assertFalse(MoskvenokApi.scrub(callback).contains("abcdef0123456789abcdef0123456789"))
         // Обычные строки не ломаются.
         assertEquals("load: isEnabled=false", MoskvenokApi.scrub("load: isEnabled=false"))
     }
@@ -79,11 +83,11 @@ class MoskvenokApiTest {
     fun sessionIdExtractedFromMosidLinkInCallbackHtml() {
         val html = """
             <html><body><script>
-            window.location = "mosid://auth?success=1&session_id=1qqfos472uya2epxu79ow36tuxjl42g0&favs=1&docs=1";
+            window.location = "mosid://auth?success=1&session_id=0123456789abcdef0123456789abcdef&favs=1&docs=1";
             </script></body></html>
         """.trimIndent()
         assertEquals(
-            "1qqfos472uya2epxu79ow36tuxjl42g0",
+            "0123456789abcdef0123456789abcdef",
             MoskvenokApi.sessionFromMosid(html)
         )
         assertNull(MoskvenokApi.sessionFromMosid("<html>no link</html>"))

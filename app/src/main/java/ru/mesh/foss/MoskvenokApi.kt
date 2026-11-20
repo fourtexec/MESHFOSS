@@ -77,6 +77,8 @@ object MoskvenokApi {
         out = SESSION_HEADER.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
         // Параметры OAuth (code/state) в URL.
         out = OAUTH_PARAM.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
+        // sessionid в путях login_callback/{device}::{sid}.
+        out = CALLBACK_SID.replace(out) { m -> m.groupValues[1] + mask(m.groupValues[2]) }
         // ПИИ и payload в JSON-ответах.
         out = PII_KEY.replace(out) { m ->
             if (m.groupValues[2].isEmpty()) m.value else m.value.replace(m.groupValues[2], "***")
@@ -90,6 +92,8 @@ object MoskvenokApi {
         Regex("((?:x-)?(?:session[_-]?id|sid)[=:]\\s*)([A-Za-z0-9]+)", RegexOption.IGNORE_CASE)
     private val OAUTH_PARAM =
         Regex("([?&](?:code|state)=)([^&\\s\"']+)", RegexOption.IGNORE_CASE)
+    private val CALLBACK_SID =
+        Regex("(/login_callback/[^/?\\s]*::)([A-Za-z0-9]+)")
     private val SESSION_HEADER =
         Regex("(x-sessionid:\\s*)(\\S+)", RegexOption.IGNORE_CASE)
     private val PII_KEY = Regex(
@@ -169,10 +173,15 @@ object MoskvenokApi {
     // ---------------------------------------------------------------- API --
 
     /** GET /api/v3/edm/mp/objects — есть ли «Москвёнок» (type: mesh в groups). */
-    fun objects(session: String, device: String, processingBudgetMs: Long = 15_000): JSONObject =
+    fun objects(
+        session: String,
+        device: String,
+        processingBudgetMs: Long = 15_000,
+        forceRefresh: Boolean = true
+    ): JSONObject =
         api(
             "GET", "$ID/api/v3/edm/mp/objects", session, device,
-            refresh = true, processingBudgetMs = processingBudgetMs
+            refresh = forceRefresh, processingBudgetMs = processingBudgetMs
         )
 
     /** POST /api/v3/edm/mp/settings/docs {"profile":[22],"favorites":[22]} — включает карту. */
@@ -293,6 +302,12 @@ object MoskvenokApi {
             if (method == "GET" && response.code == 202 && deadline > 0 &&
                 System.currentTimeMillis() < deadline
             ) {
+                // force-refresh на опросе может перезапускать генерацию документов
+                // (observed: аккаунт, у которого каждый опрос с force отвечает 202
+                // минутами) — для ожидания снимаем его, дальше обычный GET.
+                if (headers.remove("x-force-refresh") != null) {
+                    log("… force-refresh снят — ждём обработку обычным GET")
+                }
                 log(
                     "… 202 обработка, повтор через 1500 мс " +
                         "(осталось ${deadline - System.currentTimeMillis()} мс)"

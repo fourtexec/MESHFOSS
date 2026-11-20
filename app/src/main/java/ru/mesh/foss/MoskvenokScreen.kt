@@ -77,8 +77,8 @@ import java.util.Locale
 fun MoskvenokScreen(store: SessionStore) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    // Официальное приложение шлёт Android ID в ВЕРХНЕМ регистре (84EB0B6C9F508016
-    // из flow — это ID в caps). Сервер регистрирует устройство на логине в таком
+    // Официальное приложение шлёт Android ID в ВЕРХНЕМ регистре (из captured
+    // flow — ID в caps). Сервер регистрирует устройство на логине в таком
     // виде: с нижним регистром settings/docs принимается (эхо 200), но не
     // сохраняется, а документ отдаёт 500. Регистр чувствителен и для привязки
     // сессии: несовпадение session/deviceid -> 403 (старая закэшированная сессия
@@ -151,16 +151,19 @@ fun MoskvenokScreen(store: SessionStore) {
 
     /** objects с однократным переполучением сессии при 401. */
     suspend fun fetchObjects(): Pair<String, JSONObject> = withContext(Dispatchers.IO) {
+        // Во время ожидания обработки (202) НЕ шлём force-refresh: он может
+        // перезапускать генерацию документов — тогда обработка не закончится.
+        val force = !processing
         try {
             val sid = session()
-            sid to MoskvenokApi.objects(sid, deviceId)
+            sid to MoskvenokApi.objects(sid, deviceId, forceRefresh = force)
         } catch (error: MoskvenokApi.MosError) {
             // Сессия протухла — получаем заново по кукам входа и повторяем.
             if (error.code != 401) throw error
             MoskvenokLog.append("objects: 401 — переполучаем сессию")
             store.mosIdSession = null
             val sid = session()
-            sid to MoskvenokApi.objects(sid, deviceId)
+            sid to MoskvenokApi.objects(sid, deviceId, forceRefresh = force)
         }
     }
 
