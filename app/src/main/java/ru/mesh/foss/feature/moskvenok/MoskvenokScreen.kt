@@ -679,7 +679,3 @@ private fun formatClock(millis: Long): String {
         String.format(Locale.US, "%d:%02d", minutes, seconds)
     }
 }
-
- catch (error: Exception) {
-    null
-}
