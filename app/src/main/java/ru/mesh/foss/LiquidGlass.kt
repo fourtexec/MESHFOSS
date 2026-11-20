@@ -109,8 +109,8 @@ import androidx.compose.ui.unit.sp
  * выбранную вкладку ([LiquidTabBar]).
  */
 object Liquid {
-    /** Радиус панели вкладок. */
-    val BarRadius = 20.dp
+    /** Радиус панели вкладок: заметно скруглённые углы, но не капсула. */
+    val BarRadius = 28.dp
 
     /** Отступ линзы от края панели. */
     val BarInset = 4.dp
@@ -438,8 +438,12 @@ fun Modifier.liquidGlass(
 /** Стекло панелей: тоньше и спокойнее линзы — под ним плавный фон, а не иконки. */
 private val PanelParams = LiquidShader.Params(thickness = 14f, offsetDp = 10f, dispersion = 5f)
 
-/** Линза: «квадрат со скруглением» (суперэллипс n = 4), толстое стекло, сильное преломление. */
-private val LensParams = LiquidShader.Params(roundness = 4f, thickness = 18f, offsetDp = 14f, dispersion = 5f, fresnelFactor = 0.25f)
+/**
+ * Линза: та же форма угла, что у панели (обычная дуга, n = 2), и концентричный
+ * радиус ([Liquid.LensRadius] = радиус панели − отступ) — линза повторяет контур
+ * панели с ровным зазором, в том числе в углах. Толстое стекло, сильное преломление.
+ */
+private val LensParams = LiquidShader.Params(roundness = 2f, thickness = 18f, offsetDp = 14f, dispersion = 5f, fresnelFactor = 0.25f)
 
 /**
  * Шапка в стиле iOS: крупный жирный заголовок прямо на фоне и действия в
