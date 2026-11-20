@@ -36,6 +36,13 @@
             android:label="@string/login_title"
             android:theme="@style/Theme.MeshRanker.Login" />
 
+        <!-- Прохождение ЦДЗ: WebView с cookie сессии МЭШ (docs/mesh-cdz-api.md §7.2) -->
+        <activity
+            android:name=".CdzActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:exported="false"
+            android:theme="@style/Theme.MeshRanker.Login" />
+
         <!-- Второй способ: обычный вход на school.mos.ru с перехватом токена -->
         <activity
             android:name=".SchoolLoginActivity"

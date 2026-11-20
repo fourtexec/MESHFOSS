@@ -225,6 +225,23 @@ class MeshApi(private val context: Context) {
         return JSONObject().put("from", from).put("to", to).put("homeworks", org.json.JSONArray(list))
     }
 
+    /** ЦДЗ одного ДЗ: params = { homework: <нормализованное ДЗ> }. */
+    fun cdzStatus(params: JSONObject?): JSONObject {
+        val child = studentFrom(params)
+        val homework = params?.optJSONObject("homework")
+            ?: throw MeshCore.MeshError(Words.MissingHomework.text, "bad-homework")
+        return JSONObject().put("materials", ensureClient().getCdzStatus(homework, child.optString("personId")))
+    }
+
+    /** Одноразовая ссылка запуска ЦДЗ (каждый вызов — новая ссылка). */
+    fun launchMaterial(params: JSONObject?): JSONObject {
+        val url = ensureClient().launchHomeworkMaterial(
+            params?.optString("homeworkEntryId"),
+            params?.optString("materialId")
+        )
+        return JSONObject().put("url", url)
+    }
+
     fun schedule(params: JSONObject?): JSONObject {
         val child = studentFrom(params)
         val date = params?.optString("date")?.takeIf { it.isNotBlank() } ?: MeshCore.today()
@@ -348,6 +365,8 @@ class MeshApi(private val context: Context) {
                 "rank" -> rank(payload)
                 "marks" -> marks(payload)
                 "homeworks" -> homeworks(payload)
+                "cdzStatus" -> cdzStatus(payload)
+                "launchMaterial" -> launchMaterial(payload)
                 "schedule" -> schedule(payload)
                 "names" -> names(payload.optString("personIds"))
                 "demoToken" -> demoToken()
