@@ -24,11 +24,12 @@ concurrency:
 
 env:
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-  # API 37 публикуется как android-37.0, без псевдонима android-37.
-  ANDROID_PACKAGES: 'platforms;android-37.0 build-tools;36.0.0 build-tools;37.0.0'
+  # Compose 1.13 требует compileSdk 37.1, поэтому ставим android-37.1
+  # (у AGP block-форма compileSdk { release(37) { minorApiLevel = 1 } }).
+  ANDROID_PACKAGES: 'platforms;android-37.1 build-tools;36.0.0 build-tools;37.0.0'
   BUILD_TOOLS_VERSION: '37.0.0'
   # Человекочитаемое представление списка пакетов для ключа кеша SDK.
-  ANDROID_SDK_CACHE_KEY: android-37.0-build-tools-36.0.0-37.0.0
+  ANDROID_SDK_CACHE_KEY: android-37.1-build-tools-36.0.0-37.0.0
 
 jobs:
   build:
@@ -96,7 +97,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-37.0
+            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-37.1
             ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
             ${{ env.ANDROID_SDK_ROOT }}/build-tools/${{ env.BUILD_TOOLS_VERSION }}
           key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_CACHE_KEY }}-${{ hashFiles('.github/workflows/android.yml') }}

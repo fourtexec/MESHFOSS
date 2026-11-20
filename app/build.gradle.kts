@@ -28,7 +28,13 @@ val hasEnvironmentSigning = listOf(
 
 android {
     namespace = "ru.mesh.foss"
-    compileSdk = 37
+    // Compose 1.13 требует compileSdk 37.1 (minor API), поэтому используем
+    // block-форму: она разрешается в platforms;android-37.1, а не android-37.0.
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "ru.mesh.foss"
