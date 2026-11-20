@@ -929,6 +929,74 @@ GET /webtests/exam/rest/secure/challenge/task/answers?challenge_id={challenge_id
   `POST /challenge/task/answer/estimation` (ручная оценка учителем),
   `POST /challenge/generate_by/{task|spec|binding}` (создание испытания).
 
+### 9.7. Тесты Библиотеки МЭШ и типы заданий
+
+**Поиск тестов:** `POST https://uchebnik.mos.ru/search/api/v3/materials`
+(`Authorization: Bearer {accessTokenEom}`, `Profile-Id`):
+
+```json
+{"query":{"search":"тест","filter":{"subject_program_ids":[31937343],"types":"test_specification"}},
+ "sort":{"field":"score","order":"desc"},"scope":"catalogue","page":1,"per_page":10}
+```
+
+Ответ: `{data:[…], page:{size,total,number,total_entities}, spellcheck, facets}`.
+Фильтр `types` почти не работает: в выдачу попадают и игры (`type: "GameApp"`),
+поэтому тесты надо отбирать по `type == "TestSpecification"`. Подтип теста лежит
+в `business_type`: `thematic_test`, `final_test`, `short_test`,
+`test_specification`, `oge_test`, `olympiad_task`, `functional_grammar_test`.
+Карточка теста: `GET /cms/api/v5/materials/{uuid}`. Списка заданий в ней нет.
+
+**Запуск тренировки:** `GET /cms/materials/{uuid}/launch` →
+`/launcher/api/v1/launch?activity_url=…&sgn=…` (SPA-страница) → редирект на
+`/exam/challenge/{challenge_id}`. Для каждого запуска создаётся новый `challenge_id`.
+Дальше всё как в 9.3–9.6, только `start-attempt` отправляется **без тела**:
+такая попытка не привязана к ДЗ и в дневник не попадает.
+
+**Важно:** `task/answer` возвращает `200 {"type":"EMPTY"}` на любое тело, даже
+`{"foo":1}`. Правильный ли формат, видно только по `user_answer` и баллам в
+результате после `complete_attempt`. В результате тренировки `right_answer` тоже
+пустой.
+
+#### Типы ответа
+
+Всего в SPA 23 типа (`answer.type` = `user_answer["@answer_type"]`). `user_answer`
+имеет ту же форму, что и `right_answer` (в коде есть
+`convertToWithRightAnswer`). «Живой» — тип встретился в реальных тестах, и сервер
+сохранил отправленный ответ в этом формате.
+
+| Тип | Что в `answer` | `user_answer` | Проверено |
+|---|---|---|---|
+| `answer/single` | `options[{id,text,content,type:"option_type/default"}]`, `options_order` | `{"id":"<option>"}` | живой |
+| `answer/multiple` | то же | `{"ids":["<option>",…]}` | живой |
+| `answer/number` | — | `{"number":[20]}` | живой |
+| `answer/string` | `right_answer.caseSensitive` | `{"string":["…"]}` | живой |
+| `answer/order` | `options[]`, `direction: vertical/horizontal` | `{"ids_order":[все id по порядку]}` | живой |
+| `answer/match` | `options[]` двух видов: `option_type/match/source` и `…/target`, `source_label`, `target_label`, `mix_source`, `mix_target` | `{"match":{"<source>":["<target>",…]}}` | живой |
+| `answer/groups` | `options[]`: группы (`option_type/group`) и элементы (`option_type/default`), `mix_groups`, `mix_options` | `{"groups":[{"group_id":"…","options_ids":["…"]}]}` | живой |
+| `answer/gap/text/input` | в `question_elements` есть `content/text/identificational` с `text_id`; `text_position[{position_id,text_id,position}]`, `expected_length`, `substitution_mode: copying`; в `right_answer.text_input_answer` приходит заготовка с пустыми `input_strings` | `{"text_input_answer":[{"position_id","text_id","caseSensitive":false,"input_strings":["…"],"group":0}]}` | живой |
+| `answer/gap/match/text` | `text_position[]` + `options[]` (слова для пропусков), `substitution_mode: moving` | `{"text_position_answer":[…], "text_input_answer":[]}` | структура живая, формат элемента не снят |
+| `answer/table` | `options[0].content[0]` = `content/table`: `table.cells["r"]["c"]=[текст]`, `rows`, `columns`, `rowHeaders`, `columnHeaders`; `cell_types` | `{"cells":{…}}` | структура живая, формат ячеек не снят |
+| `answer/free` | `allow_upload_file_answer` | multipart: `request` + части `files` | структура живая, поля не сняты |
+| `answer/string/multiple` | `text_input_rules` | `{"answers":[{"id","strings":[…],"num","group"}],"case_sensitive","with_order","quantity"}` | по коду |
+| `answer/order/multiple` | `group_options[]` | `{"grouped_options":[{"order_group_id","ids_order":[…]}]}` | по коду |
+| `answer/grid` | `cells[]` | `{"cells":[…]}` | по коду |
+| `answer/inline/choice/single` | `text_position[]` | `{"text_position_answer":[…]}` | по коду |
+| `answer/color/match`, `answer/gap/match/text/image`, `answer/text/line_highlighting/match` | `text_position[]` + цвета, картинки или стили | `{"text_position_answer":[…]}` | по коду |
+| `answer/gap/match/background/image` | `background_image`, `image_gaps_positions[]` | `{"position_answer":[…]}` | по коду |
+| `answer/gap/match/background/image/selection` | то же + `gaps_selection_mode` | `{"position_ids":[…]}` | по коду |
+| `answer/match/rebus` | `option_positions`, `area_positions` | `{"match":[…]}` | по коду |
+| `answer/match/timeline` | `options`: `option_type/match/timeline/date` и `…/event` | `{"match":{"<date>":["<event>"]}}` | по коду |
+| `answer/number/interval` | `reference_right_answer.number` | `{"step":…}` (точный формат неизвестен) | по коду |
+
+Типы содержимого в `question_elements` / `options[].content`: `content/text`,
+`content/text/identificational` (текст с пропусками, `text_id`), `content/table`,
+`content/math`, `content/link`, `content/atomic` (медиа: `image`, `sound`,
+`video`, `file`). Справочник типов: `GET /webtests/exam/rest/secure/meta/answer_type`.
+
+Задания в тесте разбиты на `challenge_test_groups`. В тренировках это группы по
+2 задания, `view_mode: "SINGLE_TASK"`. Режимы оценивания из кода: `default`,
+`single_penalty`, `multiple*`, `pair*`, `each_option`, `each_answer`, `manual`, `grid_row` и др.
+
 ## 10. Тематическое планирование
 
 Подгружается вместе с карточкой урока (вкладка «Об уроке»):
