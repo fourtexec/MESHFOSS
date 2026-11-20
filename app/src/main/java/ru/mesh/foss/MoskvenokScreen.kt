@@ -372,8 +372,26 @@ fun MoskvenokScreen(store: SessionStore) {
     // Сервер асинхронно генерирует документы (202) — опрашиваем сами.
     LaunchedEffect(processing) {
         if (!processing) return@LaunchedEffect
+        val startedAt = System.currentTimeMillis()
+        var lastRenew = 0L
         while (processing) {
             delay(3000)
+            // 202 может висеть на уровне сессии: sid, созданный в момент
+            // зависшей обработки, наследует флаг refresh и не сбрасывается —
+            // пересоздание сессии происходит только при 401/403, а 202 не
+            // ошибка авторизации. Раз в 2 минуты (первый раз — через 60 с)
+            // обнуляем sid: свежий sid здорового аккаунта отдаёт 200.
+            val now = System.currentTimeMillis()
+            val due = if (lastRenew == 0L) {
+                now - startedAt >= 60_000
+            } else {
+                now - lastRenew >= 120_000
+            }
+            if (due) {
+                lastRenew = now
+                MoskvenokLog.append("session: 202 не проходит — пересоздаём сессию (свежий sid)")
+                store.mosIdSession = null
+            }
             refreshAll(false)
         }
     }
