@@ -64,6 +64,7 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     var design by remember { mutableStateOf(Design.migrate(prefs)) }
     val glass = design == Design.GLASS
     val liquid = design == Design.LIQUID
+    val frosted = design == Design.FROSTED
     val language = UiLanguage.code
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val localized = remember(context, configuration, language) { UiLanguage.context(context) }
@@ -80,16 +81,29 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
             AppTheme.colors(themeId, themeColors)
         }
     }
-    val colors = remember(baseColors, glass) { if (glass) Glass.glassify(baseColors) else baseColors }
+    val colors = remember(baseColors, design) {
+        when (design) {
+            Design.GLASS -> Glass.glassify(baseColors)
+            Design.FROSTED -> Frosted.scheme(baseColors)
+            else -> baseColors
+        }
+    }
     val glassStyle = remember(themeId, baseColors) { Glass.style(themeId, baseColors) }
     // В стекле карточки скруглены сильнее (20dp) — крупные мягкие углы, как у пластины.
-    val shapes = remember(glass) {
+    // В «матовом стекле» — ровные 16dp у карточек, как в Uxaoro.
+    val shapes = remember(glass, frosted) {
         Shapes(
             extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
             small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
             medium = androidx.compose.foundation.shape.RoundedCornerShape(if (glass) 20.dp else 16.dp),
-            large = androidx.compose.foundation.shape.RoundedCornerShape(if (glass) 28.dp else 24.dp),
-            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
+            large = androidx.compose.foundation.shape.RoundedCornerShape(
+                when {
+                    glass -> 28.dp
+                    frosted -> 16.dp
+                    else -> 24.dp
+                }
+            ),
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(if (frosted) 24.dp else 32.dp)
         )
     }
 
@@ -126,6 +140,10 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         ) {
             when {
                 liquid -> LiquidBackdrop(content)
+                frosted -> FrostedBackdrop {
+                    // Фон рисует FrostedBackdrop: прозрачная Surface задаёт только цвет текста.
+                    Surface(color = androidx.compose.ui.graphics.Color.Transparent, content = content)
+                }
                 glass -> GlassBackdrop {
                     // Фон рисует GlassBackdrop: прозрачная Surface задаёт только цвет текста.
                     Surface(color = androidx.compose.ui.graphics.Color.Transparent, content = content)
@@ -461,9 +479,34 @@ fun MainScaffold(
     val design = LocalDesign.current
     val glass = design == Design.GLASS
     val liquid = design == Design.LIQUID
+    val frosted = design == Design.FROSTED
     val glassStyle = LocalGlassStyle.current
+    val navItems = listOf(
+        Triple("ranking", Words.Ranking.text, R.drawable.ic_nav_ranking),
+        Triple("marks", Words.GradesTab.text, R.drawable.ic_nav_marks),
+        Triple("homeworks", Words.Tasks.text, R.drawable.ic_nav_homeworks),
+        Triple("schedule", Words.ScheduleTab.text, R.drawable.ic_nav_schedule),
+        Triple("moskvenok", Words.Moskvenok.text, R.drawable.ic_nav_moskvenok)
+    )
+    val topActions: @Composable RowScope.() -> Unit = {
+        if (currentTab == "marks" && marksSubjectId != null) {
+            TextButton(
+                onClick = {
+                    navigateTo(NavState(tab = "ranking", rankingSubjectId = marksSubjectId))
+                }
+            ) {
+                Text(Words.Ranking.text)
+            }
+        }
+        IconButton(onClick = { navigateTo(NavState(tab = "settings")) }) {
+            Icon(
+                painter = painterResource(R.drawable.ic_settings),
+                contentDescription = Words.SettingsAndProfile.text
+            )
+        }
+    }
     Scaffold(
-        containerColor = if (glass || liquid) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = if (glass || liquid || frosted) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         modifier = Modifier.pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
@@ -495,6 +538,10 @@ fun MainScaffold(
             }
         },
         topBar = {
+            if (frosted) {
+                FrostedTopBar(screenTitle, topActions)
+                return@Scaffold
+            }
             TopAppBar(
                 // В стекле и liquid-дизайне шапка прозрачная: под ней виден фон со свечениями.
                 colors = if (glass || liquid) {
@@ -508,26 +555,18 @@ fun MainScaffold(
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
-                actions = {
-                    if (currentTab == "marks" && marksSubjectId != null) {
-                        TextButton(
-                            onClick = {
-                                navigateTo(NavState(tab = "ranking", rankingSubjectId = marksSubjectId))
-                            }
-                        ) {
-                            Text(Words.Ranking.text)
-                        }
-                    }
-                    IconButton(onClick = { navigateTo(NavState(tab = "settings")) }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_settings),
-                            contentDescription = Words.SettingsAndProfile.text
-                        )
-                    }
-                }
+                actions = topActions
             )
         },
         bottomBar = {
+            if (frosted) {
+                FrostedNavBar(
+                    items = navItems.map { (key, label, iconRes) -> FrostedNavItem(key, label, painterResource(iconRes)) },
+                    selected = currentTab,
+                    onSelect = { navigateTo(NavState(tab = it)) }
+                )
+                return@Scaffold
+            }
             ShortNavigationBar(
                 modifier = when {
                     // Нижняя панель в стекле — стеклянная пластина с тонкой светлой кромкой сверху.
@@ -543,14 +582,7 @@ fun MainScaffold(
                     else -> ShortNavigationBarDefaults.containerColor
                 }
             ) {
-                val items = listOf(
-                    Triple("ranking", Words.Ranking.text, R.drawable.ic_nav_ranking),
-                    Triple("marks", Words.GradesTab.text, R.drawable.ic_nav_marks),
-                    Triple("homeworks", Words.Tasks.text, R.drawable.ic_nav_homeworks),
-                    Triple("schedule", Words.ScheduleTab.text, R.drawable.ic_nav_schedule),
-                    Triple("moskvenok", Words.Moskvenok.text, R.drawable.ic_nav_moskvenok)
-                )
-                items.forEach { (key, label, iconRes) ->
+                navItems.forEach { (key, label, iconRes) ->
                     ShortNavigationBarItem(
                         selected = currentTab == key,
                         onClick = { navigateTo(NavState(tab = key)) },
@@ -574,6 +606,10 @@ fun MainScaffold(
                     fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
             ) {
                 ExtendedFloatingActionButton(
+                    // В «матовом стекле» — «чернильная» кнопка (цвет текста на фоне) со скруглением 16dp.
+                    containerColor = if (frosted) MaterialTheme.colorScheme.onBackground else FloatingActionButtonDefaults.containerColor,
+                    contentColor = if (frosted) MaterialTheme.colorScheme.background else contentColorFor(FloatingActionButtonDefaults.containerColor),
+                    shape = if (frosted) Frosted.CardShape else FloatingActionButtonDefaults.extendedFabShape,
                     text = { Text(Words.Meals.text) },
                     icon = {
                         Icon(

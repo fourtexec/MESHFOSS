@@ -165,6 +165,20 @@ internal enum class Words(
         "Paneles con borde suave y brillo al tocar",
         "Panneaux à bord doux et éclat au toucher"
     ),
+    DesignFrosted(
+        "Матовое стекло",
+        "Frosted glass",
+        "Matt üveg",
+        "Cristal esmerilado",
+        "Verre dépoli"
+    ),
+    DesignFrostedHint(
+        "Плавающие матовые панели и плотные карточки на мягком переливающемся свечении",
+        "Floating frosted bars and solid cards over a softly drifting glow",
+        "Lebegő matt sávok és tömör kártyák lágyan áramló fényben",
+        "Barras esmeriladas flotantes y tarjetas sólidas sobre un suave resplandor fluido",
+        "Barres dépolies flottantes et cartes opaques sur une lueur douce et mouvante"
+    ),
     ThemeName(
         "Название своей темы",
         "Theme name",
