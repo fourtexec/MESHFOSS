@@ -45,7 +45,10 @@ import androidx.compose.ui.unit.dp
  *  - [GLASS] — стеклянный стиль (glassmorphism): фон со свечениями, полупрозрачные
  *    контейнеры, блики на карточках ([Glass], [Modifier.glass], [GlassBackdrop]);
  *  - [LIQUID] — «жидкое стекло»: панели с градиентной кромкой и светом от касания
- *    ([glassPane], [GlassCard], [LiquidBackdrop]).
+ *    ([glassPane], [GlassCard], [LiquidBackdrop]);
+ *  - [FROSTED] — «матовое стекло» в стиле Uxaoro: живой фон со свечениями,
+ *    размытые плавающие шапка и панель вкладок, плотные карточки с тенью
+ *    ([FrostedBackdrop], [FrostedTopBar], [FrostedNavBar], [Modifier.frostedSurface]).
  *
  * Миграция со старого булевого `glass_enabled`: если `design` ещё не записан,
  * но стекло было включено явно — достаём «glass».
@@ -55,6 +58,7 @@ object Design {
     const val PLAIN = "plain"
     const val GLASS = "glass"
     const val LIQUID = "liquid"
+    const val FROSTED = "frosted"
     const val DEFAULT = PLAIN
 
     /** Старый ключ переключателя стеклянного стиля (PR #4) — только для миграции. */
@@ -398,6 +402,7 @@ fun Modifier.glassPane(
 fun Modifier.selectionPane(shape: Shape, tint: Color): Modifier = when (LocalDesign.current) {
     Design.LIQUID -> glassPane(shape, tint)
     Design.GLASS -> Modifier.clip(shape).background(tint).glass(shape)
+    Design.FROSTED -> Modifier.frostedSurface(shape, tint, elevation = 2.dp)
     else -> Modifier.clip(shape).background(tint)
 }
 
@@ -413,6 +418,8 @@ internal fun Modifier.dialogGlass(): Modifier {
     return when (LocalDesign.current) {
         Design.LIQUID -> solid.glassPane(shape, MaterialTheme.colorScheme.surfaceContainerHigh)
         Design.GLASS -> solid.glass(shape)
+        Design.FROSTED -> background(MaterialTheme.colorScheme.surfaceContainerHigh, shape)
+            .border(1.dp, frostedHairline(), shape)
         else -> solid
     }
 }
@@ -449,6 +456,16 @@ fun GlassCard(
             shape = shape,
             colors = CardDefaults.cardColors(
                 containerColor = container,
+                contentColor = scheme.onSurface
+            ),
+            border = border,
+            content = content
+        )
+        Design.FROSTED -> Card(
+            modifier = modifier.frostedSurface(shape, container),
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = Color.Transparent,
                 contentColor = scheme.onSurface
             ),
             border = border,

@@ -13,6 +13,7 @@ composeBom = "2025.06.01"
 activityCompose = "1.9.3"
 navigationCompose = "2.8.5"
 zxing = "3.5.3"
+haze = "1.6.10"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -35,6 +36,8 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 # QR-код карты «Москвёнок» (кодирование payload в BitMatrix).
 zxing = { module = "com.google.zxing:core", version.ref = "zxing" }
+# Размытие (blur) хрома в дизайне «Матовое стекло».
+haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -165,6 +165,20 @@ internal enum class Words(
         "Paneles con borde suave y brillo al tocar",
         "Panneaux à bord doux et éclat au toucher"
     ),
+    DesignFrosted(
+        "Матовое стекло",
+        "Frosted glass",
+        "Matt üveg",
+        "Vidrio esmerilado",
+        "Verre dépoli"
+    ),
+    DesignFrostedHint(
+        "Размытые плавающие панели и живой фон, как в Uxaoro",
+        "Blurred floating bars over a living backdrop, like Uxaoro",
+        "Elmosott lebegő sávok élő háttér előtt, mint az Uxaoróban",
+        "Barras flotantes difuminadas sobre un fondo vivo, como en Uxaoro",
+        "Barres flottantes floutées sur un fond vivant, comme dans Uxaoro"
+    ),
     ThemeName(
         "Название своей темы",
         "Theme name",
