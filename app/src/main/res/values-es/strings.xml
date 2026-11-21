@@ -14,4 +14,7 @@
     <string name="cdz_native_status">Resuelto y guardado: %1$d de %2$d</string>
     <string name="cdz_native_save">Guardar</string>
     <string name="cdz_native_finish">Finalizar</string>
+    <string name="cdz_continue_attempt">Continuar intento</string>
+    <string name="cdz_start_attempt">Iniciar intento</string>
+    <string name="cdz_attempt_history">Historial de intentos</string>
 </resources>

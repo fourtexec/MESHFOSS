@@ -14,4 +14,7 @@
     <string name="cdz_native_status">Résolu et enregistré : %1$d sur %2$d</string>
     <string name="cdz_native_save">Enregistrer</string>
     <string name="cdz_native_finish">Terminer</string>
+    <string name="cdz_continue_attempt">Continuer la tentative</string>
+    <string name="cdz_start_attempt">Démarrer la tentative</string>
+    <string name="cdz_attempt_history">Historique des tentatives</string>
 </resources>

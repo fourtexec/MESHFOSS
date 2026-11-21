@@ -14,4 +14,7 @@
     <string name="cdz_native_status">Megoldva és mentve: %1$d / %2$d</string>
     <string name="cdz_native_save">Mentés</string>
     <string name="cdz_native_finish">Befejezés</string>
+    <string name="cdz_continue_attempt">Próbálkozás folytatása</string>
+    <string name="cdz_start_attempt">Próbálkozás indítása</string>
+    <string name="cdz_attempt_history">Próbálkozások története</string>
 </resources>

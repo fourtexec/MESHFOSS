@@ -14,4 +14,7 @@
     <string name="cdz_native_status">Solved and saved: %1$d of %2$d</string>
     <string name="cdz_native_save">Save</string>
     <string name="cdz_native_finish">Finish</string>
+    <string name="cdz_continue_attempt">Continue attempt</string>
+    <string name="cdz_start_attempt">Start attempt</string>
+    <string name="cdz_attempt_history">Attempt history</string>
 </resources>

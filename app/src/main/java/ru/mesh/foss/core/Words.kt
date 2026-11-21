@@ -2650,6 +2650,27 @@ internal enum class Words(
         "No se pudo iniciar sesión con las cookies. Compruebe que sigan siendo válidas.",
         "Impossible de se connecter avec ces cookies. Vérifiez qu’ils sont encore valides."
     ),
+    CdzAttemptLoading(
+        "Проверяем попытки на сервере…",
+        "Checking attempts on the server…",
+        "Próbálkozások ellenőrzése…",
+        "Comprobando intentos…",
+        "Vérification des tentatives…"
+    ),
+    CdzAttemptHint(
+        "Выберите, что делать: продолжить начатую попытку или начать новую. История — только завершённые попытки.",
+        "Choose: continue an existing attempt or start a new one. History shows completed attempts only.",
+        "Válasszon: folytat egy megkezdett próbálkozást, vagy újat indít. A történet csak a befejezetteket mutatja.",
+        "Elija: continuar un intento iniciado o iniciar uno nuevo. El historial muestra solo los completados.",
+        "Choisissez : continuer une tentative commencée ou en démarrer une nouvelle. L’historique ne montre que les tentatives terminées."
+    ),
+    CdzAttemptStatus(
+        "Начато попыток: %1\$d · текущая: %2\$s",
+        "Attempts started: %1\$d · current: %2\$s",
+        "Indított próbálkozások: %1\$d · jelenlegi: %2\$s",
+        "Intentos iniciados: %1\$d · actual: %2\$s",
+        "Tentatives démarrées : %1\$d · actuelle : %2\$s"
+    ),
     CdzAttemptTitle(
         "Попытка ЦДЗ",
         "Digital homework attempt",

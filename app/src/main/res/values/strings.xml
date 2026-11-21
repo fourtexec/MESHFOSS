@@ -16,4 +16,7 @@
     <string name="cdz_native_status">Решено и сохранено: %1$d из %2$d</string>
     <string name="cdz_native_save">Сохранить</string>
     <string name="cdz_native_finish">Завершить</string>
+    <string name="cdz_continue_attempt">Продолжить попытку</string>
+    <string name="cdz_start_attempt">Начать попытку</string>
+    <string name="cdz_attempt_history">История попыток</string>
 </resources>

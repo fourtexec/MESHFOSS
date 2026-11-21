@@ -20,15 +20,6 @@
         android:textSize="13sp"
         android:paddingTop="4dp" />
 
-    <GridView
-        android:id="@+id/cdzNav"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:numColumns="6"
-        android:horizontalSpacing="4dp"
-        android:verticalSpacing="4dp"
-        android:paddingTop="8dp" />
-
     <ProgressBar
         android:id="@+id/cdzProgress"
         style="?android:attr/progressBarStyleHorizontal"
@@ -37,39 +28,94 @@
         android:indeterminate="true"
         android:visibility="gone" />
 
-    <ScrollView
-        android:id="@+id/cdzScroll"
+    <!-- Выбор попытки: показывается до старта, чтобы случайно не создать вторую. -->
+    <LinearLayout
+        android:id="@+id/cdzAttemptPanel"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:orientation="vertical"
+        android:gravity="center">
 
-        <LinearLayout
-            android:id="@+id/cdzContent"
+        <TextView
+            android:id="@+id/cdzAttemptHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingTop="8dp" />
-    </ScrollView>
+            android:gravity="center"
+            android:textSize="14sp"
+            android:paddingBottom="12dp" />
 
+        <Button
+            android:id="@+id/cdzContinue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/cdz_continue_attempt" />
+
+        <Button
+            android:id="@+id/cdzStart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/cdz_start_attempt" />
+
+        <Button
+            android:id="@+id/cdzHistory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/cdz_attempt_history" />
+    </LinearLayout>
+
+    <!-- Рабочая область заданий: скрыта, пока попытка не выбрана. -->
     <LinearLayout
+        android:id="@+id/cdzGamePanel"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingTop="8dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:visibility="gone">
 
-        <Button
-            android:id="@+id/cdzSave"
-            android:layout_width="0dp"
+        <GridView
+            android:id="@+id/cdzNav"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/cdz_native_save" />
+            android:numColumns="6"
+            android:horizontalSpacing="4dp"
+            android:verticalSpacing="4dp"
+            android:paddingTop="8dp" />
 
-        <Button
-            android:id="@+id/cdzFinish"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+        <ScrollView
+            android:id="@+id/cdzScroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:text="@string/cdz_native_finish" />
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:id="@+id/cdzContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="8dp" />
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="8dp">
+
+            <Button
+                android:id="@+id/cdzSave"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/cdz_native_save" />
+
+            <Button
+                android:id="@+id/cdzFinish"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/cdz_native_finish" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

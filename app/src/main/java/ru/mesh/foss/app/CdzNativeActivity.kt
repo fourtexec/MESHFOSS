@@ -65,6 +65,7 @@ class CdzNativeActivity : AppCompatActivity() {
     private var current = 0
     private var challenge = ""
     private var finished = false
+    private var currentAttemptCount = 0
     private var currentView: View? = null
 
 
@@ -76,6 +77,12 @@ class CdzNativeActivity : AppCompatActivity() {
     private lateinit var scroll: ScrollView
     private lateinit var saveButton: Button
     private lateinit var finishButton: Button
+    private lateinit var attemptPanel: View
+    private lateinit var gamePanel: View
+    private lateinit var attemptHint: TextView
+    private lateinit var continueButton: Button
+    private lateinit var startButton: Button
+    private lateinit var historyButton: Button
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(UiLanguage.context(newBase))
@@ -96,6 +103,12 @@ class CdzNativeActivity : AppCompatActivity() {
         scroll = findViewById(R.id.cdzScroll)
         saveButton = findViewById(R.id.cdzSave)
         finishButton = findViewById(R.id.cdzFinish)
+        attemptPanel = findViewById(R.id.cdzAttemptPanel)
+        gamePanel = findViewById(R.id.cdzGamePanel)
+        attemptHint = findViewById(R.id.cdzAttemptHint)
+        continueButton = findViewById(R.id.cdzContinue)
+        startButton = findViewById(R.id.cdzStart)
+        historyButton = findViewById(R.id.cdzHistory)
 
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
         MeshLog.log("CDZ", "native: открытие url=${url.take(200)}")
@@ -113,8 +126,20 @@ class CdzNativeActivity : AppCompatActivity() {
                 "studentId=${store.studentId} personId=${store.personId} " +
                 "cookies=${jar.size} есть токен=${!token.isNullOrBlank()}"
         }
+        client = CdzNativeClient(
+            pageUrl = url,
+            token = token,
+            profileId = store.studentId,
+            userId = jar["obr_id"],
+            personId = store.personId,
+            cookies = jar,
+        )
+        MeshLog.log("CDZ", "native: клиент создан")
         saveButton.setOnClickListener { saveCurrent() }
         finishButton.setOnClickListener { confirmFinish() }
+        continueButton.setOnClickListener { beginAttempt() }
+        startButton.setOnClickListener { confirmNewAttempt(currentAttemptCount) }
+        historyButton.setOnClickListener { showHistory() }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (hasUnsaved()) confirmLeave() else finish()
@@ -152,6 +177,12 @@ class CdzNativeActivity : AppCompatActivity() {
 
     private fun startNative(finalUrl: String, challengeId: String) {
         challenge = challengeId
+        attemptPanel.visibility = View.VISIBLE
+        gamePanel.visibility = View.GONE
+        attemptHint.text = Words.CdzAttemptLoading.text
+        continueButton.isEnabled = false
+        startButton.isEnabled = false
+        historyButton.isEnabled = false
         scope.launch {
             progress.visibility = View.VISIBLE
             try {
@@ -176,23 +207,23 @@ class CdzNativeActivity : AppCompatActivity() {
         }
     }
 
-    /** Никакого автостарта: пользователь сам выбирает «начать» или «продолжить». */
+    /** Никакого автостарта: пользователь сам выбирает кнопкой на экране. */
     private fun showAttemptChooser(count: Int, lastAttempt: String?) {
-        val labels = mutableListOf<String>()
-        val actions = mutableListOf<() -> Unit>()
+        currentAttemptCount = count
+        attemptHint.text = Words.CdzAttemptHint.text
+        continueButton.isEnabled = true
+        startButton.isEnabled = true
+        historyButton.isEnabled = true
+        attemptPanel.visibility = View.VISIBLE
+        gamePanel.visibility = View.GONE
+        nav.visibility = View.GONE
+        continueButton.visibility = if (lastAttempt != null) View.VISIBLE else View.GONE
         if (lastAttempt != null) {
-            labels += Words.CdzContinueAttempt(lastAttempt)
-            actions += { beginAttempt() }
+            continueButton.text = Words.CdzContinueAttempt(lastAttempt)
         }
-        labels += if (count > 0) Words.CdzStartNewAttempt.text else Words.CdzStartAttempt.text
-        actions += { confirmNewAttempt(count) }
-        labels += Words.CdzAttemptHistory.text
-        actions += { showHistory() }
-        AlertDialog.Builder(this)
-            .setTitle(Words.CdzAttemptTitle.text)
-            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
-            .setNegativeButton(Words.Close.text, null)
-            .show()
+        startButton.text = if (count > 0) Words.CdzStartNewAttempt.text else Words.CdzStartAttempt.text
+        statusView.text = Words.CdzAttemptStatus(count, lastAttempt ?: "—")
+        MeshLog.log("CDZ", "панель попыток: count=$count last=$lastAttempt")
     }
 
     private fun confirmNewAttempt(count: Int) {
@@ -217,6 +248,9 @@ class CdzNativeActivity : AppCompatActivity() {
                 if (tasks.isEmpty()) throw IllegalStateException("no tasks")
                 draft = restoreDraft()
                 saved = restoreSaved()
+                attemptPanel.visibility = View.GONE
+                gamePanel.visibility = View.VISIBLE
+                nav.visibility = View.VISIBLE
                 render()
             } catch (error: Exception) {
                 MeshLog.error("CDZ", error)
