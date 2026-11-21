@@ -89,10 +89,10 @@ fun CdzMatchScreen(
     fun cancel() { pending = null }
 
     fun finish(sourceId: String, finger: Offset) {
-        val target = targets.minByOrNull { id ->
-            centers[id]?.let { (it - finger).getDistance() } ?: Float.MAX_VALUE
+        val target = targets.minByOrNull { node: MatchNode ->
+            centers[node.id]?.let { (it - finger).getDistance() } ?: Float.MAX_VALUE
         }
-        val center = target?.let { centers[it] }
+        val center = target?.let { centers[it.id] }
         if (target != null && center != null && (center - finger).getDistance() <= hitRadius) {
             val map = LinkedHashMap(links)
             map.entries.removeIf { it.value == target.id }  // один target — одна пара
