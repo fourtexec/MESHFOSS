@@ -2860,6 +2860,104 @@ internal enum class Words(
         "Su respuesta",
         "Votre réponse"
     ),
+    CdzNativeSave(
+        "Сохранить",
+        "Save",
+        "Mentés",
+        "Guardar",
+        "Enregistrer"
+    ),
+    CdzNativeFinish(
+        "Завершить",
+        "Finish",
+        "Befejezés",
+        "Finalizar",
+        "Terminer"
+    ),
+    Undo(
+        "Отменить",
+        "Undo",
+        "Visszavonás",
+        "Deshacer",
+        "Annuler"
+    ),
+    Clear(
+        "Очистить",
+        "Clear",
+        "Törlés",
+        "Borrar",
+        "Effacer"
+    ),
+    CdzTaskOf(
+        "Задание %1\$d из %2\$d",
+        "Task %1\$d of %2\$d",
+        "%1\$d. feladat / %2\$d",
+        "Tarea %1\$d de %2\$d",
+        "Tâche %1\$d sur %2\$d"
+    ),
+    CdzSavedCount(
+        "Сохранено %1\$d из %2\$d",
+        "Saved %1\$d of %2\$d",
+        "Mentve: %1\$d / %2\$d",
+        "Guardadas %1\$d de %2\$d",
+        "Enregistré : %1\$d sur %2\$d"
+    ),
+    CdzUnsavedShort(
+        "Есть несохранённые ответы",
+        "Some answers are not saved",
+        "Vannak nem mentett válaszok",
+        "Hay respuestas sin guardar",
+        "Des réponses ne sont pas enregistrées"
+    ),
+    CdzAnswerLabel(
+        "Ответ",
+        "Answer",
+        "Válasz",
+        "Respuesta",
+        "Réponse"
+    ),
+    CdzMatchLinked(
+        "Связано %1\$d из %2\$d",
+        "Matched %1\$d of %2\$d",
+        "Összekapcsolva: %1\$d / %2\$d",
+        "Emparejados %1\$d de %2\$d",
+        "Associés : %1\$d sur %2\$d"
+    ),
+    CdzMatchHint(
+        "Нажмите на два элемента или протяните линию от карточки к карточке. Внутри одной колонки связать нельзя.",
+        "Tap two items or drag a line from card to card. Items in the same column cannot be linked.",
+        "Koppintson két elemre, vagy húzzon vonalat a kártyák között. Azonos oszlop elemei nem kapcsolhatók össze.",
+        "Toque dos elementos o arrastre una línea entre tarjetas. No se pueden unir elementos de la misma columna.",
+        "Touchez deux éléments ou faites glisser une ligne entre les cartes. Les éléments d’une même colonne ne peuvent pas être liés."
+    ),
+    CdzMatchEmpty(
+        "В этом задании нет вариантов для сопоставления.",
+        "This task has no matching options.",
+        "Ehhez a feladathoz nincsenek párosítható elemek.",
+        "Esta tarea no tiene opciones para emparejar.",
+        "Cette tâche n’a pas d’éléments à associer."
+    ),
+    CdzGroup(
+        "Группа %1\$d",
+        "Group %1\$d",
+        "%1\$d. csoport",
+        "Grupo %1\$d",
+        "Groupe %1\$d"
+    ),
+    CdzCell(
+        "Ячейка %1\$d",
+        "Cell %1\$d",
+        "%1\$d. cella",
+        "Celda %1\$d",
+        "Cellule %1\$d"
+    ),
+    CdzUnsupportedType(
+        "Тип «%1\$s» пока не поддерживается полностью. Можно ввести ответ текстом.",
+        "The “%1\$s” type is not fully supported yet. You can enter the answer as text.",
+        "A(z) „%1\$s” típus még nem teljesen támogatott. A válasz szövegként megadható.",
+        "El tipo «%1\$s» aún no es compatible por completo. Puede escribir la respuesta.",
+        "Le type « %1\$s » n’est pas encore entièrement pris en charge. Vous pouvez saisir la réponse."
+    ),
     WidgetUpdated(
         "Обновлено %s",
         "Updated %s",

@@ -42,7 +42,7 @@
             android:name=".app.CdzNativeActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="false"
-            android:theme="@style/Theme.MeshRanker.Login" />
+            android:theme="@style/Theme.MeshRanker" />
 
         <activity
             android:name=".app.CdzActivity"
