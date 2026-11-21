@@ -327,7 +327,12 @@ class CdzNativeActivity : AppCompatActivity() {
                 if (task.optLong("id") > 0L) out += task
             }
         }
-        return out.sortedBy { it.optInt("task_order") }
+        val sorted = out.mapIndexed { index, task -> index to task }
+            .sortedWith(compareBy({ it.second.optInt("task_order", Int.MAX_VALUE) }, { it.first }))
+            .map { it.second }
+        val orderLog = sorted.joinToString(",") { it.optInt("task_order").toString() }
+        MeshLog.log("CDZ", "порядок заданий=$orderLog")
+        return sorted
     }
 
     private fun taskId(index: Int): Long = tasks.getOrNull(index)?.optLong("id") ?: 0L
