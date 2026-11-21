@@ -57,7 +57,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         mutableStateOf(prefs.getString("theme_colors", "67E8F9,071923,102A3A") ?: "67E8F9,071923,102A3A")
     }
     var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean("haptics_enabled", true)) }
-    var cdzInApp by remember { mutableStateOf(prefs.getBoolean("cdz_in_app", true)) }
+    var cdzInApp by remember { mutableStateOf(prefs.getBoolean("cdz_in_app", false)) }
     var moskvenokLog by remember { mutableStateOf(MeshLog.enabled) }
     var showMoskvenokLog by remember { mutableStateOf(false) }
     var updateChannel by remember {

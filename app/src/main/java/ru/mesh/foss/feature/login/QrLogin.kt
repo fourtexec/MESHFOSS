@@ -434,6 +434,7 @@ fun QrLoginPanel(
     onLogin: (String) -> Unit,
     loading: Boolean = false,
     onLink: (String?) -> Unit = {},
+    restoreSession: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -558,7 +559,8 @@ fun QrLoginPanel(
     // Восстановление по сохранённым кукам: токен устарел, но куки от прошлого
     // QR-входа ещё живы — новый токен получаем без повторного QR (refresh.sh).
     // QR остаётся запасным путём, когда кук нет или МЭШ их не принял.
-    LaunchedEffect(Unit) {
+    LaunchedEffect(restoreSession) {
+        if (!restoreSession) return@LaunchedEffect
         val raw = store.authCookies
         if (raw.isNullOrBlank()) return@LaunchedEffect
         restoring = true

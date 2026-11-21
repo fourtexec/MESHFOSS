@@ -2112,18 +2112,18 @@ internal enum class Words(
         "Ouvrir dans le navigateur"
     ),
     CdzOpenInApp(
-        "ЦДЗ во встроенном окне",
-        "Digital homework in app window",
-        "Digitális házi az alkalmazásban",
-        "Tareas digitales en la app",
-        "Devoirs numériques dans l’application"
+        "Нативное решение ЦДЗ (эксперимент)",
+        "Native digital homework (experimental)",
+        "Natív digitális házi (kísérleti)",
+        "Resolución nativa de tareas digitales (experimental)",
+        "Résolution native des devoirs numériques (expérimental)"
     ),
     CdzOpenInAppHint(
-        "Открывать ЦДЗ внутри приложения с вашей сессией МЭШ. Выключите, чтобы открывать в браузере.",
-        "Open digital homework inside the app with your MESH session. Turn off to open in the browser.",
-        "Digitális házi megnyitása az alkalmazáson belül a MESH-munkamenettel. Kapcsolja ki, ha böngészőben szeretné megnyitni.",
-        "Abre las tareas digitales dentro de la app con tu sesión de MESH. Desactívalo para abrirlas en el navegador.",
-        "Ouvrir les devoirs numériques dans l’application avec votre session MESH. Désactivez pour ouvrir dans le navigateur."
+        "Решать ЦДЗ в приложении:сохранение вручную и предупреждение перед завершением. По умолчанию выключено — открывается веб-страница.",
+        "Solve digital homework in the app with manual saving and a completion warning. Off by default — opens the web page.",
+        "Digitális házi megoldása az appban kézi mentéssel és figyelmeztetéssel. Alapértelmezés szerint ki van kapcsolva — akkor a weboldal nyílik meg.",
+        "Resolver tareas digitales en la app con guardado manual y aviso antes de terminar. Desactivado por defecto: se abre la página web.",
+        "Résoudre les devoirs numériques dans l’app avec enregistrement manuel et avertissement. Désactivé par défaut — la page Web s’ouvre."
     ),
     CdzReusedLink(
         "Ссылка запуска одноразовая — получаем новую…",
@@ -2649,6 +2649,125 @@ internal enum class Words(
         "Nem sikerült bejelentkezni a cookie-kkal. Ellenőrizze, hogy érvényesek-e még.",
         "No se pudo iniciar sesión con las cookies. Compruebe que sigan siendo válidas.",
         "Impossible de se connecter avec ces cookies. Vérifiez qu’ils sont encore valides."
+    ),
+    CdzNativeTitle(
+        "ЦДЗ — нативное решение",
+        "Digital homework — native solver",
+        "Digitális házi — natív megoldás",
+        "Tarea digital — resolución nativa",
+        "Devoir numérique — résolution native"
+    ),
+    CdzNativeError(
+        "Не удалось открыть ЦДЗ нативно. Откройте его в браузере.",
+        "Could not open the digital homework natively. Open it in the browser.",
+        "Nem sikerült natívan megnyitni a digitális házit. Nyissa meg a böngészőben.",
+        "No se pudo abrir la tarea digital de forma nativa. Ábrala en el navegador.",
+        "Impossible d’ouvrir le devoir numérique nativement. Ouvrez-le dans le navigateur."
+    ),
+    CdzFinishTitle(
+        "Завершить попытку?",
+        "Finish the attempt?",
+        "Befejezni a próbálkozást?",
+        "¿Finalizar el intento?",
+        "Terminer la tentative ?"
+    ),
+    CdzFinishConfirm(
+        "Сохранено на сервере %1\$d из %2\$d заданий.",
+        "Saved on the server: %1\$d of %2\$d tasks.",
+        "A szerveren mentve: %1\$d / %2\$d feladat.",
+        "Guardado en el servidor: %1\$d de %2\$d tareas.",
+        "Enregistré sur le serveur : %1\$d tâches sur %2\$d."
+    ),
+    CdzFinishWarning(
+        "Решено только %1\$d из %2\$d заданий.",
+        "Only %1\$d of %2\$d tasks are solved.",
+        "Csak %1\$d / %2\$d feladat van megoldva.",
+        "Solo %1\$d de %2\$d tareas están resueltas.",
+        "Seules %1\$d tâches sur %2\$d sont résolues."
+    ),
+    CdzFinishUnsaved(
+        "Есть ответы, которые вы не сохраняли. После завершения попытку нельзя продолжить.",
+        "There are answers you did not save. The attempt cannot be continued after finishing.",
+        "Vannak nem mentett válaszok. A próbálkozás nem folytatható a befejezés után.",
+        "Hay respuestas sin guardar. El intento no se puede continuar después de finalizar.",
+        "Des réponses ne sont pas enregistrées. La tentative ne pourra pas être reprise."
+    ),
+    CdzFinishAnyway(
+        "Всё равно завершить",
+        "Finish anyway",
+        "Mégis befejezni",
+        "Finalizar de todos modos",
+        "Terminer quand même"
+    ),
+    CdzLeaveTitle(
+        "Уйти, не сохранив?",
+        "Leave without saving?",
+        "Kilépés mentés nélkül?",
+        "¿Salir sin guardar?",
+        "Quitter sans enregistrer ?"
+    ),
+    CdzLeaveMessage(
+        "Несохранённые ответы останутся только в этом приложении (без отправки на сервер).",
+        "Unsaved answers will stay only in this app (not sent to the server).",
+        "A nem mentett válaszok csak ebben az alkalmazásban maradnak (nem kerülnek a szerverre).",
+        "Las respuestas sin guardar se quedarán solo en la app (no se envían al servidor).",
+        "Les réponses non enregistrées resteront dans l’app (non envoyées au serveur)."
+    ),
+    CdzLeaveAnyway(
+        "Уйти",
+        "Leave",
+        "Kilépés",
+        "Salir",
+        "Quitter"
+    ),
+    CdzResultTitle(
+        "Попытка завершена",
+        "Attempt finished",
+        "Próbálkozás befejezve",
+        "Intento finalizado",
+        "Tentative terminée"
+    ),
+    CdzResultDone(
+        "Ответы отправлены. Результат появится в дневнике.",
+        "Answers submitted. The result will appear in the diary.",
+        "A válaszok elküldve. Az eredmény a naplóban jelenik meg.",
+        "Respuestas enviadas. El resultado aparecerá en el diario.",
+        "Réponses envoyées. Le résultat apparaîtra dans le carnet."
+    ),
+    CdzResultScore(
+        "Баллы: %1\$d из %2\$d",
+        "Score: %1\$d of %2\$d",
+        "Pontszám: %1\$d / %2\$d",
+        "Puntuación: %1\$d de %2\$d",
+        "Score : %1\$d sur %2\$d"
+    ),
+    CdzAnswerEmpty(
+        "Выберите ответ или введите текст",
+        "Choose an answer or enter text",
+        "Válasszon választ vagy írjon szöveget",
+        "Elija una respuesta o escriba texto",
+        "Choisissez une réponse ou saisissez du texte"
+    ),
+    CdzSaved(
+        "Ответ сохранён на сервере",
+        "Answer saved on the server",
+        "A válasz mentve a szerveren",
+        "Respuesta guardada en el servidor",
+        "Réponse enregistrée sur le serveur"
+    ),
+    Option(
+        "Вариант",
+        "Option",
+        "Opció",
+        "Opción",
+        "Option"
+    ),
+    YourAnswer(
+        "Ваш ответ",
+        "Your answer",
+        "Az Ön válasza",
+        "Su respuesta",
+        "Votre réponse"
     ),
     WidgetUpdated(
         "Обновлено %s",

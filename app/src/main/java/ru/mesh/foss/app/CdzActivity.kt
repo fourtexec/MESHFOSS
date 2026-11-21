@@ -9,6 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.view.Menu
 import android.view.MenuItem
 import android.webkit.CookieManager
@@ -54,7 +57,16 @@ class CdzActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_login)
+        setContentView(R.layout.activity_cdz_web)
+        // status bar не должна «съедать» верх страницы ЦДЗ.
+        val inset = findViewById<View>(R.id.cdzTopInset)
+        ViewCompat.setOnApplyWindowInsetsListener(inset) { view, windows ->
+            val top = windows.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            view.layoutParams.height = top
+            view.setLayoutParams(view.layoutParams)
+            windows
+        }
+        ViewCompat.requestApplyInsets(inset)
         supportActionBar?.apply {
             setDisplayHomeAsUpEnabled(true)
             title = intent.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: Words.CdzWindowTitle.text

@@ -265,7 +265,8 @@ fun AppRoot(
     }
 
     /** Экран входа без очистки текущего аккаунта — для добавления ещё одного. */
-    fun showLogin() {
+    fun showLogin(addAccount: Boolean = false) {
+        addingAccount = addAccount
         screen = "login"
         bootError = null
         loginError = null
@@ -447,6 +448,7 @@ fun AppRoot(
                             )
                         }
                         bootError = null
+                        addingAccount = false
                         screen = "main"
                     } catch (e: CancellationException) {
                         throw e
@@ -459,7 +461,8 @@ fun AppRoot(
             },
             loading = loginLoading,
             error = loginError,
-            onLoginCookies = { raw -> loginWithCookies(raw) }
+            onLoginCookies = { raw -> loginWithCookies(raw) },
+            restoreSession = !addingAccount
         )
 
         booting -> BootScreen()
@@ -478,7 +481,7 @@ fun AppRoot(
             studentId = activeStudentId,
             registry = registry,
             onLogout = { logout() },
-            onAddAccount = { showLogin() },
+            onAddAccount = { showLogin(addAccount = true) },
             onSwitchAccount = onSwitchAccount
         )
     }

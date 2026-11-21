@@ -11,4 +11,7 @@
     <string name="widget_status_name">MESHFOSS - óra most</string>
     <string name="widget_schedule_name">MESHFOSS - órarend</string>
     <string name="widget_homework_name">MESHFOSS - házi feladatok</string>
+    <string name="cdz_native_status">Megoldva és mentve: %1$d / %2$d</string>
+    <string name="cdz_native_save">Mentés</string>
+    <string name="cdz_native_finish">Befejezés</string>
 </resources>

@@ -76,7 +76,7 @@ class AccountRegistry(context: Context) {
 
     /** Первый вход после обновления: легаси-данные остаются активными. */
     fun ensureLegacy() {
-        if (accounts().isEmpty() && prefs.getString(KEY_ACTIVE, null) == null) {
+        if (accounts().isEmpty()) {
             val legacy = org.json.JSONArray().put(
                 org.json.JSONObject().put("id", LEGACY).put("label", Words.Account.text)
             )

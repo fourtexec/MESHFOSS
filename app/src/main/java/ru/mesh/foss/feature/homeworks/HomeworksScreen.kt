@@ -3,6 +3,7 @@
 package ru.mesh.foss.feature.homeworks
 
 import ru.mesh.foss.app.CdzActivity
+import ru.mesh.foss.app.CdzNativeActivity
 
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
@@ -159,8 +160,10 @@ fun HomeworksScreen(
                     client.launchHomeworkMaterial(homeworkEntryId, materialId)
                 }
                 cdzReturnEntry = homeworkEntryId
-                if (prefs.getBoolean("cdz_in_app", true)) {
-                    context.startActivity(CdzActivity.intent(context, url, material.optString("title")))
+                if (prefs.getBoolean("cdz_in_app", false)) {
+                    context.startActivity(
+                        CdzNativeActivity.intent(context, url, material.optString("title"))
+                    )
                 } else {
                     openUrl(uriHandler, url, context)
                 }

@@ -37,6 +37,13 @@
             android:theme="@style/Theme.MeshRanker.Login" />
 
         <!-- Прохождение ЦДЗ: WebView с cookie сессии МЭШ (docs/mesh-cdz-api.md §7.2) -->
+        <!-- Нативное решение ЦДЗ (экспериментальная настройка) -->
+        <activity
+            android:name=".app.CdzNativeActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:exported="false"
+            android:theme="@style/Theme.MeshRanker.Login" />
+
         <activity
             android:name=".app.CdzActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
