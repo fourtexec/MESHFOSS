@@ -113,11 +113,10 @@ jobs:
         run: npx --yes --package=@tauri-apps/cli@2.12.6 tauri build --bundles deb,appimage --config "$RUNNER_TEMP/mesh-version.json"
       - name: Verify package payloads
         run: |
-          dpkg-deb --contents target/release/bundle/deb/*.deb > "$RUNNER_TEMP/mesh-files"
-          grep -q '/usr/bin/mesh-ranker$' "$RUNNER_TEMP/mesh-files"
+          dpkg-deb -x target/release/bundle/deb/*.deb "$RUNNER_TEMP/mesh-installed"
+          test -x "$RUNNER_TEMP/mesh-installed/usr/bin/mesh-ranker"
           target/release/bundle/appimage/*.AppImage --appimage-extract >/dev/null
           test -x squashfs-root/AppRun
-          dpkg-deb -x target/release/bundle/deb/*.deb "$RUNNER_TEMP/mesh-installed"
           dbus-run-session -- xvfb-run -a -s '-screen 0 1400x950x24' python3 tests/desktop_smoke.py "$RUNNER_TEMP/mesh-installed/usr/bin/mesh-ranker"
           dbus-run-session -- xvfb-run -a -s '-screen 0 1400x950x24' python3 tests/desktop_smoke.py squashfs-root/AppRun
       - name: Upload packages
