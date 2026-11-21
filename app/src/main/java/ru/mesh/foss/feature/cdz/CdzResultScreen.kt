@@ -307,11 +307,30 @@ private fun ResultTaskCard(
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = Words.YourAnswer.text,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = Words.YourAnswer.text,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (verdict != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = verdictColor.copy(alpha = 0.14f),
+                            contentColor = verdictColor,
+                        ) {
+                            Text(
+                                text = verdict,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
                 ResultUserAnswer(task)
             }
             if (!awaitingReview &&
@@ -334,19 +353,6 @@ private fun ResultTaskCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-            }
-            if (verdict != null) {
-                Surface(
-                    shape = CircleShape,
-                    color = verdictColor.copy(alpha = 0.14f),
-                    contentColor = verdictColor,
-                ) {
-                    Text(
-                        text = verdict,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
                 }
             }
         }
