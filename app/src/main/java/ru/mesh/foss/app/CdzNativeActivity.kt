@@ -18,6 +18,7 @@ import android.text.method.LinkMovementMethod
 import android.view.View
 import android.webkit.CookieManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.CheckBox
 import android.widget.GridView
 import android.widget.LinearLayout
@@ -335,8 +336,7 @@ class CdzNativeActivity : AppCompatActivity() {
 
     private fun isAnswered(index: Int): Boolean {
         val answer = draft.optJSONObject(taskId(index).toString()) ?: return false
-        return answer.has("id") || answer.has("ids") || answer.has("string") ||
-            answer.has("number") || answer.has("match")
+        return answer.length() > 1
     }
 
     private fun isDone(index: Int): Boolean = isSaved(index) && isAnswered(index)
@@ -417,7 +417,14 @@ class CdzNativeActivity : AppCompatActivity() {
         val chosen = draft.optJSONObject(answerKey) ?: JSONObject()
         when (type) {
             "answer/single", "answer/multiple" -> renderOptions(answer, chosen, type, answerKey)
-            else -> renderTextAnswer(chosen, answerKey)
+            "answer/match" -> renderMatch(answer, chosen, answerKey)
+            "answer/number" -> renderNumber(chosen, answerKey)
+            "answer/number/interval" -> renderNumberInterval(chosen, answerKey)
+            "answer/string", "answer/free" -> renderTextAnswer(chosen, answerKey, type)
+            "answer/order" -> renderOrder(answer, chosen, answerKey)
+            "answer/groups" -> renderGroups(answer, chosen, answerKey)
+            "answer/grid" -> renderGrid(answer, chosen, answerKey)
+            else -> renderTextAnswer(chosen, answerKey, type)
         }
         scroll.scrollTo(0, 0)
         renderNavState()
@@ -474,20 +481,28 @@ class CdzNativeActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderTextAnswer(chosen: JSONObject, answerKey: String) {
+    private fun renderTextAnswer(chosen: JSONObject, answerKey: String, type: String) {
         val input = android.widget.EditText(this)
-        input.setText(chosen.optString("string"))
+        val values = chosen.optJSONArray("string")
+        val initial = if (values != null && values.length() > 0) {
+            (0 until values.length()).joinToString(", ") { values.optString(it) }
+        } else chosen.optString("string")
+        input.setText(initial)
         input.setTextIsSelectable(true)
         input.hint = Words.YourAnswer.text
         input.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
-                val value = s?.toString().orEmpty()
-                val answer = JSONObject()
-                    .put("@answer_type", "answer/string")
-                    .put("string", JSONArray().put(value))
-                    .put("caseSensitive", false)
+                val value = s?.toString().orEmpty().trim()
+                val answer = if (type == "answer/free") {
+                    JSONObject().put("@answer_type", type).put("string", value).put("files", JSONArray())
+                } else {
+                    JSONObject()
+                        .put("@answer_type", type)
+                        .put("string", JSONArray().put(value))
+                        .put("caseSensitive", false)
+                }
                 if (value.isBlank()) draft.remove(answerKey) else draft.put(answerKey, answer)
                 keepDraft()
                 saved.remove(current)
@@ -496,6 +511,200 @@ class CdzNativeActivity : AppCompatActivity() {
         })
         content.addView(input)
     }
+
+    private fun optionView(option: JSONObject, onClick: () -> Unit): TextView {
+        val view = TextView(this)
+        val text = option.optString("text")
+        val parts = mutableListOf<String>()
+        if (text.isNotBlank()) parts += text
+        val attachments = option.optJSONArray("content")
+        if (attachments != null) {
+            for (i in 0 until attachments.length()) {
+                val a = attachments.optJSONObject(i) ?: continue
+                if (a.optString("type") == "content/atomic" && a.optString("atomic_type") == "image") {
+                    parts += "🖼 " + a.optString("description").ifBlank { a.optString("atomic_id") }
+                }
+            }
+        }
+        view.text = parts.joinToString("\n").ifBlank { Words.Option.text }
+        view.setTextIsSelectable(true)
+        view.setBackgroundResource(android.R.drawable.btn_default)
+        view.setPadding(12, 12, 12, 12)
+        view.setOnClickListener { onClick() }
+        return view
+    }
+
+    /** answer/match: source → target; картинки вариантов показываем в тексте (~MD §7.2). */
+    private fun renderMatch(answer: JSONObject, chosen: JSONObject, answerKey: String) {
+        val options = answer.optJSONArray("options") ?: return
+        val sources = mutableListOf<JSONObject>()
+        val targets = mutableListOf<JSONObject>()
+        for (i in 0 until options.length()) {
+            val option = options.optJSONObject(i) ?: continue
+            when (option.optString("type")) {
+                "option_type/match/source" -> sources += option
+                "option_type/match/target" -> targets += option
+            }
+        }
+        val currentMatch = chosen.optJSONObject("match") ?: JSONObject()
+        sources.forEach { source ->
+            val sid = source.optString("id")
+            val selected = currentMatch.optJSONArray(sid)?.optString(0).orEmpty()
+            content.addView(optionView(source) {
+                val next = targets.firstOrNull { it.optString("id") == selected }
+                val index = targets.indexOf(next).let { if (it < 0) -1 else it }
+                AlertDialog.Builder(this)
+                    .setTitle(source.optString("text").ifBlank { Words.Option.text })
+                    .setSingleChoiceItems(
+                        targets.map { it.optString("text").ifBlank { Words.Option.text } }.toTypedArray(),
+                        index
+                    ) { dialog, which ->
+                        val map = (draft.optJSONObject(answerKey)?.optJSONObject("match")
+                            ?: chosen.optJSONObject("match") ?: JSONObject())
+                        val target = targets[which].optString("id")
+                        map.put(sid, JSONArray().put(target))
+                        val result = JSONObject()
+                            .put("@answer_type", "answer/match")
+                            .put("match", map)
+                        draft.put(answerKey, result)
+                        keepDraft()
+                        saved.remove(current)
+                        renderNavState()
+                        dialog.dismiss()
+                        renderTask()
+                    }
+                    .setNegativeButton(Words.Close.text, null)
+                    .show()
+            })
+            val target = targets.firstOrNull { it.optString("id") == selected }
+            if (target != null) {
+                val label = TextView(this)
+                label.text = "→ " + target.optString("text")
+                label.setTextIsSelectable(true)
+                content.addView(label)
+            }
+        }
+    }
+
+    private fun renderNumber(chosen: JSONObject, answerKey: String) {
+        val input = android.widget.EditText(this)
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        val arr = chosen.optJSONArray("number")
+        input.setText(if (arr != null && arr.length() > 0) arr.optString(0) else "")
+        input.hint = Words.YourAnswer.text
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+            override fun onTextChanged(s: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val value = s?.toString().orEmpty().trim()
+                if (value.isBlank()) draft.remove(answerKey)
+                else draft.put(answerKey, JSONObject().put("@answer_type", "answer/number").put("number", JSONArray().put(value)))
+                keepDraft(); saved.remove(current); renderNavState()
+            }
+        })
+        content.addView(input)
+    }
+
+    private fun renderNumberInterval(chosen: JSONObject, answerKey: String) {
+        val input = android.widget.EditText(this)
+        input.inputType = android.text.InputType.TYPE_CLASS_TEXT
+        input.setText(chosen.optString("number"))
+        input.hint = Words.YourAnswer.text
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+            override fun onTextChanged(s: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val value = s?.toString().orEmpty().trim()
+                if (value.isBlank()) draft.remove(answerKey)
+                else draft.put(answerKey, JSONObject().put("@answer_type", "answer/number/interval").put("number", value))
+                keepDraft(); saved.remove(current); renderNavState()
+            }
+        })
+        content.addView(input)
+    }
+
+    private fun renderOrder(answer: JSONObject, chosen: JSONObject, answerKey: String) {
+        val options = answer.optJSONArray("options") ?: return
+        val selected = (chosen.optJSONArray("ids_order")?.let { arr ->
+            (0 until arr.length()).map { arr.optString(it) }
+        } ?: (0 until options.length()).map { options.optJSONObject(it)?.optString("id").orEmpty() }).toMutableList()
+        fun commit() {
+            draft.put(answerKey, JSONObject().put("@answer_type", "answer/order").put("ids_order", selected.toJsonArray()))
+            keepDraft(); saved.remove(current); renderNavState(); renderTask()
+        }
+        for (i in selected.indices) {
+            val option = (0 until options.length()).mapNotNull { options.optJSONObject(it) }
+                .firstOrNull { it.optString("id") == selected[i] } ?: continue
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            row.addView(optionView(option) { if (i > 0) { val t = selected[i-1]; selected[i-1]=selected[i]; selected[i]=t; commit() } })
+            row.addView(Button(this).apply { text = "↓"; setOnClickListener { if (i < selected.lastIndex) { val t = selected[i+1]; selected[i+1]=selected[i]; selected[i]=t; commit() } } })
+            content.addView(row)
+        }
+    }
+
+    private fun renderGroups(answer: JSONObject, chosen: JSONObject, answerKey: String) {
+        val options = answer.optJSONArray("options") ?: return
+        val groups = mutableMapOf<String, MutableList<String>>()
+        val chosenGroups = chosen.optJSONArray("groups")
+        if (chosenGroups != null) {
+            for (i in 0 until chosenGroups.length()) {
+                val g = chosenGroups.optJSONObject(i) ?: continue
+                val id = g.optString("group_id")
+                val ids = g.optJSONArray("options_ids") ?: continue
+                groups[id] = (0 until ids.length()).map { ids.optString(it) }.toMutableList()
+            }
+        }
+        val groupIds = (0 until options.length()).mapNotNull { options.optJSONObject(it)?.optString("group_id")?.takeIf(String::isNotBlank) }.distinct()
+        groupIds.forEach { gid ->
+            content.addView(TextView(this).apply { text = gid; textSize = 16f; setTextIsSelectable(true) })
+            options.arrayObjects().filter { it.optString("group_id") == gid }.forEach { option ->
+                val oid = option.optString("id")
+                val selected = groups[gid]?.contains(oid) == true
+                val box = CheckBox(this)
+                box.text = option.optString("text").ifBlank { Words.Option.text }
+                box.isChecked = selected
+                box.setTextIsSelectable(true)
+                box.setOnCheckedChangeListener { _, checked ->
+                    val list = groups.getOrPut(gid) { mutableListOf() }
+                    if (checked) list.add(oid) else list.remove(oid)
+                    val out = JSONArray()
+                    groups.forEach { (key, values) ->
+                        out.put(JSONObject().put("group_id", key).put("options_ids", values.toJsonArray()))
+                    }
+                    draft.put(answerKey, JSONObject().put("@answer_type", "answer/groups").put("groups", out))
+                    keepDraft(); saved.remove(current); renderNavState()
+                }
+                content.addView(box)
+            }
+        }
+    }
+
+    private fun renderGrid(answer: JSONObject, chosen: JSONObject, answerKey: String) {
+        val cells = chosen.optJSONArray("cells")
+        val count = maxOf(3, (cells?.length() ?: 0) + 1)
+        for (i in 0 until count) {
+            val input = EditText(this)
+            input.setText(cells?.optJSONObject(i)?.optString("answer").orEmpty())
+            input.hint = Words.YourAnswer.text
+            input.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+                override fun onTextChanged(s: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    val out = JSONArray()
+                    for (j in 0 until content.childCount) {
+                        val child = content.getChildAt(j)
+                        if (child is EditText) out.put(JSONObject().put("input_type", "MANUAL_INPUT").put("answer", child.text.toString()))
+                    }
+                    draft.put(answerKey, JSONObject().put("@answer_type", "answer/grid").put("cells", out))
+                    keepDraft(); saved.remove(current); renderNavState()
+                }
+            })
+            content.addView(input)
+        }
+    }
+
+    private fun JSONArray.arrayObjects(): List<JSONObject> =
+        (0 until length()).mapNotNull { optJSONObject(it) }
 
     private fun saveCurrent() {
         val answer = draft.optJSONObject(taskId(current).toString())
