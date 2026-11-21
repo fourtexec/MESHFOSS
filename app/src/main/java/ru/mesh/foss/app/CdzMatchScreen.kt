@@ -88,6 +88,7 @@ fun CdzMatchScreen(
     var drag by remember { mutableStateOf<Pair<Offset, Offset>?>(null) }
     val nodeCenters = remember { mutableStateMapOf<String, Offset>() }
     val palette = PairColors
+    val dragColor = MaterialTheme.colorScheme.primary
 
     fun commit(first: Pair<Boolean, String>, second: Pair<Boolean, String>) {
         val (sourceId, targetId) = if (first.first) first.second to second.second
@@ -134,7 +135,7 @@ fun CdzMatchScreen(
                         moveTo(from.x, from.y)
                         quadraticBezierTo((from.x + to.x) / 2, (from.y + to.y) / 2, to.x, to.y)
                     }
-                    drawPath(path, MaterialTheme.colorScheme.primary, style = Stroke(width = 4f))
+                    drawPath(path, dragColor, style = Stroke(width = 4f))
                 }
             }
             Row(
