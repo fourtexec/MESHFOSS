@@ -248,6 +248,35 @@ class CdzNativeClient(
         )
         json
     }
+    /** История попыток: assignments/my -> context/{id}/result (docs §5). */
+    suspend fun attemptHistory(challenge: String): JSONObject = withContext(Dispatchers.IO) {
+        setChallengeId(challenge)
+        val mine = request("GET", "$SECURE/challenge/$challenge/assignments/my", null)
+        val mineJson = runCatching { JSONObject(mine.body) }.getOrDefault(JSONObject())
+        val contextId = mineJson.optJSONObject("assignment")?.optLong("assignment_context_id") ?: 0L
+        MeshLog.log("CDZ", "history: assignments/my HTTP=${mine.status} context=$contextId")
+        val attempts = JSONArray()
+        if (contextId > 0L) {
+            val history = request(
+                "GET",
+                "$SECURE/challenge/assignment/context/$contextId/result",
+                null
+            )
+            val historyJson = runCatching { JSONObject(history.body) }.getOrDefault(JSONObject())
+            val results = historyJson.optJSONArray("user_results")
+            if (results != null) {
+                for (i in 0 until results.length()) {
+                    val list = results.optJSONObject(i)?.optJSONArray("attempts") ?: continue
+                    for (j in 0 until list.length()) {
+                        val item = list.optJSONObject(j) ?: continue
+                        attempts.put(item)
+                    }
+                }
+            }
+            MeshLog.log("CDZ", "history: попыток=${attempts.length()}")
+        }
+        mineJson.put("attempts", attempts)
+    }
     /** Старт или продолжение попытки — один и тот же вызов (docs §6.1). */
     suspend fun startAttempt(challenge: String): JSONObject = withContext(Dispatchers.IO) {
         setChallengeId(challenge)

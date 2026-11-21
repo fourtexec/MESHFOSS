@@ -2650,6 +2650,76 @@ internal enum class Words(
         "No se pudo iniciar sesión con las cookies. Compruebe que sigan siendo válidas.",
         "Impossible de se connecter avec ces cookies. Vérifiez qu’ils sont encore valides."
     ),
+    CdzAttemptTitle(
+        "Попытка ЦДЗ",
+        "Digital homework attempt",
+        "Digitális házi próbálkozás",
+        "Intento de tarea digital",
+        "Tentative de devoir numérique"
+    ),
+    CdzStartAttempt(
+        "Начать попытку",
+        "Start attempt",
+        "Próbálkozás indítása",
+        "Iniciar intento",
+        "Démarrer la tentative"
+    ),
+    CdzStartNewAttempt(
+        "Начать новую попытку",
+        "Start a new attempt",
+        "Új próbálkozás indítása",
+        "Iniciar un nuevo intento",
+        "Démarrer une nouvelle tentative"
+    ),
+    CdzContinueAttempt(
+        "Продолжить попытку %1\$s",
+        "Continue attempt %1\$s",
+        "Próbálkozás folytatása: %1\$s",
+        "Continuar intento %1\$s",
+        "Continuer la tentative %1\$s"
+    ),
+    CdzAttemptHistory(
+        "История попыток",
+        "Attempt history",
+        "Próbálkozások története",
+        "Historial de intentos",
+        "Historique des tentatives"
+    ),
+    CdzStartAnyway(
+        "Начать",
+        "Start",
+        "Indítás",
+        "Iniciar",
+        "Démarrer"
+    ),
+    CdzFirstAttemptWarning(
+        "Сервер ещё не видел ни одной попытки. Начать первую?",
+        "No attempts yet. Start the first one?",
+        "Még nincs próbálkozás. Indítani az elsőt?",
+        "Aún no hay intentos. ¿Iniciar el primero?",
+        "Aucune tentative. Démarrer la première ?"
+    ),
+    CdzNewAttemptWarning(
+        "Уже начато попыток: %1\$d. Новая попытка не отменит предыдущие. Продолжить существующую — безопаснее.",
+        "There are already %1\$d attempts. A new one will not cancel the previous ones. Continuing an existing attempt is safer.",
+        "Már %1\$d próbálkozás van. Az új nem szünteti meg az előzőket. A meglévő folytatása biztonságosabb.",
+        "Ya hay %1\$d intentos. Uno nuevo no cancela los anteriores. Continuar uno existente es más seguro.",
+        "Il existe déjà %1\$d tentatives. Une nouvelle n’annule pas les précédentes. Continuer une tentative existante est plus sûr."
+    ),
+    CdzNoAttempts(
+        "Завершённых попыток пока нет",
+        "No completed attempts yet",
+        "Még nincs befejezett próbálkozás",
+        "Aún no hay intentos completados",
+        "Aucune tentative terminée"
+    ),
+    CdzAttemptRow(
+        "№%1\$d · %2\$s · %3\$d/%4\$d",
+        "#%1\$d · %2\$s · %3\$d/%4\$d",
+        "#%1\$d · %2\$s · %3\$d/%4\$d",
+        "№%1\$d · %2\$s · %3\$d/%4\$d",
+        "n°%1\$d · %2\$s · %3\$d/%4\$d"
+    ),
     CdzNativeTitle(
         "ЦДЗ — нативное решение",
         "Digital homework — native solver",

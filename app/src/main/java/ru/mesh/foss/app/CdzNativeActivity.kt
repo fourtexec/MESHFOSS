@@ -151,16 +151,11 @@ class CdzNativeActivity : AppCompatActivity() {
     }
 
     private fun startNative(finalUrl: String, challengeId: String) {
-        // Клиент уже создан с pageUrl=activity_url и параметрами лаунчера.
         challenge = challengeId
         scope.launch {
             progress.visibility = View.VISIBLE
             try {
                 val api = client ?: return@launch
-                val info = withContext(Dispatchers.IO) { api.checkAttempts(challenge) }
-                val attemptCount = info.optInt("number_of_attempt")
-                val lastAttempt = info.optString("last_attempt_id")
-                MeshLog.log("CDZ", "native: info number_of_attempt=$attemptCount last=$lastAttempt")
                 val refreshed = withContext(Dispatchers.IO) { api.refreshSession() }
                 MeshLog.log("CDZ", "native: refresh=$refreshed")
                 if (!refreshed) {
@@ -168,18 +163,96 @@ class CdzNativeActivity : AppCompatActivity() {
                     Toast.makeText(this@CdzNativeActivity, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
                     return@launch
                 }
+                val info = withContext(Dispatchers.IO) { api.checkAttempts(challenge) }
+                val count = info.optInt("number_of_attempt")
+                val last = info.optString("last_attempt_id").takeIf { it.isNotBlank() && it != "null" }
+                showAttemptChooser(count, last)
+            } catch (error: Exception) {
+                MeshLog.error("CDZ", error)
+                Toast.makeText(this@CdzNativeActivity, error.message ?: error.javaClass.simpleName, Toast.LENGTH_LONG).show()
+            } finally {
+                progress.visibility = View.GONE
+            }
+        }
+    }
+
+    /** Никакого автостарта: пользователь сам выбирает «начать» или «продолжить». */
+    private fun showAttemptChooser(count: Int, lastAttempt: String?) {
+        val labels = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+        if (lastAttempt != null) {
+            labels += Words.CdzContinueAttempt(lastAttempt)
+            actions += { beginAttempt() }
+        }
+        labels += if (count > 0) Words.CdzStartNewAttempt.text else Words.CdzStartAttempt.text
+        actions += { confirmNewAttempt(count) }
+        labels += Words.CdzAttemptHistory.text
+        actions += { showHistory() }
+        AlertDialog.Builder(this)
+            .setTitle(Words.CdzAttemptTitle.text)
+            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
+            .setNegativeButton(Words.Close.text, null)
+            .show()
+    }
+
+    private fun confirmNewAttempt(count: Int) {
+        AlertDialog.Builder(this)
+            .setTitle(Words.CdzStartAttempt.text)
+            .setMessage(if (count > 0) Words.CdzNewAttemptWarning(count) else Words.CdzFirstAttemptWarning.text)
+            .setPositiveButton(Words.CdzStartAnyway.text) { _, _ -> beginAttempt() }
+            .setNegativeButton(Words.Cancel.text, null)
+            .show()
+    }
+
+    private fun beginAttempt() {
+        scope.launch {
+            progress.visibility = View.VISIBLE
+            try {
+                val api = client ?: return@launch
                 val attempt = withContext(Dispatchers.IO) { api.startAttempt(challenge) }
                 attemptId = attempt.optLong("challenge_attempt_id")
-                MeshLog.log("CDZ", "native: attempt=$attemptId keys=${attempt.keys()}")
+                MeshLog.log("CDZ", "start-attempt выбран вручную: attempt=$attemptId")
                 tasks = readTasks(attempt)
                 MeshLog.log("CDZ", "native: заданий=${tasks.size}")
-                if (tasks.isEmpty()) {
-                    MeshLog.log("CDZ", "native: пустой список заданий: ${attempt.toString().take(300)}")
-                    throw IllegalStateException("no tasks")
-                }
+                if (tasks.isEmpty()) throw IllegalStateException("no tasks")
                 draft = restoreDraft()
                 saved = restoreSaved()
                 render()
+            } catch (error: Exception) {
+                MeshLog.error("CDZ", error)
+                Toast.makeText(this@CdzNativeActivity, error.message ?: error.javaClass.simpleName, Toast.LENGTH_LONG).show()
+            } finally {
+                progress.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun showHistory() {
+        scope.launch {
+            progress.visibility = View.VISIBLE
+            try {
+                val api = client ?: return@launch
+                val history = withContext(Dispatchers.IO) { api.attemptHistory(challenge) }
+                val attempts = history.optJSONArray("attempts")
+                val lines = mutableListOf<String>()
+                if (attempts == null || attempts.length() == 0) {
+                    lines += Words.CdzNoAttempts.text
+                } else {
+                    for (i in 0 until attempts.length()) {
+                        val item = attempts.optJSONObject(i) ?: continue
+                        lines += Words.CdzAttemptRow(
+                            item.optInt("attempt_num"),
+                            item.optString("start_attempt").take(16),
+                            item.optInt("got_score"),
+                            item.optInt("max_score")
+                        )
+                    }
+                }
+                AlertDialog.Builder(this@CdzNativeActivity)
+                    .setTitle(Words.CdzAttemptHistory.text)
+                    .setItems(lines.toTypedArray(), null)
+                    .setPositiveButton(Words.Close.text, null)
+                    .show()
             } catch (error: Exception) {
                 MeshLog.error("CDZ", error)
                 Toast.makeText(this@CdzNativeActivity, error.message ?: error.javaClass.simpleName, Toast.LENGTH_LONG).show()
