@@ -1010,6 +1010,7 @@ fun LoginScreen(
     var experimental by remember { mutableStateOf(false) }
     var qrLink by remember { mutableStateOf<String?>(null) }
     var cookieJson by remember { mutableStateOf("") }
+    val context = LocalContext.current
     val cookieFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             runCatching {
@@ -1018,7 +1019,6 @@ fun LoginScreen(
         }
     }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val context = LocalContext.current
     val url = MeshCore.loginUrl()
     val webLogin = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
