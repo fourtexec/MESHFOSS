@@ -120,24 +120,20 @@ class CdzNativeClient(
         }
     }
 
-    /** Первый токен uchebnik можно получить по cookie без Bearer (docs §13.7). */
+    /**
+     * Отдельный refresh не нужен: у приложения уже есть токен и cookie МЭШ.
+     * Возвращаем true, если токен есть — запросы идут с ним напрямую (как в HAR,
+     * где Authorization — это тот же school-токен с claims usr/prf).
+     */
     suspend fun refreshSession() = withContext(Dispatchers.IO) {
-        val result = request("POST", "$BASE/acl/api/session/v2/refresh", "null")
-        MeshLog.log("CDZ", "refresh: HTTP ${result.status}")
-        runCatching {
-            val json = JSONObject(result.body)
-            json.optString("accessTokenEom").takeIf { it.isNotBlank() }?.let { accessToken = it }
-            json.optString("accessTokenAupd").takeIf { it.isNotBlank() }?.let { jar["aupd_token"] = it }
-            json.optString("profileId").takeIf { it.isNotBlank() }?.let { jar["Session-Eom-Profile"] = it }
+        if (accessToken.isBlank()) {
+            accessToken = jar["aupd_token"].orEmpty()
         }
-        result.status in 200..299
+        val tokenState = if (accessToken.isBlank()) "нет" else "есть"
+        MeshLog.log("CDZ", "токен для CDZ: $tokenState")
+        accessToken.isNotBlank()
     }
 
-    /**
-     * Нативный проход по цепочке лаунчера school.mos.ru -> uchebnik.mos.ru.
-     * HttpURLConnection не идёт за редиректами сам: мы читаем Location/тело,
-     * сохраняем Set-Cookie и повторяем запрос с обновлённым jar'ом.
-     */
     /**
      * Лаунчер уже содержит activity_url и все параметры запуска (§4.1 дока):
      * context, registration, actor, role, endpoint, fetch. Собираем страницу
