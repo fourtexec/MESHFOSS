@@ -156,6 +156,24 @@ class CdzTableTest {
     }
 
     @Test
+    fun `group headers are marked separately from items`() {
+        val group = JSONObject()
+            .put("id", "group-1")
+            .put("text", "Инфузории")
+            .put("type", "option_type/group")
+        val item = JSONObject()
+            .put("id", "item-1")
+            .put("text", "Питается бактериями")
+            .put("type", "option_type/default")
+        val parsed = parseOptions(
+            JSONObject().put("options", JSONArray().put(group).put(item))
+        )
+        assertTrue(parsed[0].isGroup)
+        assertFalse(parsed[1].isGroup)
+        assertEquals("Инфузории", parsed[0].text)
+    }
+
+    @Test
     fun `gap match text uses shared options for every position`() {
         val option = JSONObject().put("id", "option-1").put("text", "топливо")
         val position = JSONObject()

@@ -305,10 +305,13 @@ private fun GroupsAnswer(
     onChanged: (JSONObject) -> Unit,
 ) {
     val options = remember(task.answer) { parseOptions(task.answer) }
-    val groupIds = remember(options) {
-        options.map { it.groupId }.filter { it.isNotBlank() }.distinct()
+    val groupHeaders = remember(options) { options.filter { it.isGroup } }
+    val itemOptions = remember(options) { options.filterNot { it.isGroup } }
+    val groups = if (groupHeaders.isEmpty()) {
+        listOf("" to "")
+    } else {
+        groupHeaders.map { it.id to it.label() }
     }
-    val effectiveGroups = if (groupIds.isEmpty()) listOf("") else groupIds
 
     val initial = remember(task.id) {
         val selected = LinkedHashMap<String, MutableSet<String>>()
@@ -349,20 +352,17 @@ private fun GroupsAnswer(
         )
     }
 
-    effectiveGroups.forEachIndexed { groupIndex, groupId ->
-        val groupOptions = options.filter { if (groupId.isBlank()) true else it.groupId == groupId }
-        if (groupOptions.isEmpty()) return@forEachIndexed
+    groups.forEachIndexed { groupIndex, group ->
+        val groupId = group.first
+        val groupLabel = group.second
+        if (itemOptions.isEmpty()) return@forEachIndexed
         Text(
-            text = if (groupId.isBlank() || groupId.length > 18) {
-                Words.CdzGroup(groupIndex + 1)
-            } else {
-                groupId
-            },
+            text = groupLabel.ifBlank { Words.CdzGroup(groupIndex + 1) },
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = if (groupIndex == 0) 0.dp else 8.dp),
         )
-        groupOptions.forEach { option ->
+        itemOptions.forEach { option ->
             val checked = selection[groupId]?.contains(option.id) == true
             Surface(
                 shape = MaterialTheme.shapes.medium,
@@ -374,8 +374,12 @@ private fun GroupsAnswer(
                     .clickable {
                         val next = selection.mapValues { (_, ids) -> ids.toMutableSet() }
                             .toMutableMap()
-                        val ids = next.getOrPut(groupId) { mutableSetOf() }
-                        if (checked) ids.remove(option.id) else ids.add(option.id)
+                        // Элемент относится к одной группе: переносим его,
+                        // а не дублируем в нескольких.
+                        next.values.forEach { ids -> ids.remove(option.id) }
+                        if (!checked) {
+                            next.getOrPut(groupId) { mutableSetOf() }.add(option.id)
+                        }
                         selection = next
                         commit()
                     },
@@ -403,7 +407,7 @@ private fun GroupsAnswer(
                 }
             }
         }
-        if (groupIndex < effectiveGroups.lastIndex) {
+        if (groupIndex < groups.lastIndex) {
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             )

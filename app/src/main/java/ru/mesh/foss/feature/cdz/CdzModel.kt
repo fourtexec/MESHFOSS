@@ -42,6 +42,8 @@ data class CdzOption(
     val groupId: String = "",
     val textSpans: List<CdzTextSpan> = emptyList(),
     val video: JSONObject? = null,
+    /** Заголовок группы в `answer/groups` (`option_type/group`), а не элемент. */
+    val isGroup: Boolean = false,
 )
 
 /**
@@ -246,6 +248,7 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
             groupId = option.optString("group_id").trim(),
             textSpans = styled.spans,
             video = video,
+            isGroup = option.optString("type") == "option_type/group",
         )
     }
     return result

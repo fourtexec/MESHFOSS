@@ -1286,6 +1286,12 @@ GET .../assignment/context/{assignment_context_id}/result
 }
 ```
 
+**`answer/groups`.** Заголовки групп — это отдельные элементы
+`answer.options[]` с `type: "option_type/group"`. У элементов-картинок
+`group_id` отсутствует, поэтому привязку нельзя брать из `option.group_id`:
+группы строятся по `option_type/group`, а `user_answer.groups[].group_id`
+содержит ID такого заголовка. Один элемент относится к одной группе.
+
 **`answer/table`.** Заголовки и сетка лежат не в `question_elements`, а в
 `answer.options[0].content[0]`:
 
