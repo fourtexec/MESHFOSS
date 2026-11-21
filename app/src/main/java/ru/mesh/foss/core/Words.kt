@@ -2049,11 +2049,11 @@ internal enum class Words(
         "Résultat"
     ),
     CdzStart(
-        "Пройти",
-        "Start",
-        "Indítás",
-        "Empezar",
-        "Commencer"
+        "Открыть",
+        "Open",
+        "Megnyitás",
+        "Abrir",
+        "Ouvrir"
     ),
     CdzStatusLoading(
         "Проверяем выполнение…",
@@ -2110,6 +2110,13 @@ internal enum class Words(
         "Megnyitás böngészőben",
         "Abrir en el navegador",
         "Ouvrir dans le navigateur"
+    ),
+    CdzBrowser(
+        "В браузере",
+        "Browser",
+        "Böngészőben",
+        "En navegador",
+        "Dans le navigateur"
     ),
     CdzOpenInApp(
         "Нативное решение ЦДЗ (эксперимент)",
@@ -2735,11 +2742,11 @@ internal enum class Words(
         "Aucune tentative terminée"
     ),
     CdzAttemptRow(
-        "№%1\$d · %2\$s · %3\$d/%4\$d",
-        "#%1\$d · %2\$s · %3\$d/%4\$d",
-        "#%1\$d · %2\$s · %3\$d/%4\$d",
-        "№%1\$d · %2\$s · %3\$d/%4\$d",
-        "n°%1\$d · %2\$s · %3\$d/%4\$d"
+        "№%1\$s · %2\$s · %3\$s/%4\$s",
+        "#%1\$s · %2\$s · %3\$s/%4\$s",
+        "#%1\$s · %2\$s · %3\$s/%4\$s",
+        "№%1\$s · %2\$s · %3\$s/%4\$s",
+        "n°%1\$s · %2\$s · %3\$s/%4\$s"
     ),
     CdzNativeTitle(
         "ЦДЗ — нативное решение",
@@ -2832,6 +2839,48 @@ internal enum class Words(
         "Puntuación: %1\$d de %2\$d",
         "Score : %1\$d sur %2\$d"
     ),
+    CdzAttemptNumber(
+        "Попытка №%1\$d",
+        "Attempt #%1\$d",
+        "%1\$d. próbálkozás",
+        "Intento n.º %1\$d",
+        "Tentative n°%1\$d"
+    ),
+    CdzCorrect(
+        "Верно",
+        "Correct",
+        "Helyes",
+        "Correcto",
+        "Correct"
+    ),
+    CdzPartiallyCorrect(
+        "Частично верно",
+        "Partially correct",
+        "Részben helyes",
+        "Parcialmente correcto",
+        "Partiellement correct"
+    ),
+    CdzIncorrect(
+        "Неверно",
+        "Incorrect",
+        "Helytelen",
+        "Incorrecto",
+        "Incorrect"
+    ),
+    CdzMissed(
+        "Пропущено",
+        "Missed",
+        "Kihagyva",
+        "Omitido",
+        "Manqué"
+    ),
+    CdzNoAnswer(
+        "Нет ответа",
+        "No answer",
+        "Nincs válasz",
+        "Sin respuesta",
+        "Sans réponse"
+    ),
     CdzAnswerEmpty(
         "Выберите ответ или введите текст",
         "Choose an answer or enter text",
@@ -2873,6 +2922,20 @@ internal enum class Words(
         "Befejezés",
         "Finalizar",
         "Terminer"
+    ),
+    CdzPreviousTask(
+        "Предыдущее задание",
+        "Previous task",
+        "Előző feladat",
+        "Tarea anterior",
+        "Tâche précédente"
+    ),
+    CdzNextTask(
+        "Следующее задание",
+        "Next task",
+        "Következő feladat",
+        "Tarea siguiente",
+        "Tâche suivante"
     ),
     Undo(
         "Отменить",
@@ -2929,6 +2992,13 @@ internal enum class Words(
         "Koppintson két elemre, vagy húzzon vonalat a kártyák között. Azonos oszlop elemei nem kapcsolhatók össze.",
         "Toque dos elementos o arrastre una línea entre tarjetas. No se pueden unir elementos de la misma columna.",
         "Touchez deux éléments ou faites glisser une ligne entre les cartes. Les éléments d’une même colonne ne peuvent pas être liés."
+    ),
+    CdzRemoveLink(
+        "Удалить связь",
+        "Remove link",
+        "Kapcsolat törlése",
+        "Eliminar enlace",
+        "Supprimer le lien"
     ),
     CdzMatchEmpty(
         "В этом задании нет вариантов для сопоставления.",

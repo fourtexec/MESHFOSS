@@ -15,20 +15,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,10 +77,9 @@ fun CdzMatchAnswer(
     var links by remember(taskId) { mutableStateOf(LinkedHashMap(initial)) }
     var selected by remember(taskId) { mutableStateOf<String?>(null) }
     var dragging by remember(taskId) { mutableStateOf<MatchDrag?>(null) }
-    val undo = remember(taskId) { mutableStateListOf<Map<String, String>>() }
-    val rootCenters = remember { mutableStateMapOf<String, Offset>() }
-    val rootTops = remember { mutableStateMapOf<String, Offset>() }
-    var containerOrigin by remember { mutableStateOf(Offset.Zero) }
+    val rootCenters = remember(taskId) { mutableStateMapOf<String, Offset>() }
+    val rootTops = remember(taskId) { mutableStateMapOf<String, Offset>() }
+    var containerOrigin by remember(taskId) { mutableStateOf(Offset.Zero) }
 
     val palette = listOf(
         MaterialTheme.colorScheme.primary,
@@ -110,19 +104,8 @@ fun CdzMatchAnswer(
         return colorOf(source.key)
     }
 
-    fun publish(next: Map<String, String>) {
-        if (undo.size >= 30) undo.removeAt(0)
-        undo.add(LinkedHashMap(links))
+    fun applyLinks(next: Map<String, String>) {
         links = LinkedHashMap(next)
-        selected = null
-        dragging = null
-        onChanged(links)
-    }
-
-    fun undoLast() {
-        if (undo.isEmpty()) return
-        val previous = undo.removeAt(undo.lastIndex)
-        links = LinkedHashMap(previous)
         selected = null
         dragging = null
         onChanged(links)
@@ -137,7 +120,18 @@ fun CdzMatchAnswer(
         // один target может быть только в одной паре
         next.entries.removeIf { it.value == targetId }
         next[sourceId] = targetId
-        publish(next)
+        applyLinks(next)
+    }
+
+    /** Крестик на правом кружке связанной пары удаляет эту связь. */
+    fun removeLink(nodeId: String) {
+        val sourceId = links.entries
+            .firstOrNull { it.key == nodeId || it.value == nodeId }
+            ?.key
+            ?: return
+        val next = LinkedHashMap(links)
+        next.remove(sourceId)
+        applyLinks(next)
     }
 
     fun tap(id: String) {
@@ -152,8 +146,9 @@ fun CdzMatchAnswer(
     }
 
     fun startDrag(id: String) {
-        selected = id
-        centerOf(id)?.let { dragging = MatchDrag(id, it) }
+        // Не меняем выбранный элемент в момент начала протягивания: иначе
+        // карточка/линия дёргаются при старте жеста после обычного тапа.
+        dragging = centerOf(id)?.let { MatchDrag(id, it) }
     }
 
     fun moveDrag(id: String, fingerInCard: Offset) {
@@ -190,32 +185,6 @@ fun CdzMatchAnswer(
     val currentCancelDrag by rememberUpdatedState<() -> Unit> { dragging = null }
 
     Column(modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = Words.CdzMatchLinked(links.size, minOf(sources.size, targets.size)),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = ::undoLast, enabled = undo.isNotEmpty()) {
-                Text(Words.Undo.text)
-            }
-            TextButton(
-                onClick = { publish(emptyMap()) },
-                enabled = links.isNotEmpty(),
-            ) {
-                Text(Words.Clear.text)
-            }
-        }
-        Text(
-            text = Words.CdzMatchHint.text,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -239,6 +208,7 @@ fun CdzMatchAnswer(
                     rootTops = rootTops,
                     colorForNode = { id -> colorForNode(id) },
                     currentTap = { currentTap(it) },
+                    onRemove = { id -> removeLink(id) },
                     dragStart = { currentStartDrag(it) },
                     dragMove = { id, offset -> currentMoveDrag(id, offset) },
                     dragEnd = { currentEndDrag() },
@@ -254,6 +224,7 @@ fun CdzMatchAnswer(
                     rootTops = rootTops,
                     colorForNode = { id -> colorForNode(id) },
                     currentTap = { currentTap(it) },
+                    onRemove = { id -> removeLink(id) },
                     dragStart = { currentStartDrag(it) },
                     dragMove = { id, offset -> currentMoveDrag(id, offset) },
                     dragEnd = { currentEndDrag() },
@@ -288,6 +259,7 @@ private fun MatchColumn(
     rootTops: MutableMap<String, Offset>,
     colorForNode: (String) -> Color?,
     currentTap: (String) -> Unit,
+    onRemove: (String) -> Unit,
     dragStart: (String) -> Unit,
     dragMove: (String, Offset) -> Unit,
     dragEnd: () -> Unit,
@@ -318,6 +290,9 @@ private fun MatchColumn(
             val dotColor = pairColor
                 ?: if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.outline
+            // Крестик только у правой колонки: так связь можно снять, не трогая
+            // карточку и не используя отдельные кнопки «Отменить/Очистить».
+            val removable = !isSource && pairColor != null
 
             Surface(
                 shape = MaterialTheme.shapes.medium,
@@ -334,9 +309,8 @@ private fun MatchColumn(
                         // Только горизонтальный жест: вертикальная прокрутка страницы
                         // остаётся рабочей, а линия тянется в сторону второй колонки.
                         detectHorizontalDragGestures(
-                            onDragStart = { start: Offset ->
+                            onDragStart = {
                                 dragStart(option.id)
-                                dragMove(option.id, start)
                             },
                             onHorizontalDrag = { change, _ ->
                                 change.consume()
@@ -355,6 +329,10 @@ private fun MatchColumn(
                     if (!isSource) {
                         MatchDot(
                             color = dotColor,
+                            removable = removable,
+                            onClick = {
+                                if (removable) onRemove(option.id) else currentTap(option.id)
+                            },
                             modifier = Modifier.onGloballyPositioned { coordinates ->
                                 rootCenters[option.id] = coordinates.positionInRoot() +
                                     Offset(
@@ -383,6 +361,7 @@ private fun MatchColumn(
                     if (isSource) {
                         MatchDot(
                             color = dotColor,
+                            onClick = { currentTap(option.id) },
                             modifier = Modifier.onGloballyPositioned { coordinates ->
                                 rootCenters[option.id] = coordinates.positionInRoot() +
                                     Offset(
@@ -401,6 +380,8 @@ private fun MatchColumn(
 @Composable
 private fun MatchDot(
     color: Color,
+    removable: Boolean = false,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -408,15 +389,39 @@ private fun MatchDot(
             .size(30.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(3.dp, color, CircleShape),
+            .border(3.dp, color, CircleShape)
+            .clickable(
+                onClickLabel = if (removable) Words.CdzRemoveLink.text else null,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(color),
-        )
+        if (removable) {
+            Canvas(Modifier.size(12.dp)) {
+                val stroke = 2.dp.toPx()
+                drawLine(
+                    color = color,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = color,
+                    start = Offset(size.width, 0f),
+                    end = Offset(0f, size.height),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
     }
 }
 

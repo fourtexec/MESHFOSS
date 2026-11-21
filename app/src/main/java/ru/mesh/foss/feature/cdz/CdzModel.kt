@@ -11,6 +11,7 @@ import org.json.JSONObject
  */
 data class CdzTask(
     val id: Long,
+    val group: Int,
     val order: Int,
     val type: String,
     val question: JSONArray,
@@ -28,31 +29,46 @@ data class CdzOption(
     val groupId: String = "",
 )
 
-/** Стабильный порядок заданий: task_order, затем исходный индекс. */
+/** Стабильный порядок заданий: группа, затем task_order внутри группы. */
 fun parseTasks(attempt: JSONObject): List<CdzTask> {
-    val indexed = mutableListOf<Pair<Int, JSONObject>>()
+    data class IndexedTask(
+        val groupOrder: Int,
+        val groupIndex: Int,
+        val taskIndex: Int,
+        val task: JSONObject,
+    )
+
+    val indexed = mutableListOf<IndexedTask>()
     val groups = attempt.optJSONArray("challenge_test_groups") ?: return emptyList()
-    var index = 0
     for (groupIndex in 0 until groups.length()) {
         val group = groups.optJSONObject(groupIndex) ?: continue
+        val groupOrder = group.optInt("test_group_num", groupIndex)
         val tasks = group.optJSONArray("challenge_tasks") ?: continue
         for (taskIndex in 0 until tasks.length()) {
             val task = tasks.optJSONObject(taskIndex) ?: continue
-            if (task.optLong("id") > 0L) indexed += index++ to task
+            if (task.optLong("id") > 0L) {
+                indexed += IndexedTask(groupOrder, groupIndex, taskIndex, task)
+            }
         }
     }
     return indexed
         .sortedWith(
             compareBy(
-                { (_, task) -> task.optInt("task_order", Int.MAX_VALUE) },
-                { (sourceIndex, _) -> sourceIndex },
+                { it.groupOrder },
+                { it.groupIndex },
+                // task_order задаётся внутри группы; отсутствие поля не должно
+                // выбрасывать задание в конец.
+                { it.task.optInt("task_order", it.taskIndex) },
+                { it.taskIndex },
             )
         )
-        .map { (_, task) ->
+        .map { indexedTask ->
+            val task = indexedTask.task
             val answer = task.optJSONObject("answer") ?: JSONObject()
             CdzTask(
                 id = task.optLong("id"),
-                order = task.optInt("task_order", 0),
+                group = indexedTask.groupOrder,
+                order = task.optInt("task_order", indexedTask.taskIndex),
                 type = answerType(answer),
                 question = task.optJSONArray("question_elements") ?: JSONArray(),
                 answer = answer,
@@ -60,6 +76,72 @@ fun parseTasks(attempt: JSONObject): List<CdzTask> {
             )
         }
 }
+
+/** Задание в уже завершённой попытке: результат, ответ ученика и фидбек. */
+data class CdzResultTask(
+    val id: Long,
+    val group: Int,
+    val order: Int,
+    val question: JSONArray,
+    val answer: JSONObject,
+    val userAnswer: JSONObject?,
+    val feedback: JSONObject?,
+    val score: Double,
+    val maxScore: Double,
+    val status: String,
+)
+
+/** `attempt/{id}/result` → задания в том же групповом порядке, что и при прохождении. */
+fun parseResultTasks(result: JSONObject): List<CdzResultTask> {
+    data class IndexedTask(
+        val groupOrder: Int,
+        val groupIndex: Int,
+        val taskIndex: Int,
+        val task: JSONObject,
+    )
+
+    val indexed = mutableListOf<IndexedTask>()
+    val groups = result.optJSONArray("results") ?: return emptyList()
+    for (groupIndex in 0 until groups.length()) {
+        val group = groups.optJSONObject(groupIndex) ?: continue
+        val groupOrder = group.optInt("test_group_num", groupIndex)
+        val tasks = group.optJSONArray("challenge_tasks") ?: continue
+        for (taskIndex in 0 until tasks.length()) {
+            val task = tasks.optJSONObject(taskIndex) ?: continue
+            if (task.optLong("id") > 0L) {
+                indexed += IndexedTask(groupOrder, groupIndex, taskIndex, task)
+            }
+        }
+    }
+    return indexed
+        .sortedWith(
+            compareBy(
+                { it.groupOrder },
+                { it.groupIndex },
+                { it.task.optInt("task_order", it.taskIndex) },
+                { it.taskIndex },
+            )
+        )
+        .map { indexedTask ->
+            val task = indexedTask.task
+            val answer = task.optJSONObject("answer") ?: JSONObject()
+            CdzResultTask(
+                id = task.optLong("id"),
+                group = indexedTask.groupOrder,
+                order = task.optInt("task_order", indexedTask.taskIndex),
+                question = task.optJSONArray("question_elements") ?: JSONArray(),
+                answer = answer,
+                userAnswer = task.optJSONObject("user_answer"),
+                feedback = task.optJSONObject("answer_feedback"),
+                score = optionalDouble(task, "score"),
+                maxScore = optionalDouble(task, "max_score"),
+                status = task.optString("status").trim(),
+            )
+        }
+}
+
+private fun optionalDouble(json: JSONObject, key: String): Double =
+    if (json.has(key) && !json.isNull(key)) json.optDouble(key, -1.0) else -1.0
 
 /** `answer.type`; в старых ответах встречается просто `type`. */
 fun answerType(answer: JSONObject): String =

@@ -47,6 +47,7 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import org.json.JSONObject
 import java.util.Locale
@@ -85,7 +86,7 @@ fun HomeworksScreen(
     // ДЗ, чьё ЦДЗ открыли последним: при возврате в приложение перечитываем статус.
     var cdzReturnEntry by remember { mutableStateOf<String?>(null) }
     // Подтверждение запуска материала с таймером («Облако Знаний»).
-    var confirmLaunch by remember { mutableStateOf<Pair<String, JSONObject>?>(null) }
+    var confirmLaunch by remember { mutableStateOf<Triple<String, JSONObject, Boolean>?>(null) }
     val cdzLimiter = remember { Semaphore(3) }
     val prefs = remember(context) { context.getSharedPreferences("mesh_settings", Context.MODE_PRIVATE) }
     val from = MeshCore.addDays(selectedDate, -45)
@@ -142,7 +143,11 @@ fun HomeworksScreen(
      * `partners/v1/homeworks/launch` (§7): прямые ссылки без контекста ДЗ
      * не засчитываются. Ссылку не кэшируем — для каждого открытия новая.
      */
-    fun launchMaterial(homeworkEntryId: String, material: JSONObject) {
+    fun launchMaterial(
+        homeworkEntryId: String,
+        material: JSONObject,
+        forceBrowser: Boolean = false
+    ) {
         val materialId = material.optString("uuid")
             .ifBlank { material.optString("materialId") }
             .trim()
@@ -162,7 +167,7 @@ fun HomeworksScreen(
                 val nativeMode = prefs.getBoolean("cdz_in_app", false)
                 MeshLog.log("CDZ", "launch: нативный режим=$nativeMode url=${url.take(160)}")
                 cdzReturnEntry = homeworkEntryId
-                if (prefs.getBoolean("cdz_in_app", false)) {
+                if (!forceBrowser && prefs.getBoolean("cdz_in_app", false)) {
                     context.startActivity(
                         CdzNativeActivity.intent(context, url, material.optString("title"))
                     )
@@ -180,12 +185,16 @@ fun HomeworksScreen(
         }
     }
 
-    fun openMaterial(homeworkEntryId: String, material: JSONObject) {
+    fun openMaterial(
+        homeworkEntryId: String,
+        material: JSONObject,
+        forceBrowser: Boolean = false
+    ) {
         // «Облако Знаний» запускает таймер сразу при открытии — спрашиваем (§8, §12.6).
         if (material.optBoolean("isCdz") && MeshCdz.startsTimer(material.optString("type"))) {
-            confirmLaunch = homeworkEntryId to material
+            confirmLaunch = Triple(homeworkEntryId, material, forceBrowser)
         } else {
-            launchMaterial(homeworkEntryId, material)
+            launchMaterial(homeworkEntryId, material, forceBrowser)
         }
     }
 
@@ -234,7 +243,7 @@ fun HomeworksScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    confirmLaunch?.let { (entryId, material) ->
+    confirmLaunch?.let { (entryId, material, browser) ->
         AlertDialog(
             onDismissRequest = { confirmLaunch = null },
             title = { Text(Words.CdzTimerTitle.text) },
@@ -252,7 +261,7 @@ fun HomeworksScreen(
             confirmButton = {
                 Button(onClick = {
                     confirmLaunch = null
-                    launchMaterial(entryId, material)
+                    launchMaterial(entryId, material, forceBrowser = browser)
                 }) { Text(Words.CdzBegin.text) }
             },
             dismissButton = {
@@ -368,13 +377,26 @@ fun HomeworksScreen(
                             highlighted = focusIndex == index,
                             dimmed = focusIndex != null && focusIndex != index,
                             launchingMaterialId = launchingMaterialId,
-                            onOpenMaterial = ::openMaterial,
+                            onOpenMaterial = { entry, material ->
+                                openMaterial(entry, material)
+                            },
+                            onOpenInBrowser = { entry, material ->
+                                openMaterial(entry, material, forceBrowser = true)
+                            },
                             isDone = doneOverrides[entryId] ?: h.optBoolean("isDone"),
                             savingDone = entryId.isNotBlank() && entryId in savingDone,
                             onToggleDone = { target -> toggleDone(h, target) },
                             cdz = cdzInfo[homeworkEntryId],
                             cdzLoading = homeworkEntryId in cdzLoading,
-                            onOpenResult = { url -> openUrl(uriHandler, url, context) }
+                            onOpenResult = { url ->
+                                if (CdzNativeActivity.isResultUrl(url)) {
+                                    context.startActivity(
+                                        CdzNativeActivity.intent(context, url, Words.CdzResult.text)
+                                    )
+                                } else {
+                                    openUrl(uriHandler, url, context)
+                                }
+                            }
                         )
                     }
                 }
@@ -394,6 +416,7 @@ private fun HomeworkCard(
     dimmed: Boolean,
     launchingMaterialId: String?,
     onOpenMaterial: (String, JSONObject) -> Unit,
+    onOpenInBrowser: (String, JSONObject) -> Unit,
     isDone: Boolean,
     savingDone: Boolean,
     onToggleDone: (Boolean) -> Unit,
@@ -540,6 +563,7 @@ private fun HomeworkCard(
                                 material.optString("url").isNotBlank(),
                             opening = launchingMaterialId != null && launchingMaterialId == uuid,
                             onOpen = { onOpenMaterial(homeworkEntryId, material) },
+                            onOpenInBrowser = { onOpenInBrowser(homeworkEntryId, material) },
                             onOpenResult = onOpenResult
                         )
                     }
@@ -621,7 +645,7 @@ private fun hasCdz(homework: JSONObject): Boolean {
 
 /**
  * Строка ЦДЗ в карточке ДЗ: название, тип и издатель, статус выполнения из LRS,
- * баллы и кнопки «Пройти» / «Результат» — как на карточке веб-дневника.
+ * баллы и кнопки «Открыть» / «Результат» — как на карточке веб-дневника.
  */
 @Composable
 private fun CdzMaterialRow(
@@ -631,6 +655,7 @@ private fun CdzMaterialRow(
     canLaunch: Boolean,
     opening: Boolean,
     onOpen: () -> Unit,
+    onOpenInBrowser: () -> Unit,
     onOpenResult: (String) -> Unit
 ) {
     val isCdz = material.optBoolean("isCdz")
@@ -645,7 +670,16 @@ private fun CdzMaterialRow(
     val result = extended?.optJSONObject("result")
     val done = result?.optBoolean("done") == true
     val resultUrl = result?.optString("resultUrl").orEmpty()
-    val action = material.optString("actionName").trim().ifBlank { Words.CdzStart.text }
+    val rawAction = material.optString("actionName").trim()
+    val action = if (
+        rawAction.isBlank() ||
+        rawAction.equals("Пройти", ignoreCase = true) ||
+        rawAction.equals("Start", ignoreCase = true)
+    ) {
+        Words.CdzStart.text
+    } else {
+        rawAction
+    }
     val scheme = MaterialTheme.colorScheme
 
     Surface(
@@ -719,6 +753,19 @@ private fun CdzMaterialRow(
                             } else {
                                 Text(action)
                             }
+                        }
+                    }
+                    if (canLaunch && isCdz) {
+                        OutlinedButton(
+                            onClick = onOpenInBrowser,
+                            enabled = !opening,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = Words.CdzBrowser.text,
+                                style = MaterialTheme.typography.labelMedium,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                     if (resultUrl.isNotBlank()) {

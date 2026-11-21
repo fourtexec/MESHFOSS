@@ -3,6 +3,7 @@ package ru.mesh.foss.data
 import ru.mesh.foss.core.MeshLog
 import ru.mesh.foss.core.Sensitive
 
+import android.content.Context
 import android.webkit.CookieManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -41,6 +42,35 @@ class CdzNativeClient(
         /** uchebnik ждёт профиль school (1002991417), а не student_id (36847597). */
         fun profileJson(profileId: String?, userId: String?): String =
             JSONObject().put("id", profileId.orEmpty()).put("type", "student").toString()
+
+        /**
+         * Клиент из активной сессии приложения: те же cookie, токен и профиль,
+         * что и у WebView. Нужен и для прохождения, и для нативного результата.
+         */
+        fun fromSession(context: Context, pageUrl: String): CdzNativeClient {
+            val store = SessionStore(context, AccountRegistry(context).activeScope())
+            val jar = CookieJson.parse(store.authCookies).toMutableMap()
+            CookieManager.getInstance().getCookie(BASE)
+                ?.split(';')?.forEach { pair ->
+                    val key = pair.substringBefore('=').trim()
+                    val value = pair.substringAfter('=').trim()
+                    if (key.isNotBlank() && value.isNotBlank()) jar[key] = value
+                }
+            val token = jar["aupd_token"]?.takeIf { it.isNotBlank() } ?: store.token
+            MeshLog.log(
+                "CDZ",
+                "session: аккаунт=${AccountRegistry(context).activeScope()} cookies=${jar.size} " +
+                    "есть токен=${!token.isNullOrBlank()}"
+            )
+            return CdzNativeClient(
+                pageUrl = pageUrl,
+                token = token,
+                profileId = store.studentId,
+                userId = jar["obr_id"],
+                personId = store.personId,
+                cookies = jar,
+            )
+        }
     }
 
     private var accessToken: String = token.orEmpty()
