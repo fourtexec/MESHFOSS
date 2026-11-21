@@ -117,19 +117,6 @@ fun CdzMatchScreen(
                 .height(260.dp)
                 .clip(MaterialTheme.shapes.large)
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { position ->
-                            val node = nodeCenters.entries.minByOrNull {
-                                (it.value - position).getDistance()
-                            }
-                            if (node != null && (node.value - position).getDistance() < 80f) {
-                                val isSource = sources.any { it.id == node.key }
-                                selected = isSource to node.key
-                            }
-                        }
-                    )
-                }
         ) {
             androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
                 links.entries.forEachIndexed { index, (sourceId, targetId) ->
@@ -167,6 +154,7 @@ fun CdzMatchScreen(
                         else if (current.first) selected = true to node.id
                         else commit(current, true to node.id)
                     },
+                    onDragStart = { node -> selected = true to node.id },
                     onDrag = { node, start, amount ->
                         drag = start to (start + amount)
                         val nearest = targets.minByOrNull {
@@ -195,6 +183,7 @@ fun CdzMatchScreen(
                         if (current == null) selected = false to node.id
                         else commit(current, false to node.id)
                     },
+                    onDragStart = { node -> selected = false to node.id },
                     onDrag = { node, start, amount -> drag = start to (start + amount) },
                     onDragEnd = { drag = null },
                     modifier = Modifier.weight(1f)
@@ -211,6 +200,7 @@ private fun MatchRow(
     selected: Pair<Boolean, String>?,
     nodeCenters: MutableMap<String, Offset>,
     onTap: (MatchNode) -> Unit,
+    onDragStart: (MatchNode) -> Unit,
     onDrag: (MatchNode, Offset, Offset) -> Unit,
     onDragEnd: () -> Unit,
     modifier: Modifier = Modifier,
@@ -239,7 +229,7 @@ private fun MatchRow(
                     }
                     .pointerInput(node.id) {
                         detectDragGestures(
-                            onDragStart = { /* tactile feedback happens via state */ },
+                            onDragStart = { onDragStart(node) },
                             onDrag = { change, amount -> change.consume(); onDrag(node, change.position - amount, amount) },
                             onDragEnd = { onDragEnd() },
                             onDragCancel = { onDragEnd() }
