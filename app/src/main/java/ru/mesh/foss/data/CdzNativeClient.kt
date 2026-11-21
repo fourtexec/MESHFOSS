@@ -163,7 +163,7 @@ class CdzNativeClient(
         } finally {
             connection.disconnect()
         }
-        MeshLog.log("CDZ", "refresh: HTTP $status")
+        MeshLog.log("CDZ", "refresh: HTTP $status setCookie=${cookies.size}")
         if (status !in 200..299) {
             MeshLog.log("CDZ", "refresh body: ${text.take(200)}")
             return@withContext false

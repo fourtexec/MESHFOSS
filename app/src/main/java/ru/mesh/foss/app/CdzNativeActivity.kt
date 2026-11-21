@@ -114,12 +114,14 @@ class CdzNativeActivity : AppCompatActivity() {
         MeshLog.log("CDZ", "native: открытие url=${url.take(200)}")
         val store = SessionStore(this, AccountRegistry(this).activeScope())
         val jar = CookieJson.parse(store.authCookies).toMutableMap()
+        // webview-сессия может содержать свежие Session-Id-External/Profile — берём их тоже.
         CookieManager.getInstance().getCookie("https://uchebnik.mos.ru")
             ?.split(';')?.forEach { pair ->
                 val key = pair.substringBefore('=').trim()
                 val value = pair.substringAfter('=').trim()
                 if (key.isNotBlank() && value.isNotBlank()) jar[key] = value
             }
+        MeshLog.trace("CDZ") { "cookie names=${jar.keys}" }
         val token = jar["aupd_token"]?.takeIf { it.isNotBlank() } ?: store.token
         MeshLog.trace("CDZ") {
             "native: аккаунт scope=${AccountRegistry(this).activeScope()} " +
