@@ -124,49 +124,43 @@ class CdzNativeActivity : AppCompatActivity() {
         resolvePage(url)
     }
 
-    /** Нативный проход по редиректам лаунчера — без WebView. */
+    /**
+     * Лаунчер содержит activity_url и все параметры запуска. Собираем страницу
+     * ЦДЗ локально — без сетевого редиректа (и без WebView).
+     */
     private fun resolvePage(startUrl: String) {
-        val direct = Regex("/exam/challenge/(\\d+)").find(startUrl)?.groupValues?.get(1).orEmpty()
-        if (direct.isNotBlank()) {
-            MeshLog.log("CDZ", "native: страница уже известна, challenge=$direct")
-            startNative(startUrl, direct)
+        val api = client ?: return
+        val derived = api.derivePageUrl(startUrl)
+        MeshLog.log("CDZ", "native: pageUrl=${derived?.take(180).orEmpty()}")
+        val id = derived?.let { Regex("/exam/challenge/(\\d+)").find(it)?.groupValues?.get(1) }
+            ?.takeIf { it.isNotBlank() }
+        if (derived == null || id == null) {
+            MeshLog.log("CDZ", "native: не найден activity_url/challenge в launch URL")
+            Toast.makeText(this, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
             return
         }
-        progress.visibility = View.VISIBLE
-        scope.launch {
-            try {
-                val api = client ?: return@launch
-                val finalUrl = withContext(Dispatchers.IO) { api.resolveChallengeUrl(startUrl) }
-                val id = Regex("/exam/challenge/(\\d+)").find(finalUrl)?.groupValues?.get(1).orEmpty()
-                MeshLog.log("CDZ", "native: финальный url=${finalUrl.take(200)} challenge=$id")
-                if (id.isBlank()) {
-                    throw IllegalStateException("challenge_id не найден: ${finalUrl.take(160)}")
-                }
-                client = CdzNativeClient(
-                    pageUrl = finalUrl,
-                    token = api.currentToken(),
-                    profileId = api.currentProfileId(),
-                    userId = api.currentUserId(),
-                    personId = api.currentPersonId(),
-                    cookies = api.currentCookies(),
-                )
-                startNative(finalUrl, id)
-            } catch (error: Exception) {
-                MeshLog.error("CDZ", error)
-                Toast.makeText(this@CdzNativeActivity, error.message ?: error.javaClass.simpleName, Toast.LENGTH_LONG).show()
-            } finally {
-                progress.visibility = View.GONE
-            }
-        }
+        client = CdzNativeClient(
+            pageUrl = derived,
+            token = api.currentToken(),
+            profileId = api.currentProfileId(),
+            userId = api.currentUserId(),
+            personId = api.currentPersonId(),
+            cookies = api.currentCookies(),
+        )
+        startNative(derived, id)
     }
 
     private fun startNative(finalUrl: String, challengeId: String) {
-        // Клиент уже создан нативным резолвером со свежими cookie после редиректов.
+        // Клиент уже создан с pageUrl=activity_url и параметрами лаунчера.
         challenge = challengeId
         scope.launch {
             progress.visibility = View.VISIBLE
             try {
                 val api = client ?: return@launch
+                val info = withContext(Dispatchers.IO) { api.checkAttempts(challenge) }
+                val attemptCount = info.optInt("number_of_attempt")
+                val lastAttempt = info.optString("last_attempt_id")
+                MeshLog.log("CDZ", "native: info number_of_attempt=$attemptCount last=$lastAttempt")
                 val refreshed = withContext(Dispatchers.IO) { api.refreshSession() }
                 MeshLog.log("CDZ", "native: refresh=$refreshed")
                 if (!refreshed) {

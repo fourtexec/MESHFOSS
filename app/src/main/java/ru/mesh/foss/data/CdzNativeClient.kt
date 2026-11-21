@@ -12,6 +12,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
@@ -137,6 +138,29 @@ class CdzNativeClient(
      * HttpURLConnection не идёт за редиректами сам: мы читаем Location/тело,
      * сохраняем Set-Cookie и повторяем запрос с обновлённым jar'ом.
      */
+    /**
+     * Лаунчер уже содержит activity_url и все параметры запуска (§4.1 дока):
+     * context, registration, actor, role, endpoint, fetch. Собираем страницу
+     * ЦДЗ сразу, без дополнительного сетевого перехода.
+     */
+    fun derivePageUrl(startUrl: String): String? {
+        val query = startUrl.substringAfter('?', "")
+        val params = LinkedHashMap<String, String>()
+        query.split('&').forEach { pair ->
+            if (pair.isBlank()) return@forEach
+            val key = runCatching { URLDecoder.decode(pair.substringBefore('='), "UTF-8") }.getOrNull()
+            val value = runCatching { URLDecoder.decode(pair.substringAfter('=', ""), "UTF-8") }.getOrNull()
+            if (!key.isNullOrBlank() && value != null) params[key] = value
+        }
+        val activity = params.remove("activity_url")?.takeIf {
+            it.startsWith("http://") || it.startsWith("https://")
+        } ?: return null
+        val rest = params.entries.joinToString("&") { (key, value) ->
+            "${URLEncoder.encode(key, "UTF-8")}=${URLEncoder.encode(value, "UTF-8")}"
+        }
+        MeshLog.log("CDZ", "derivePageUrl: activity=$activity params=${params.keys}")
+        return activity + if (rest.isBlank()) "" else "?$rest"
+    }
     suspend fun resolveChallengeUrl(startUrl: String): String = withContext(Dispatchers.IO) {
         var current = startUrl
         val seen = mutableSetOf<String>()
@@ -207,6 +231,23 @@ class CdzNativeClient(
             .put("user", runCatching { JSONObject(user.body) }.getOrDefault(JSONObject()))
     }
 
+    /**
+     * Проверяем info до старта: если попытка уже идёт, start-attempt всё равно
+     * продолжит её, но мы явно логируем число начатых попыток и last_attempt_id.
+     * Это защита от случайного создания новой попытки.
+     */
+    suspend fun checkAttempts(challenge: String): JSONObject = withContext(Dispatchers.IO) {
+        setChallengeId(challenge)
+        val info = request("GET", "$SECURE/challenge/$challenge/info", null)
+        val json = runCatching { JSONObject(info.body) }.getOrDefault(JSONObject())
+        val attempts = json.optInt("number_of_attempt", 0)
+        val last = json.optString("last_attempt_id", "")
+        MeshLog.log(
+            "CDZ",
+            "попытки: number_of_attempt=$attempts last_attempt_id=$last HTTP=${info.status}"
+        )
+        json
+    }
     /** Старт или продолжение попытки — один и тот же вызов (docs §6.1). */
     suspend fun startAttempt(challenge: String): JSONObject = withContext(Dispatchers.IO) {
         setChallengeId(challenge)
@@ -226,7 +267,13 @@ class CdzNativeClient(
             .put("contextCorrupted", false)
             .toString()
         val result = request("POST", "$SECURE/challenge/$challenge/start-attempt", body)
-        MeshLog.log("CDZ", "start: HTTP ${result.status}")
+        val started = runCatching { JSONObject(result.body) }.getOrDefault(JSONObject())
+        MeshLog.log(
+            "CDZ",
+            "start-attempt: HTTP ${result.status} attemptId=${started.optLong("challenge_attempt_id")} " +
+                "startedAt=${started.optString("challenge_attempt_started_at")} " +
+                "elongated=${started.has("challenge_attempt_started_at")}"
+        )
         if (result.status !in 200..299) {
             throw IllegalStateException("start-attempt HTTP ${result.status}")
         }
