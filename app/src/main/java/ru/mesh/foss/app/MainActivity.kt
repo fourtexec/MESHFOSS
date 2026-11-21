@@ -1009,6 +1009,7 @@ fun LoginScreen(
     loading: Boolean,
     error: String?,
     onLoginCookies: (String) -> Unit,
+    restoreSession: Boolean = true,
 ) {
     var tokenInput by remember { mutableStateOf("") }
     var experimental by remember { mutableStateOf(false) }
@@ -1041,7 +1042,12 @@ fun LoginScreen(
 
         // Основной и единственный видимый способ входа — одноразовая QR-ссылка.
         // Панель сама чинит устаревший токен по сохранённым кукам.
-        QrLoginPanel(onLogin = onLogin, loading = loading, onLink = { qrLink = it })
+        QrLoginPanel(
+        onLogin = onLogin,
+        loading = loading,
+        onLink = { qrLink = it },
+        restoreSession = restoreSession,
+    )
 
         Spacer(Modifier.height(20.dp))
         // Остальные способы спрятаны за красной кнопкой инструментов.
