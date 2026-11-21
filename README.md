@@ -69,7 +69,7 @@ Liquid Glass, формы, шейдер и поведение линзы сохр
 - **push в main** — скользящий prerelease `nightly`;
 - **ветки и PR** — только сборка, без публикации.
 
-Текущий prerelease: `v2.4.0-beta.6`.
+Текущий prerelease: `v2.4.0-beta.7`.
 
 Локально: `./gradlew assembleDebug` (нужны Android SDK 37 и JDK 17).
 

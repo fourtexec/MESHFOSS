@@ -26,6 +26,7 @@ class MeshApp : Application() {
         super.onCreate()
         UiLanguage.select(getSharedPreferences("mesh_settings", MODE_PRIVATE).getString("language", "ru"))
         MeshLogStore.init(this)
+        MeshLog.log("APP", "запуск MESHFOSS")
         createNotificationChannel()
         scheduleTokenRefresh()
     }

@@ -159,6 +159,8 @@ fun HomeworksScreen(
                 val url = withContext(Dispatchers.IO) {
                     client.launchHomeworkMaterial(homeworkEntryId, materialId)
                 }
+                val nativeMode = prefs.getBoolean("cdz_in_app", false)
+                MeshLog.log("CDZ", "launch: нативный режим=$nativeMode url=${url.take(160)}")
                 cdzReturnEntry = homeworkEntryId
                 if (prefs.getBoolean("cdz_in_app", false)) {
                     context.startActivity(
@@ -170,6 +172,7 @@ fun HomeworksScreen(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                MeshLog.error("CDZ", e)
                 Toast.makeText(context, MeshCore.describeError(e), Toast.LENGTH_LONG).show()
             } finally {
                 launchingMaterialId = null

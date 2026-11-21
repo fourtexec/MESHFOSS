@@ -579,6 +579,7 @@ fun MainScaffold(
 
     fun navigateTo(next: NavState) {
         if (next == currentState()) return
+        MeshLog.log("NAV", "${currentTab} -> ${next.tab}")
         backStack.add(currentState())
         currentTab = next.tab
         rankingSubjectId = next.rankingSubjectId

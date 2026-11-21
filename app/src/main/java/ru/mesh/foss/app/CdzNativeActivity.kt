@@ -14,8 +14,13 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.method.LinkMovementMethod
 import android.view.View
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.webkit.CookieManager
 import android.widget.Button
 import android.widget.CheckBox
@@ -66,6 +71,8 @@ class CdzNativeActivity : AppCompatActivity() {
     private var challenge = ""
     private var finished = false
     private var currentView: View? = null
+    private var resolver: WebView? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var titleView: TextView
     private lateinit var statusView: TextView
@@ -97,6 +104,103 @@ class CdzNativeActivity : AppCompatActivity() {
         finishButton = findViewById(R.id.cdzFinish)
 
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
+        MeshLog.log("CDZ", "native: открытие url=${url.take(200)}")
+        val store = SessionStore(this, AccountRegistry(this).activeScope())
+        val jar = CookieJson.parse(store.authCookies).toMutableMap()
+        CookieManager.getInstance().getCookie("https://uchebnik.mos.ru")
+            ?.split(';')?.forEach { pair ->
+                val key = pair.substringBefore('=').trim()
+                val value = pair.substringAfter('=').trim()
+                if (key.isNotBlank() && value.isNotBlank()) jar[key] = value
+            }
+        val token = jar["aupd_token"]?.takeIf { it.isNotBlank() } ?: store.token
+        MeshLog.trace("CDZ") {
+            "native: аккаунт scope=${AccountRegistry(this).activeScope()} " +
+                "studentId=${store.studentId} personId=${store.personId} " +
+                "cookies=${jar.size} есть токен=${!token.isNullOrBlank()}"
+        }
+        saveButton.setOnClickListener { saveCurrent() }
+        finishButton.setOnClickListener { confirmFinish() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (hasUnsaved()) confirmLeave() else finish()
+            }
+        })
+
+        resolvePage(url)
+    }
+
+    /**
+     * Дневник отдаёт URL лаунчера school.mos.ru, а не страницу uchebnik.
+     * Пропускаем цепочку OAuth через скрытый WebView (там уже есть куки сессии),
+     * ловим финальный /exam/challenge/{id} и только потом включаем нативный API.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun resolvePage(startUrl: String) {
+        val direct = Regex("/exam/challenge/(\\d+)").find(startUrl)?.groupValues?.get(1).orEmpty()
+        if (direct.isNotBlank()) {
+            MeshLog.log("CDZ", "native: страница уже известна, challenge=$direct")
+            startNative(startUrl, direct)
+            return
+        }
+        MeshLog.log("CDZ", "native: нужен редирект лаунчера, загружаем в скрытом WebView")
+        progress.visibility = View.VISIBLE
+        val web = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            visibility = View.GONE
+        }
+        resolver = web
+        var done = false
+        fun onFinal(finalUrl: String) {
+            if (done) return
+            done = true
+            val id = Regex("/exam/challenge/(\\d+)").find(finalUrl)?.groupValues?.get(1).orEmpty()
+            MeshLog.log("CDZ", "native: финальный url=${finalUrl.take(200)} challenge=$id")
+            if (id.isBlank()) {
+                MeshLog.log("CDZ", "native: редирект не привёл к странице задания")
+                progress.visibility = View.GONE
+                Toast.makeText(this@CdzNativeActivity, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
+                return
+            }
+            // Копируем свежие куки из WebView в jar нативного клиента.
+            CookieManager.getInstance().getCookie("https://uchebnik.mos.ru")
+                ?.split(';')?.forEach { pair ->
+                    val key = pair.substringBefore('=').trim()
+                    val value = pair.substringAfter('=').trim()
+                    if (key.isNotBlank() && value.isNotBlank()) {
+                        client?.updateCookie(key, value)
+                    }
+                }
+            startNative(finalUrl, id)
+        }
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
+                val value = request.url.toString()
+                if (value.contains("/exam/challenge/")) {
+                    onFinal(value)
+                    return true
+                }
+                return false
+            }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                MeshLog.trace("CDZ") { "native web: $url" }
+                if (!url.isNullOrBlank() && url.contains("/exam/challenge/")) onFinal(url)
+            }
+        }
+        handler.postDelayed({
+            if (!done) {
+                MeshLog.log("CDZ", "native: таймаут ожидания редиректа")
+                done = true
+                progress.visibility = View.GONE
+                Toast.makeText(this, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
+            }
+        }, 25_000)
+        web.loadUrl(startUrl)
+    }
+
+    private fun startNative(finalUrl: String, challengeId: String) {
         val store = SessionStore(this, AccountRegistry(this).activeScope())
         val jar = CookieJson.parse(store.authCookies).toMutableMap()
         CookieManager.getInstance().getCookie("https://uchebnik.mos.ru")
@@ -107,42 +211,34 @@ class CdzNativeActivity : AppCompatActivity() {
             }
         val token = jar["aupd_token"]?.takeIf { it.isNotBlank() } ?: store.token
         client = CdzNativeClient(
-            pageUrl = url,
+            pageUrl = finalUrl,
             token = token,
             profileId = store.studentId,
             userId = jar["obr_id"],
             personId = store.personId,
             cookies = jar,
         )
-
-        challenge = Regex("/exam/challenge/(\\d+)").find(url)?.groupValues?.get(1).orEmpty()
-        if (challenge.isBlank()) {
-            Toast.makeText(this, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
-
-        saveButton.setOnClickListener { saveCurrent() }
-        finishButton.setOnClickListener { confirmFinish() }
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (hasUnsaved()) confirmLeave() else finish()
-            }
-        })
-
+        challenge = challengeId
         scope.launch {
             progress.visibility = View.VISIBLE
             try {
                 val api = client ?: return@launch
                 val refreshed = withContext(Dispatchers.IO) { api.refreshSession() }
+                MeshLog.log("CDZ", "native: refresh=$refreshed")
                 if (!refreshed) {
+                    MeshLog.log("CDZ", "native: сессия uchebnik не обновлена")
                     Toast.makeText(this@CdzNativeActivity, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 val attempt = withContext(Dispatchers.IO) { api.startAttempt(challenge) }
                 attemptId = attempt.optLong("challenge_attempt_id")
+                MeshLog.log("CDZ", "native: attempt=$attemptId keys=${attempt.keys()}")
                 tasks = readTasks(attempt)
-                if (tasks.isEmpty()) throw IllegalStateException("no tasks")
+                MeshLog.log("CDZ", "native: заданий=${tasks.size}")
+                if (tasks.isEmpty()) {
+                    MeshLog.log("CDZ", "native: пустой список заданий: ${attempt.toString().take(300)}")
+                    throw IllegalStateException("no tasks")
+                }
                 draft = restoreDraft()
                 saved = restoreSaved()
                 render()

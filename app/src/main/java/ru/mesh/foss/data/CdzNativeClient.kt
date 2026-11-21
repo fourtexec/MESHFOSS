@@ -49,6 +49,9 @@ class CdzNativeClient(
     fun setChallengeId(value: String) {
         challengeId = value
     }
+    fun updateCookie(name: String, value: String) {
+        if (name.isNotBlank() && value.isNotBlank()) jar[name] = value
+    }
 
     private fun params(): Map<String, String> {
         val out = mutableMapOf<String, String>()

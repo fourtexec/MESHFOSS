@@ -38,6 +38,18 @@ object MeshLog {
     }
 
     fun error(tag: String, error: Throwable) {
-        log(tag, "error: " + (error.message ?: error.javaClass.simpleName))
+        runCatching {
+            log(tag, "error: ${error.javaClass.name}: ${error.message}")
+            error.stackTrace?.take(8)?.forEach { frame ->
+                log(tag, "  at ${frame.className}.${frame.methodName}:${frame.lineNumber}")
+            }
+            var cause = error.cause
+            var depth = 0
+            while (cause != null && depth < 4) {
+                log(tag, "caused by: ${cause.javaClass.name}: ${cause.message}")
+                cause = cause.cause
+                depth++
+            }
+        }
     }
 }

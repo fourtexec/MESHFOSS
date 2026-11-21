@@ -399,6 +399,7 @@ class MeshClient(
             MeshCore.Paths.HOMEWORK_LAUNCH,
             mapOf("homework_entry_id" to entry, "material_id" to material)
         )
+        MeshLog.log("CDZ", "launch: entry=$entry material=$material")
         var attempt = 0
         while (attempt < 2) {
             attempt++
@@ -414,6 +415,7 @@ class MeshClient(
             }
             response.use { res ->
                 val status = res.code
+                MeshLog.log("CDZ", "launch: HTTP $status attempt=$attempt")
                 if (status == 401 && attempt < 2) {
                     if (refreshToken() != null) return@use
                     throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
@@ -423,12 +425,21 @@ class MeshClient(
                 if (status !in 200..399) {
                     throw MeshCore.MeshError(Words.CouldNotOpenMaterialHttp(status), "http-$status", status)
                 }
-                res.header("Location")?.takeIf { it.isNotBlank() }?.let { return MeshCore.absoluteUrl(it) }
+                res.header("Location")?.takeIf { it.isNotBlank() }?.let { location ->
+                    val absolute = MeshCore.absoluteUrl(location)
+                    MeshLog.log("CDZ", "launch: Location -> $absolute")
+                    return absolute
+                }
                 val text = res.body?.string().orEmpty().trim().trim('"')
+                MeshLog.log("CDZ", "launch: body ${text.take(160)}")
                 if (text.startsWith("http://") || text.startsWith("https://")) return text
                 runCatching { JSONObject(text) }.getOrNull()?.let { json ->
                     listOf("url", "link", "location", "redirect", "activity_url").forEach { key ->
-                        json.optString(key).takeIf { it.isNotBlank() }?.let { return MeshCore.absoluteUrl(it) }
+                        json.optString(key).takeIf { it.isNotBlank() }?.let { value ->
+                            val absolute = MeshCore.absoluteUrl(value)
+                            MeshLog.log("CDZ", "launch: $key -> $absolute")
+                            return absolute
+                        }
                     }
                 }
                 if (status in 300..399) {

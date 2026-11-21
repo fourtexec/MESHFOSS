@@ -27,6 +27,7 @@ object WidgetUpdater {
         val student = studentId?.trim().orEmpty()
         if (student.isBlank()) return@withContext
         val today = MeshCore.today()
+        MeshLog.log("WIDGET", "обновление снимка: student=$student")
         val schedule = runCatching { client.getSchedule(student, today) }.getOrNull()
         val homeworks = runCatching { client.getHomeworks(student, today, today) }.getOrNull().orEmpty()
 
@@ -66,6 +67,7 @@ object WidgetUpdater {
             updatedAt = System.currentTimeMillis(),
         )
         store.saveWidgetSnapshot(snapshot.toJson().toString())
+        MeshLog.log("WIDGET", "снимок: уроков=${lessons.size} ДЗ=${homeworkItems.size}")
         val widgets: List<GlanceAppWidget> = listOf(MeshWidget(), ScheduleWidget(), HomeworkWidget())
         widgets.forEach { widget -> runCatching { widget.updateAll(context) } }
     }
