@@ -65,10 +65,19 @@ import ru.mesh.foss.widget.WidgetUpdater
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val store = SessionStore(this)
         setContent {
             MeshRankerTheme {
-                AppRoot(store)
+                val context = LocalContext.current
+                val registry = remember { AccountRegistry(context).also { it.ensureLegacy() } }
+                var scope by remember { mutableStateOf(registry.activeScope()) }
+                // Смена аккаунта пересоздаёт дерево: у каждого свой SessionStore и кэш.
+                key(scope) {
+                    AppRoot(
+                        store = SessionStore(context, scope),
+                        registry = registry,
+                        onSwitchAccount = { scope = registry.activeScope() },
+                    )
+                }
             }
         }
     }
@@ -182,7 +191,11 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun AppRoot(store: SessionStore) {
+fun AppRoot(
+    store: SessionStore,
+    registry: AccountRegistry,
+    onSwitchAccount: () -> Unit,
+) {
     var token by remember { mutableStateOf(store.token ?: "") }
     var profile by remember { mutableStateOf<JSONObject?>(null) }
     var activeStudentId by remember { mutableStateOf(store.studentId) }
@@ -249,6 +262,75 @@ fun AppRoot(store: SessionStore) {
         bootError = null
         booting = false
         loginError = null
+    }
+
+    /** Экран входа без очистки текущего аккаунта — для добавления ещё одного. */
+    fun showLogin() {
+        screen = "login"
+        bootError = null
+        loginError = null
+    }
+
+    /**
+     * Вход по JSON-кукам (например `mos_cookies.json`): обновляем токен по cookie
+     * и создаём отдельный аккаунт со своим токеном, кэшем и куками.
+     */
+    fun loginWithCookies(raw: String) {
+        loginLoading = true
+        loginError = null
+        scope.launch {
+            try {
+                val jar = CookieJson.parse(raw)
+                if (jar.isEmpty()) {
+                    loginError = Words.CookiesInvalid.text
+                    return@launch
+                }
+                val refreshed = withContext(Dispatchers.IO) { CookieRefresh.refresh(jar) }
+                    ?: throw MeshCore.MeshError(Words.CookiesSignInFailed.text, "cookies")
+                val rotatedJar = CookieJson.parse(org.json.JSONObject(refreshed.jar).toString())
+                    .ifEmpty { jar }
+                val freshCookieJson = org.json.JSONObject(rotatedJar as Map<*, *>).toString()
+                client.token = refreshed.token
+                val result = withContext(Dispatchers.IO) { client.signIn(refreshed.token) }
+                val tokenValue = result.optString("token", refreshed.token)
+                val prof = result.optJSONObject("profile")
+                    ?: withContext(Dispatchers.IO) { client.fetchProfile() }
+                val children = (0 until (prof.optJSONArray("children")?.length() ?: 0))
+                    .mapNotNull { prof.optJSONArray("children")?.optJSONObject(it) }
+                val child = children.firstOrNull()
+                val studentId = child?.optString("id")?.takeIf { it.isNotBlank() }
+                val personId = child?.optString("personId")?.takeIf { it.isNotBlank() }
+                    ?: child?.optString("contingent_guid")?.takeIf { it.isNotBlank() }
+                if (studentId == null || personId == null) {
+                    throw MeshCore.MeshError(Words.NoStudentFoundSignInAsAParent.text, "no-student")
+                }
+                val id = CookieJson.accountKey(freshCookieJson)
+                val label = jar["user_login"]?.takeIf { it.isNotBlank() }
+                    ?: jar["login"]?.takeIf { it.isNotBlank() }
+                    ?: jar["obr_id"]?.takeIf { it.isNotBlank() }
+                    ?: id.take(8)
+                val accountStore = SessionStore(context, AccountRegistry.scopeFor(id))
+                accountStore.authCookies = freshCookieJson
+                accountStore.save(
+                    tokenValue,
+                    studentId,
+                    studentId,
+                    personId,
+                    prof.optJSONObject("parent")?.optString("parentName")
+                        ?: prof.optJSONObject("parent")?.optString("name"),
+                    child.optString("name"),
+                )
+                registry.add(id, label)
+                onSwitchAccount()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loginError = Words.CookiesSignInFailed.text
+                MeshLog.error("AUTH", e)
+            } finally {
+                if (isActive) loginLoading = false
+            }
+        }
     }
 
     // Проверка обновлений на GitHub Releases: не чаще одного раза в 15 минут.
@@ -376,7 +458,8 @@ fun AppRoot(store: SessionStore) {
                 }
             },
             loading = loginLoading,
-            error = loginError
+            error = loginError,
+            onLoginCookies = { raw -> loginWithCookies(raw) }
         )
 
         booting -> BootScreen()
@@ -393,7 +476,10 @@ fun AppRoot(store: SessionStore) {
             profile = profile,
             personId = activePersonId,
             studentId = activeStudentId,
-            onLogout = { logout() }
+            registry = registry,
+            onLogout = { logout() },
+            onAddAccount = { showLogin() },
+            onSwitchAccount = onSwitchAccount
         )
     }
 }
@@ -445,7 +531,10 @@ fun MainScaffold(
     profile: JSONObject?,
     personId: String?,
     studentId: String?,
-    onLogout: () -> Unit
+    registry: AccountRegistry,
+    onLogout: () -> Unit,
+    onAddAccount: () -> Unit,
+    onSwitchAccount: () -> Unit,
 ) {
     var currentTab by remember { mutableStateOf("ranking") }
     val hapticView = LocalView.current
@@ -465,6 +554,8 @@ fun MainScaffold(
     var marksSubjectName by remember { mutableStateOf<String?>(null) }
     var homeworkTarget by remember { mutableStateOf<HomeworkTarget?>(null) }
     var showMore by remember { mutableStateOf(false) }
+    var showAccounts by remember { mutableStateOf(false) }
+    var accountsVersion by remember { mutableIntStateOf(0) }
     var editNav by remember { mutableStateOf(false) }
     var navLayout by remember { mutableStateOf(NavTabs.load(hapticContext)) }
     fun applyNav(next: NavLayout) {
@@ -806,6 +897,11 @@ fun MainScaffold(
                 )
             } else {
                 ListItem(
+                    modifier = Modifier.fillMaxWidth().clickable { showAccounts = true },
+                    headlineContent = { Text(Words.Accounts.text) },
+                    leadingContent = { Text("◉") },
+                )
+                ListItem(
                     modifier = Modifier.fillMaxWidth().clickable { editNav = true },
                     headlineContent = { Text(Words.EditTabs.text) },
                     leadingContent = { Text("✎") },
@@ -821,6 +917,71 @@ fun MainScaffold(
                 Spacer(Modifier.height(16.dp))
             }
         }
+    }
+
+    if (showAccounts) {
+        val list = remember(accountsVersion) { registry.accounts() }
+        val active = registry.activeId()
+        AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = Color.Transparent,
+            onDismissRequest = { showAccounts = false },
+            title = { Text(Words.Accounts.text) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    if (list.isEmpty()) {
+                        Text(
+                            Words.NoAccountsYet.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    list.forEach { account ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                account.label + if (account.id == active) " •" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (account.id != active) {
+                                TextButton(onClick = {
+                                    registry.setActive(account.id)
+                                    showAccounts = false
+                                    onSwitchAccount()
+                                }) {
+                                    Text(Words.SwitchAccount.text)
+                                }
+                            }
+                            IconButton(onClick = {
+                                registry.remove(account.id)
+                                if (account.id == active) {
+                                    showAccounts = false
+                                    onSwitchAccount()
+                                } else {
+                                    accountsVersion++
+                                }
+                            }) {
+                                Text("×", style = MaterialTheme.typography.titleLarge)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAccounts = false
+                    onAddAccount()
+                }) {
+                    Text(Words.AddAccount.text)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAccounts = false }) { Text(Words.Close.text) }
+            }
+        )
     }
 }
 
@@ -839,10 +1000,23 @@ private fun MoreSheetItem(label: String, iconRes: Int, onClick: () -> Unit) {
 }
 
 @Composable
-fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
+fun LoginScreen(
+    onLogin: (String) -> Unit,
+    loading: Boolean,
+    error: String?,
+    onLoginCookies: (String) -> Unit,
+) {
     var tokenInput by remember { mutableStateOf("") }
     var experimental by remember { mutableStateOf(false) }
     var qrLink by remember { mutableStateOf<String?>(null) }
+    var cookieJson by remember { mutableStateOf("") }
+    val cookieFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()?.let { cookieJson = it }
+        }
+    }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val context = LocalContext.current
     val url = MeshCore.loginUrl()
@@ -901,6 +1075,47 @@ fun LoginScreen(onLogin: (String) -> Unit, loading: Boolean, error: String?) {
             title = { Text(Words.ExperimentalSignInMethods.text) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
+                    // Вход по cookie JSON (например mos_cookies.json) — experimental.
+                    Text(
+                        Words.SignInWithCookiesJson.text,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        Words.CookiesJsonHint.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { cookieFile.launch("*/*") }) {
+                            Text(Words.PickCookiesFile.text)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = cookieJson,
+                        onValueChange = { cookieJson = it },
+                        label = { Text(Words.PasteCookiesJson.text) },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Button(
+                        onClick = {
+                            val value = cookieJson.trim()
+                            if (value.isNotBlank()) {
+                                onLoginCookies(value)
+                                experimental = false
+                            }
+                        },
+                        enabled = !loading && cookieJson.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(Words.SignInWithCookiesJson.text)
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 16.dp))
                     Text(
                         Words.ExperimentalSignInWarning.text,
                         style = MaterialTheme.typography.bodyMedium,

@@ -36,7 +36,7 @@ class TokenRefreshWorker(
     }
 
     override fun doWork(): Result {
-        val store = SessionStore(applicationContext)
+        val store = SessionStore(applicationContext, AccountRegistry(applicationContext).activeScope())
         val saved = store.token
         if (saved.isNullOrBlank()) return Result.success()
 

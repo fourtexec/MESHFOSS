@@ -18,7 +18,11 @@ import org.json.JSONObject
  * недоступно (например, на устройстве без Keystore), используется обычное приватное
  * хранилище приложения с предупреждением в лог.
  */
-class SessionStore(context: Context) {
+class SessionStore(
+    context: Context,
+    /** Префикс файлов аккаунта: пустой — легаси-сессия, иначе `a…`. */
+    private val scope: String = "",
+) {
 
     companion object {
         private const val TAG = "MeshSession"
@@ -43,9 +47,10 @@ class SessionStore(context: Context) {
     }
 
     private val appContext = context.applicationContext
+    private val suffix = if (scope.isBlank()) "" else "_${scope}"
     private var encrypted: Boolean = false
     private val session: SharedPreferences = createSessionPrefs(appContext)
-    private val cache: SharedPreferences = appContext.getSharedPreferences(CACHE_FILE, Context.MODE_PRIVATE)
+    private val cache: SharedPreferences = appContext.getSharedPreferences(CACHE_FILE + suffix, Context.MODE_PRIVATE)
     private val settings: SharedPreferences = appContext.getSharedPreferences(SETTINGS_FILE, Context.MODE_PRIVATE)
 
     private fun createSessionPrefs(context: Context): SharedPreferences {
@@ -55,7 +60,7 @@ class SessionStore(context: Context) {
                 .build()
             val prefs = EncryptedSharedPreferences.create(
                 context,
-                SESSION_FILE,
+                SESSION_FILE + suffix,
                 masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
@@ -65,7 +70,7 @@ class SessionStore(context: Context) {
         } catch (error: Exception) {
             Log.w(TAG, "Шифрованное хранилище недоступно, используется приватное: ${error.message}")
             encrypted = false
-            context.getSharedPreferences(SESSION_FILE, Context.MODE_PRIVATE)
+            context.getSharedPreferences(SESSION_FILE + suffix, Context.MODE_PRIVATE)
         }
     }
 

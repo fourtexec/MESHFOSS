@@ -2573,6 +2573,83 @@ internal enum class Words(
         "Y %d más",
         "Et %d de plus"
     ),
+    Accounts(
+        "Аккаунты",
+        "Accounts",
+        "Fiókok",
+        "Cuentas",
+        "Comptes"
+    ),
+    AddAccount(
+        "Добавить аккаунт",
+        "Add account",
+        "Fiók hozzáadása",
+        "Añadir cuenta",
+        "Ajouter un compte"
+    ),
+    SwitchAccount(
+        "Переключиться",
+        "Switch to",
+        "Váltás",
+        "Cambiar a",
+        "Basculer vers"
+    ),
+    RemoveAccount(
+        "Удалить аккаунт",
+        "Remove account",
+        "Fiók törlése",
+        "Eliminar cuenta",
+        "Supprimer le compte"
+    ),
+    NoAccountsYet(
+        "Аккаунтов пока нет. Войдите по QR-ссылке или по cookie JSON.",
+        "No accounts yet. Sign in with a QR link or cookie JSON.",
+        "Még nincs fiók. Jelentkezzen be QR-hivatkozással vagy cookie JSON-nal.",
+        "Aún no hay cuentas. Inicie sesión con un enlace QR o JSON de cookies.",
+        "Aucun compte. Connectez-vous avec un lien QR ou un JSON de cookies."
+    ),
+    SignInWithCookiesJson(
+        "Войти по cookie JSON",
+        "Sign in with cookie JSON",
+        "Bejelentkezés cookie JSON-nal",
+        "Iniciar sesión con JSON de cookies",
+        "Se connecter avec un JSON de cookies"
+    ),
+    CookiesJsonHint(
+        "Выберите файл (например mos_cookies.json) или вставьте его содержимое. Куки останутся только на этом устройстве.",
+        "Pick a file (for example mos_cookies.json) or paste its contents. Cookies stay on this device only.",
+        "Válasszon fájlt (pl. mos_cookies.json), vagy illessze be a tartalmát. A cookie-k csak ezen az eszközön maradnak.",
+        "Seleccione un archivo (por ejemplo mos_cookies.json) o pegue su contenido. Las cookies se quedan solo en este dispositivo.",
+        "Choisissez un fichier (par exemple mos_cookies.json) ou collez son contenu. Les cookies restent sur cet appareil."
+    ),
+    PasteCookiesJson(
+        "Вставить JSON",
+        "Paste JSON",
+        "JSON beillesztése",
+        "Pegar JSON",
+        "Coller le JSON"
+    ),
+    PickCookiesFile(
+        "Выбрать файл",
+        "Pick file",
+        "Fájl kiválasztása",
+        "Elegir archivo",
+        "Choisir un fichier"
+    ),
+    CookiesInvalid(
+        "Не удалось прочитать cookie JSON. Нужны поля name и value.",
+        "Could not read cookie JSON. Fields name and value are required.",
+        "Nem sikerült beolvasni a cookie JSON-t. A name és value mezők szükségesek.",
+        "No se pudo leer el JSON de cookies. Se requieren los campos name y value.",
+        "Impossible de lire le JSON de cookies. Les champs name et value sont requis."
+    ),
+    CookiesSignInFailed(
+        "Не удалось войти по кукам. Проверьте, что они ещё действуют.",
+        "Could not sign in with these cookies. Check that they are still valid.",
+        "Nem sikerült bejelentkezni a cookie-kkal. Ellenőrizze, hogy érvényesek-e még.",
+        "No se pudo iniciar sesión con las cookies. Compruebe que sigan siendo válidas.",
+        "Impossible de se connecter avec ces cookies. Vérifiez qu’ils sont encore valides."
+    ),
     WidgetUpdated(
         "Обновлено %s",
         "Updated %s",

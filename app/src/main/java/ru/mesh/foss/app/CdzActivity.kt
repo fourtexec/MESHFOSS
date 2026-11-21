@@ -70,7 +70,7 @@ class CdzActivity : AppCompatActivity() {
         val cookies = CookieManager.getInstance()
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(webView, true)
-        val store = SessionStore(this)
+        val store = SessionStore(this, AccountRegistry(this).activeScope())
         // Долгоживущие куки QR-входа (Ltpatoken2, session-cookie…) помогают OAuth
         // к партнёру пройти без повторного входа; aupd_token — текущий токен.
         val jar = store.authCookies?.let { raw ->

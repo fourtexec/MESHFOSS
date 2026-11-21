@@ -2,6 +2,7 @@ package ru.mesh.foss.widget
 
 import ru.mesh.foss.R
 import ru.mesh.foss.core.Words
+import ru.mesh.foss.data.AccountRegistry
 import ru.mesh.foss.data.SessionStore
 import ru.mesh.foss.app.MainActivity
 
@@ -42,7 +43,7 @@ import java.util.Calendar
 class MeshWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snapshot = WidgetSnapshot.fromJson(SessionStore(context).loadWidgetSnapshot())
+        val snapshot = WidgetSnapshot.fromJson(SessionStore(context, AccountRegistry(context).activeScope()).loadWidgetSnapshot())
         provideContent { WidgetContent(snapshot) }
     }
 }
