@@ -52,6 +52,11 @@ class CdzNativeClient(
     fun updateCookie(name: String, value: String) {
         if (name.isNotBlank() && value.isNotBlank()) jar[name] = value
     }
+    fun currentToken(): String? = token
+    fun currentProfileId(): String? = profileId
+    fun currentUserId(): String? = userId
+    fun currentPersonId(): String? = personId
+    fun currentCookies(): Map<String, String> = jar.toMap()
 
     private fun params(): Map<String, String> {
         val out = mutableMapOf<String, String>()
@@ -127,6 +132,72 @@ class CdzNativeClient(
         result.status in 200..299
     }
 
+    /**
+     * Нативный проход по цепочке лаунчера school.mos.ru -> uchebnik.mos.ru.
+     * HttpURLConnection не идёт за редиректами сам: мы читаем Location/тело,
+     * сохраняем Set-Cookie и повторяем запрос с обновлённым jar'ом.
+     */
+    suspend fun resolveChallengeUrl(startUrl: String): String = withContext(Dispatchers.IO) {
+        var current = startUrl
+        val seen = mutableSetOf<String>()
+        repeat(12) { hop ->
+            if (seen.contains(current)) {
+                throw IllegalStateException("цикл редиректов на шаге $hop")
+            }
+            seen.add(current)
+            MeshLog.log("CDZ", "redirect #$hop -> ${current.take(180)}")
+            val connection = URL(current).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 20_000
+            connection.readTimeout = 30_000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8")
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/147.0.0.0 Mobile Safari/537.36")
+            if (token.orEmpty().isNotBlank()) {
+                connection.setRequestProperty("Authorization", "Bearer $token")
+            }
+            if (jar.isNotEmpty()) connection.setRequestProperty("Cookie", cookieHeader())
+
+            val status: Int
+            val body: String
+            val location: String?
+            val setCookies: List<String>
+            try {
+                status = connection.responseCode
+                location = connection.getHeaderField("Location")
+                setCookies = connection.headerFields["Set-Cookie"].orEmpty()
+                val stream = runCatching { connection.inputStream }.getOrNull() ?: connection.errorStream
+                body = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() }.orEmpty()
+            } finally {
+                connection.disconnect()
+            }
+            setCookies.forEach { raw ->
+                val pair = raw.substringBefore(';')
+                val name = pair.substringBefore('=').trim()
+                val value = pair.substringAfter('=').trim()
+                if (name.isNotBlank() && value.isNotBlank()) {
+                    jar[name] = value
+                    MeshLog.trace("CDZ") { "cookie $name обновлена" }
+                }
+            }
+            MeshLog.log("CDZ", "redirect #$hop: HTTP $status location=${location?.take(120).orEmpty()} body=${body.take(120)}")
+
+            val candidates = listOfNotNull(
+                location,
+                body.takeIf { it.startsWith("http://") || it.startsWith("https://") }?.trim(),
+                Regex("https?://[^\"'<>\\ ]+").find(body)?.value
+            )
+            val next = candidates.firstOrNull {
+                it.contains("/exam/challenge/") || it.startsWith("http")
+            }
+            if (current.contains("/exam/challenge/")) return@withContext current
+            if (next == null) {
+                throw IllegalStateException("редирект не найден: HTTP $status")
+            }
+            current = next.replace("&amp;", "&")
+        }
+        throw IllegalStateException("не удалось дойти до страницы ЦДЗ")
+    }
     suspend fun loadChallenge(challenge: String): JSONObject = withContext(Dispatchers.IO) {
         setChallengeId(challenge)
         val info = request("GET", "$SECURE/challenge/$challenge/info", null)

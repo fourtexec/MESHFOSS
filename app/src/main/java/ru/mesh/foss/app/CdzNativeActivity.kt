@@ -14,13 +14,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.text.method.LinkMovementMethod
 import android.view.View
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.webkit.CookieManager
 import android.widget.Button
 import android.widget.CheckBox
@@ -71,8 +66,7 @@ class CdzNativeActivity : AppCompatActivity() {
     private var challenge = ""
     private var finished = false
     private var currentView: View? = null
-    private var resolver: WebView? = null
-    private val handler = Handler(Looper.getMainLooper())
+
 
     private lateinit var titleView: TextView
     private lateinit var statusView: TextView
@@ -130,12 +124,7 @@ class CdzNativeActivity : AppCompatActivity() {
         resolvePage(url)
     }
 
-    /**
-     * Дневник отдаёт URL лаунчера school.mos.ru, а не страницу uchebnik.
-     * Пропускаем цепочку OAuth через скрытый WebView (там уже есть куки сессии),
-     * ловим финальный /exam/challenge/{id} и только потом включаем нативный API.
-     */
-    @SuppressLint("SetJavaScriptEnabled")
+    /** Нативный проход по редиректам лаунчера — без WebView. */
     private fun resolvePage(startUrl: String) {
         val direct = Regex("/exam/challenge/(\\d+)").find(startUrl)?.groupValues?.get(1).orEmpty()
         if (direct.isNotBlank()) {
@@ -143,81 +132,36 @@ class CdzNativeActivity : AppCompatActivity() {
             startNative(startUrl, direct)
             return
         }
-        MeshLog.log("CDZ", "native: нужен редирект лаунчера, загружаем в скрытом WebView")
         progress.visibility = View.VISIBLE
-        val web = WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            visibility = View.GONE
-        }
-        resolver = web
-        var done = false
-        fun onFinal(finalUrl: String) {
-            if (done) return
-            done = true
-            val id = Regex("/exam/challenge/(\\d+)").find(finalUrl)?.groupValues?.get(1).orEmpty()
-            MeshLog.log("CDZ", "native: финальный url=${finalUrl.take(200)} challenge=$id")
-            if (id.isBlank()) {
-                MeshLog.log("CDZ", "native: редирект не привёл к странице задания")
-                progress.visibility = View.GONE
-                Toast.makeText(this@CdzNativeActivity, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
-                return
-            }
-            // Копируем свежие куки из WebView в jar нативного клиента.
-            CookieManager.getInstance().getCookie("https://uchebnik.mos.ru")
-                ?.split(';')?.forEach { pair ->
-                    val key = pair.substringBefore('=').trim()
-                    val value = pair.substringAfter('=').trim()
-                    if (key.isNotBlank() && value.isNotBlank()) {
-                        client?.updateCookie(key, value)
-                    }
+        scope.launch {
+            try {
+                val api = client ?: return@launch
+                val finalUrl = withContext(Dispatchers.IO) { api.resolveChallengeUrl(startUrl) }
+                val id = Regex("/exam/challenge/(\\d+)").find(finalUrl)?.groupValues?.get(1).orEmpty()
+                MeshLog.log("CDZ", "native: финальный url=${finalUrl.take(200)} challenge=$id")
+                if (id.isBlank()) {
+                    throw IllegalStateException("challenge_id не найден: ${finalUrl.take(160)}")
                 }
-            startNative(finalUrl, id)
-        }
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
-                val value = request.url.toString()
-                if (value.contains("/exam/challenge/")) {
-                    onFinal(value)
-                    return true
-                }
-                return false
-            }
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                MeshLog.trace("CDZ") { "native web: $url" }
-                if (!url.isNullOrBlank() && url.contains("/exam/challenge/")) onFinal(url)
-            }
-        }
-        handler.postDelayed({
-            if (!done) {
-                MeshLog.log("CDZ", "native: таймаут ожидания редиректа")
-                done = true
+                client = CdzNativeClient(
+                    pageUrl = finalUrl,
+                    token = api.currentToken(),
+                    profileId = api.currentProfileId(),
+                    userId = api.currentUserId(),
+                    personId = api.currentPersonId(),
+                    cookies = api.currentCookies(),
+                )
+                startNative(finalUrl, id)
+            } catch (error: Exception) {
+                MeshLog.error("CDZ", error)
+                Toast.makeText(this@CdzNativeActivity, error.message ?: error.javaClass.simpleName, Toast.LENGTH_LONG).show()
+            } finally {
                 progress.visibility = View.GONE
-                Toast.makeText(this, Words.CdzNativeError.text, Toast.LENGTH_LONG).show()
             }
-        }, 25_000)
-        web.loadUrl(startUrl)
+        }
     }
 
     private fun startNative(finalUrl: String, challengeId: String) {
-        val store = SessionStore(this, AccountRegistry(this).activeScope())
-        val jar = CookieJson.parse(store.authCookies).toMutableMap()
-        CookieManager.getInstance().getCookie("https://uchebnik.mos.ru")
-            ?.split(';')?.forEach { pair ->
-                val key = pair.substringBefore('=').trim()
-                val value = pair.substringAfter('=').trim()
-                if (key.isNotBlank() && value.isNotBlank()) jar[key] = value
-            }
-        val token = jar["aupd_token"]?.takeIf { it.isNotBlank() } ?: store.token
-        client = CdzNativeClient(
-            pageUrl = finalUrl,
-            token = token,
-            profileId = store.studentId,
-            userId = jar["obr_id"],
-            personId = store.personId,
-            cookies = jar,
-        )
+        // Клиент уже создан нативным резолвером со свежими cookie после редиректов.
         challenge = challengeId
         scope.launch {
             progress.visibility = View.VISIBLE
