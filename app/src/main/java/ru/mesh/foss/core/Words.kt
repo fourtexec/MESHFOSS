@@ -2105,18 +2105,25 @@ internal enum class Words(
         "Devoirs numériques"
     ),
     CdzOpenInBrowser(
-        "Открыть в браузере",
-        "Open in browser",
-        "Megnyitás böngészőben",
-        "Abrir en el navegador",
-        "Ouvrir dans le navigateur"
+        "Браузер",
+        "Browser",
+        "Böngésző",
+        "Navegador",
+        "Navigateur"
     ),
     CdzBrowser(
-        "В браузере",
+        "Браузер",
         "Browser",
-        "Böngészőben",
-        "En navegador",
-        "Dans le navigateur"
+        "Böngésző",
+        "Navegador",
+        "Navigateur"
+    ),
+    CdzWatch(
+        "Смотреть",
+        "Watch",
+        "Megnézés",
+        "Ver",
+        "Regarder"
     ),
     CdzOpenInApp(
         "Нативное решение ЦДЗ (эксперимент)",

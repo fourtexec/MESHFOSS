@@ -45,6 +45,12 @@
             android:theme="@style/Theme.MeshRanker" />
 
         <activity
+            android:name=".app.CdzVideoActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:exported="false"
+            android:theme="@style/Theme.MeshRanker" />
+
+        <activity
             android:name=".app.CdzActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="false"

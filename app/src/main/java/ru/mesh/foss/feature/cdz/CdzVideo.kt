@@ -54,6 +54,7 @@ private data class CdzVideoInfo(
     val subtitlesUrl: String,
     val title: String,
     val posterUrl: String,
+    val cookieHeader: String = "",
 )
 
 private sealed class CdzVideoState {
@@ -68,12 +69,13 @@ private sealed class CdzVideoState {
  * В задании обычно приходит `atomic_id`, а настоящий MP4 лежит в
  * `GET /cms/api/v5/materials/{uuid}` → `custom_meta.file_url`. Поэтому сначала
  * пробуем прямой URL из блока, затем метаданные материала. Если воспроизвести
- * файл нельзя, остаётся честная кнопка «Открыть в браузере».
+ * файл нельзя, остаётся честная кнопка «Браузер».
  */
 @Composable
 fun CdzRemoteVideo(
     block: JSONObject,
     modifier: Modifier = Modifier,
+    showTitle: Boolean = true,
 ) {
     val context = LocalContext.current
     val key = remember(block) {
@@ -117,7 +119,7 @@ fun CdzRemoteVideo(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (current.info.title.isNotBlank()) {
+            if (showTitle && current.info.title.isNotBlank()) {
                 Text(
                     text = current.info.title,
                     style = MaterialTheme.typography.titleSmall,
@@ -185,7 +187,7 @@ private fun CdzVideoPlayer(info: CdzVideoInfo) {
                     val controller = MediaController(viewContext)
                     controller.setAnchorView(this)
                     setMediaController(controller)
-                    setVideoURI(Uri.parse(info.url), videoHeaders(info.url))
+                    setVideoURI(Uri.parse(info.url), videoHeaders(info.url, info.cookieHeader))
                     setOnPreparedListener { player ->
                         player.isLooping = false
                     }
@@ -203,12 +205,13 @@ private fun CdzVideoPlayer(info: CdzVideoInfo) {
     }
 }
 
-private fun videoHeaders(url: String): Map<String, String> = buildMap {
+private fun videoHeaders(url: String, cookieHeader: String = ""): Map<String, String> = buildMap {
     put("User-Agent", BrowserUserAgent)
     put("Referer", "$CdzBaseUrl/")
-    CookieManager.getInstance().getCookie(url)
-        ?.takeIf { it.isNotBlank() }
-        ?.let { put("Cookie", it) }
+    val cookies = cookieHeader.ifBlank {
+        CookieManager.getInstance().getCookie(url).orEmpty()
+    }
+    if (cookies.isNotBlank()) put("Cookie", cookies)
 }
 
 private fun openBrowser(context: Context, url: String) {
@@ -224,6 +227,7 @@ private suspend fun resolveCdzVideo(context: Context, block: JSONObject): CdzVid
     // Пробуем оба вида ссылок, но не задерживаем уже готовый прямой MP4
     // ожиданием метаданных. API требует Bearer и Profile-Id, поэтому идём
     // через сессионный клиент, а прямой HTTP оставляем запасным путём.
+    var sessionCookies = ""
     val metadata = if (direct.isBlank()) {
         val ids = materialIdCandidates(block)
         val viaClient = try {
@@ -235,6 +239,11 @@ private suspend fun resolveCdzVideo(context: Context, block: JSONObject): CdzVid
                 for (id in ids) {
                     found = client.loadMaterial(id)?.let(::videoInfoFromMetadata)
                     if (found != null) break
+                }
+                if (found != null) {
+                    sessionCookies = client.currentCookies().entries.joinToString("; ") {
+                        "${it.key}=${it.value}"
+                    }
                 }
                 found
             }
@@ -257,6 +266,7 @@ private suspend fun resolveCdzVideo(context: Context, block: JSONObject): CdzVid
                 block.optString("full_cover_url")
                     .ifBlank { block.optString("preview_url") }
             ),
+        cookieHeader = sessionCookies,
     )
 }
 

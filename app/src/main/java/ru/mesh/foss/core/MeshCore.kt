@@ -1253,6 +1253,19 @@ object MeshCore {
         }
     }
 
+    /**
+     * Дата по умолчанию для «Еды и баланса»: в будни — текущий день,
+     * в субботу/воскресенье — ближайший учебный понедельник. Иначе экран
+     * открывается на выходной, где меню и заказов всё равно нет.
+     */
+    fun defaultFeedingDate(today: String = today()): String {
+        return when (parseIso(today).get(Calendar.DAY_OF_WEEK)) {
+            Calendar.SATURDAY -> addDays(today, 2)
+            Calendar.SUNDAY -> addDays(today, 1)
+            else -> today
+        }
+    }
+
     /** Первый день учебного года (1 сентября). */
     fun schoolYearStart(iso: String): String {
         val calendar = parseIso(iso)

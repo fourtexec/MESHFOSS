@@ -206,6 +206,18 @@ class MeshCoreTest {
     }
 
     @Test
+    fun `Еда по умолчанию показывает текущий будний день и понедельник в выходные`() {
+        // 2026-11-12 — четверг: остаёмся на текущем дне.
+        assertEquals("2026-11-12", MeshCore.defaultFeedingDate("2026-11-12"))
+        // 2026-11-13 — пятница: пятница ещё учебный день.
+        assertEquals("2026-11-13", MeshCore.defaultFeedingDate("2026-11-13"))
+        // 2026-11-14 — суббота → понедельник, 16-е.
+        assertEquals("2026-11-16", MeshCore.defaultFeedingDate("2026-11-14"))
+        // 2026-11-15 — воскресенье → понедельник, 16-е.
+        assertEquals("2026-11-16", MeshCore.defaultFeedingDate("2026-11-15"))
+    }
+
+    @Test
     fun `нормализация домашки и расписания`() {
         val homework = MeshCore.normalizeHomework(
             JSONObject(

@@ -2,8 +2,8 @@
 
 package ru.mesh.foss.feature.homeworks
 
-import ru.mesh.foss.app.CdzActivity
 import ru.mesh.foss.app.CdzNativeActivity
+import ru.mesh.foss.app.CdzVideoActivity
 
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
@@ -11,6 +11,7 @@ import ru.mesh.foss.ui.*
 import ru.mesh.foss.R
 
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
@@ -47,7 +48,6 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import org.json.JSONObject
 import java.util.Locale
@@ -170,7 +170,19 @@ fun HomeworksScreen(
                     "launch: нативный режим=$nativeMode url=${url.substringBefore('?').take(160)}"
                 )
                 cdzReturnEntry = homeworkEntryId
-                if (!forceBrowser && prefs.getBoolean("cdz_in_app", false)) {
+                // Видео-атомы открываются не через ЦДЗ, а сразу в нативном
+                // проигрывателе: в launch-ссылке у них нет /exam/challenge/.
+                val videoMaterialId = cmsMaterialId(url)
+                if (!forceBrowser && videoMaterialId != null) {
+                    context.startActivity(
+                        CdzVideoActivity.intent(
+                            context = context,
+                            materialId = videoMaterialId,
+                            title = material.optString("title"),
+                            browserUrl = url,
+                        )
+                    )
+                } else if (!forceBrowser && prefs.getBoolean("cdz_in_app", false)) {
                     context.startActivity(
                         CdzNativeActivity.intent(context, url, material.optString("title"))
                     )
@@ -641,9 +653,40 @@ private fun openUrl(uriHandler: UriHandler, url: String, context: Context) {
     }
 }
 
+private val CmsMaterialUrl = Regex(
+    "/cms/materials/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+)
+
+/**
+ * Достаёт UUID видео-атома из ответа launch.
+ *
+ * school.mos.ru отдаёт 302 с `activity_url=https://uchebnik.mos.ru/cms/materials/<uuid>/launch`.
+ * В отличие от ЦДЗ, здесь нет `/exam/challenge/`, поэтому такой материал нужно вести
+ * в видеоплеер, а не в нативное прохождение.
+ */
+private fun cmsMaterialId(launchUrl: String): String? {
+    val activity = runCatching {
+        Uri.parse(launchUrl).getQueryParameter("activity_url")
+    }.getOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    return CmsMaterialUrl.find(activity ?: launchUrl)?.groupValues?.getOrNull(1)
+}
+
 private fun hasCdz(homework: JSONObject): Boolean {
     val materials = homework.optJSONArray("materials") ?: return false
     return (0 until materials.length()).any { materials.optJSONObject(it)?.optBoolean("isCdz") == true }
+}
+
+/**
+ * Видео-атомы (`atomic_object`) приходят в ДЗ без `isCdz` и без прямой ссылки.
+ * Для них primary-действие — «Смотреть», а launch уходит в нативный плеер.
+ */
+private fun isVideoMaterial(material: JSONObject): Boolean {
+    val type = material.optString("type").lowercase(Locale.US)
+    val typeName = material.optString("typeName").lowercase(Locale.ROOT)
+    return type == "atomic_object" ||
+        type.contains("video") ||
+        typeName.contains("видео") ||
+        typeName.contains("video")
 }
 
 /**
@@ -674,7 +717,10 @@ private fun CdzMaterialRow(
     val done = result?.optBoolean("done") == true
     val resultUrl = result?.optString("resultUrl").orEmpty()
     val rawAction = material.optString("actionName").trim()
-    val action = if (
+    val isVideo = isVideoMaterial(material)
+    val action = if (isVideo) {
+        Words.CdzWatch.text
+    } else if (
         rawAction.isBlank() ||
         rawAction.equals("Пройти", ignoreCase = true) ||
         rawAction.equals("Start", ignoreCase = true)
@@ -744,38 +790,42 @@ private fun CdzMaterialRow(
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (canLaunch) {
-                        FilledTonalButton(
+                        FilledTonalIconButton(
                             onClick = onOpen,
                             enabled = !opening,
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             if (opening) {
                                 LoadingIndicator(modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(Words.Opening.text)
                             } else {
-                                Text(action)
+                                Icon(
+                                    painter = painterResource(
+                                        if (isVideo) R.drawable.ic_watch else R.drawable.ic_open_material
+                                    ),
+                                    contentDescription = action,
+                                )
                             }
                         }
                     }
                     if (canLaunch && isCdz) {
-                        OutlinedButton(
+                        OutlinedIconButton(
                             onClick = onOpenInBrowser,
                             enabled = !opening,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text(
-                                text = Words.CdzBrowser.text,
-                                style = MaterialTheme.typography.labelMedium,
-                                textAlign = TextAlign.Center
+                            Icon(
+                                painter = painterResource(R.drawable.ic_browser),
+                                contentDescription = Words.CdzBrowser.text,
                             )
                         }
                     }
                     if (resultUrl.isNotBlank()) {
-                        OutlinedButton(
+                        OutlinedIconButton(
                             onClick = { onOpenResult(resultUrl) },
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) { Text(Words.CdzResult.text) }
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_result),
+                                contentDescription = Words.CdzResult.text,
+                            )
+                        }
                     }
                 }
             }

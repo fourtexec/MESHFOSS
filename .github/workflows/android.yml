@@ -32,8 +32,35 @@ env:
   ANDROID_SDK_CACHE_KEY: android-37.1-build-tools-36.0.0-37.0.0
 
 jobs:
+  release-guard:
+    name: Проверка релизного тега
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.guard.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Теги нужны, чтобы отличить обычный push в main от публикации релиза.
+          fetch-depth: 0
+
+      - name: Не собирать nightly для коммита с релизным тегом
+        id: guard
+        run: |
+          set -eu
+          SKIP="false"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            TAG="$(git tag --points-at HEAD --list 'v*' | head -n 1 || true)"
+            if [ -n "${TAG}" ]; then
+              echo "HEAD уже помечен тегом ${TAG}: nightly не публикуем, релиз соберёт запуск по тегу."
+              SKIP="true"
+            fi
+          fi
+          echo "skip=${SKIP}" >> "$GITHUB_OUTPUT"
+
   build:
     name: APK (Kotlin)
+    needs: release-guard
+    if: needs.release-guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

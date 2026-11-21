@@ -46,7 +46,7 @@ private data class FoodData(
 @Composable
 fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
     val scope = rememberCoroutineScope()
-    var selectedDate by remember { mutableStateOf(MeshCore.today()) }
+    var selectedDate by remember { mutableStateOf(MeshCore.defaultFeedingDate()) }
     var loading by remember { mutableStateOf(personId != null) }
     // Обновление свайпом «потянуть»: контент остаётся, крутится индикатор.
     var refreshing by remember { mutableStateOf(false) }
