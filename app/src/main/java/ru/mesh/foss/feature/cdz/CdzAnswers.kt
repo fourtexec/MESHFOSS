@@ -84,6 +84,7 @@ fun CdzAnswerContent(
                 TextAnswer(task, answer, onChanged, KeyboardType.Text)
             "answer/order" -> OrderAnswer(task, answer, onChanged)
             "answer/groups" -> GroupsAnswer(task, answer, onChanged)
+            "answer/table" -> CdzTableAnswer(task, answer, onChanged)
             "answer/grid" -> GridAnswer(task, answer, onChanged)
             "answer/inline/choice/single" -> Text(
                 text = Words.CdzChoose.text,
@@ -151,12 +152,15 @@ private fun ChoiceAnswer(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     CdzOptionMedia(option)
-                    CdzRichText(
-                        text = option.label(),
-                        spans = option.labelSpans(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    val label = option.label()
+                    if (label.isNotBlank()) {
+                        CdzRichText(
+                            text = label,
+                            spans = option.labelSpans(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
@@ -275,11 +279,14 @@ private fun OrderAnswer(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     CdzOptionMedia(option)
-                    CdzRichText(
-                        text = option.label(),
-                        spans = option.labelSpans(),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    val label = option.label()
+                    if (label.isNotBlank()) {
+                        CdzRichText(
+                            text = label,
+                            spans = option.labelSpans(),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
                 TextButton(onClick = { move(index, -1) }, enabled = index > 0) { Text("↑") }
                 TextButton(
@@ -379,12 +386,20 @@ private fun GroupsAnswer(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Checkbox(checked = checked, onCheckedChange = null)
-                    CdzRichText(
-                        text = option.label(),
-                        spans = option.labelSpans(),
-                        style = MaterialTheme.typography.bodyMedium,
+                    Column(
                         modifier = Modifier.weight(1f),
-                    )
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        CdzOptionMedia(option)
+                        val label = option.label()
+                        if (label.isNotBlank()) {
+                            CdzRichText(
+                                text = label,
+                                spans = option.labelSpans(),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -470,14 +485,18 @@ private fun UnsupportedAnswer(
 }
 
 @Composable
-private fun CdzOptionMedia(option: CdzOption) {
+internal fun CdzOptionMedia(option: CdzOption) {
     CdzRemoteImage(option.imageUrl, option.description)
     val video = option.video
     if (video != null) CdzRemoteVideo(video)
 }
 
-private fun CdzOption.label(): String =
-    text.ifBlank { description.ifBlank { Words.Option.text } }
+internal fun CdzOption.label(): String =
+    text.ifBlank {
+        description.ifBlank {
+            if (imageUrl.isNotBlank() || video != null) "" else Words.Option.text
+        }
+    }
 
 private fun CdzOption.labelSpans(): List<CdzTextSpan> =
     if (text.isNotBlank()) textSpans else emptyList()

@@ -3042,6 +3042,48 @@ internal enum class Words(
         "Elija",
         "Choisir"
     ),
+    CdzImage(
+        "Изображение",
+        "Image",
+        "Kép",
+        "Imagen",
+        "Image"
+    ),
+    CdzCorrectAnswer(
+        "Правильный ответ",
+        "Correct answer",
+        "Helyes válasz",
+        "Respuesta correcta",
+        "Bonne réponse"
+    ),
+    CdzCorrectAnswerHidden(
+        "Сервер не раскрывает правильный ответ для этой попытки.",
+        "The server does not reveal the correct answer for this attempt.",
+        "A szerver nem fedi fel a helyes választ ehhez a próbálkozáshoz.",
+        "El servidor no revela la respuesta correcta de este intento.",
+        "Le serveur ne révèle pas la bonne réponse pour cette tentative."
+    ),
+    CdzAwaitingReview(
+        "На проверке",
+        "Awaiting review",
+        "Ellenőrzésre vár",
+        "En revisión",
+        "En attente de vérification"
+    ),
+    CdzAwaitingReviewScore(
+        "— / %1\$d",
+        "— / %1\$d",
+        "— / %1\$d",
+        "— / %1\$d",
+        "— / %1\$d"
+    ),
+    CdzAnswerUnavailable(
+        "Ответ недоступен",
+        "Answer unavailable",
+        "A válasz nem érhető el",
+        "Respuesta no disponible",
+        "Réponse indisponible"
+    ),
     CdzVideoUnavailable(
         "Видео недоступно",
         "Video is unavailable",

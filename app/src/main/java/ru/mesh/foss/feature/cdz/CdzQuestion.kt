@@ -96,9 +96,10 @@ private fun CdzAtomicMedia(block: JSONObject, modifier: Modifier = Modifier) {
 
 @Composable
 private fun CdzAtomicImage(block: JSONObject, modifier: Modifier = Modifier) {
-    val url = block.optString("relative_url")
-        .ifBlank { block.optString("preview_url") }
-        .trim()
+    val url = cdzAbsoluteUrl(
+        block.optString("relative_url")
+            .ifBlank { block.optString("preview_url") }
+    )
     CdzRemoteImage(
         url = url,
         description = block.optString("description").trim(),

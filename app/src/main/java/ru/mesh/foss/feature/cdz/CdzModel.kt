@@ -44,6 +44,29 @@ data class CdzOption(
     val video: JSONObject? = null,
 )
 
+/**
+ * Таблица `answer/table`.
+ *
+ * API хранит заголовки прямо в `answer.options[0].content[0].table.cells`
+ * (строка `0` — заголовок столбцов), а типы ячеек — в `answer.cell_types`.
+ * Поэтому таблицу нельзя разобрать как обычный список вариантов.
+ */
+data class CdzTable(
+    val rows: Int,
+    val columns: Int,
+    val columnHeaders: Boolean,
+    val rowHeaders: Boolean,
+    val cells: Map<Pair<Int, Int>, String>,
+    val inputCells: Set<Pair<Int, Int>>,
+) {
+    val headerRows: Int get() = if (columnHeaders) 1 else 0
+    val headerColumns: Int get() = if (rowHeaders) 1 else 0
+
+    fun value(row: Int, column: Int): String = cells[row to column].orEmpty()
+
+    fun isInput(row: Int, column: Int): Boolean = row to column in inputCells
+}
+
 /** Пропуск в тексте `answer/inline/choice/single`. */
 data class CdzInlineChoice(
     val positionId: String,
@@ -194,9 +217,10 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
                 when (item.optString("atomic_type")) {
                     "image" -> {
                         if (image.isBlank()) {
-                            image = item.optString("relative_url")
-                                .ifBlank { item.optString("preview_url") }
-                                .trim()
+                            image = cdzAbsoluteUrl(
+                                item.optString("relative_url")
+                                    .ifBlank { item.optString("preview_url") }
+                            )
                             description = item.optString("description").trim()
                         }
                     }
@@ -225,6 +249,134 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
         )
     }
     return result
+}
+
+/**
+ * Таблица из `answer/table`.
+ *
+ * `options[0].content[0].table` содержит сетку и заголовки, а `cell_types`
+ * говорит, какие ячейки нужно заполнять. Если `cell_types` нет, вводными
+ * считаются все ячейки ниже/правее заголовков.
+ */
+fun parseTable(answer: JSONObject): CdzTable? {
+    val table = findTable(answer) ?: return null
+    val rows = table.optInt("rows", 0)
+    val columns = table.optInt("columns", 0)
+    if (rows <= 0 || columns <= 0) return null
+    val rawCells = table.optJSONObject("cells") ?: return null
+
+    val cells = linkedMapOf<Pair<Int, Int>, String>()
+    for (row in 0 until rows) {
+        val rowJson = rawCells.optJSONObject(row.toString()) ?: continue
+        for (column in 0 until columns) {
+            cells[row to column] = cellText(rowJson.opt(column.toString()))
+        }
+    }
+
+    val columnHeaders = table.optBoolean("columnHeaders", false)
+    val rowHeaders = table.optBoolean("rowHeaders", false)
+    val headerRows = if (columnHeaders) 1 else 0
+    val headerColumns = if (rowHeaders) 1 else 0
+    val cellTypes = answer.optJSONObject("cell_types")
+    val input = linkedSetOf<Pair<Int, Int>>()
+    for (row in headerRows until rows) {
+        for (column in headerColumns until columns) {
+            val type = cellTypes
+                ?.optJSONObject(row.toString())
+                ?.optString(column.toString())
+                .orEmpty()
+                .trim()
+                .uppercase()
+            if (cellTypes == null || type.isBlank() ||
+                "INPUT" in type || "MANUAL" in type
+            ) {
+                input += row to column
+            }
+        }
+    }
+
+    return CdzTable(
+        rows = rows,
+        columns = columns,
+        columnHeaders = columnHeaders,
+        rowHeaders = rowHeaders,
+        cells = cells,
+        inputCells = input,
+    )
+}
+
+/** Значения `cells` из `user_answer` или `right_answer` таблицы. */
+fun parseTableValues(answer: JSONObject?): Map<Pair<Int, Int>, String> {
+    val cells = answer?.optJSONObject("cells") ?: return emptyMap()
+    val result = linkedMapOf<Pair<Int, Int>, String>()
+    val rowKeys = cells.keys()
+    while (rowKeys.hasNext()) {
+        val rowKey = rowKeys.next()
+        val row = rowKey.toIntOrNull() ?: continue
+        val rowJson = cells.optJSONObject(rowKey) ?: continue
+        val columnKeys = rowJson.keys()
+        while (columnKeys.hasNext()) {
+            val columnKey = columnKeys.next()
+            val column = columnKey.toIntOrNull() ?: continue
+            val text = cellText(rowJson.opt(columnKey)).trim()
+            if (text.isNotBlank()) result[row to column] = text
+        }
+    }
+    return result
+}
+
+/** Тело ответа `answer/table` в формате сервера. */
+fun tableAnswer(type: String, values: Map<Pair<Int, Int>, String>): JSONObject {
+    val cells = JSONObject()
+    values.toSortedMap(compareBy<Pair<Int, Int>>({ it.first }, { it.second }))
+        .forEach { (key, text) ->
+        if (text.isNotBlank()) {
+            val rowKey = key.first.toString()
+            val row = cells.optJSONObject(rowKey) ?: JSONObject().also {
+                cells.put(rowKey, it)
+            }
+            row.put(key.second.toString(), JSONArray().put(text))
+        }
+    }
+    if (cells.length() == 0) return JSONObject()
+    return JSONObject()
+        .put("@answer_type", type)
+        .put("cells", cells)
+}
+
+private fun findTable(answer: JSONObject): JSONObject? {
+    answer.optJSONObject("table")?.let { return it }
+    val options = answer.optJSONArray("options") ?: return null
+    for (optionIndex in 0 until options.length()) {
+        val option = options.optJSONObject(optionIndex) ?: continue
+        val content = option.optJSONArray("content") ?: continue
+        for (partIndex in 0 until content.length()) {
+            val part = content.optJSONObject(partIndex) ?: continue
+            part.optJSONObject("table")?.let { return it }
+        }
+    }
+    return null
+}
+
+private fun cellText(value: Any?): String = when (value) {
+    null, JSONObject.NULL -> ""
+    is JSONArray -> (0 until value.length())
+        .mapNotNull { index -> value.optString(index).takeIf { it.isNotBlank() } }
+        .joinToString("\n")
+    is String -> value
+    else -> value.toString()
+}
+
+/**
+ * Относительные ссылки ЦДЗ приходят и как `/system/...`, и как полный URL.
+ * База всегда uchebnik.mos.ru, поэтому school-хелпер здесь не подходит.
+ */
+fun cdzAbsoluteUrl(raw: String?): String {
+    val value = raw?.trim().orEmpty()
+    if (value.isBlank()) return ""
+    if (value.startsWith("//")) return "https:$value"
+    if (value.startsWith("http://") || value.startsWith("https://")) return value
+    return "https://uchebnik.mos.ru/${value.trimStart('/')}"
 }
 
 /** Разбирает `text_styles` и обрезает диапазоны по границам текста. */
@@ -284,13 +436,20 @@ private fun trimmedStyledText(raw: String, styles: JSONArray?): StyledText {
 /** Пропуски `answer/inline/choice/single`. */
 fun parseInlineChoices(answer: JSONObject): List<CdzInlineChoice> {
     val positions = answer.optJSONArray("text_position") ?: return emptyList()
+    // `answer/gap/match/text` хранит общий список вариантов в answer.options,
+    // а `answer/inline/choice/single` — у каждого пропуска свой список.
+    val sharedOptions = if (isGapMatchText(answerType(answer))) {
+        parseOptions(answer)
+    } else {
+        emptyList()
+    }
     val result = mutableListOf<CdzInlineChoice>()
     for (index in 0 until positions.length()) {
         val position = positions.optJSONObject(index) ?: continue
         val positionId = position.optString("position_id").trim()
         val textId = position.optString("text_id").trim()
         val charPosition = position.optInt("position", -1)
-        val options = parseOptions(position)
+        val options = parseOptions(position).ifEmpty { sharedOptions }
         if (positionId.isBlank() || textId.isBlank() || charPosition < 0 || options.isEmpty()) continue
         result += CdzInlineChoice(
             positionId = positionId,
@@ -334,7 +493,11 @@ fun inlineAnswer(type: String, selections: List<CdzInlineSelection>): JSONObject
 
 /** true для типов, где ответ выбирается прямо в тексте задания. */
 fun isInlineChoice(type: String): Boolean =
-    type == "answer/inline/choice/single"
+    type == "answer/inline/choice/single" || isGapMatchText(type)
+
+/** `answer/gap/match/text` использует общий список вариантов и пропуски в тексте. */
+fun isGapMatchText(type: String): Boolean =
+    type == "answer/gap/match/text"
 
 /** Пары из `answer.match` (source → target). */
 fun parseMatch(value: JSONObject?): LinkedHashMap<String, String> {
@@ -420,6 +583,9 @@ fun hasAnswer(answer: JSONObject): Boolean {
         }
         return false
     }
+    answer.optJSONObject("cells")?.let {
+        return parseTableValues(answer).isNotEmpty()
+    }
     answer.optJSONArray("string")?.let { values ->
         for (i in 0 until values.length()) {
             if (values.optString(i).isNotBlank()) return true
@@ -435,4 +601,45 @@ fun hasAnswer(answer: JSONObject): Boolean {
     return answer.optString("id").isNotBlank() ||
         answer.optString("string").isNotBlank() ||
         answer.optString("number").isNotBlank()
+}
+
+/**
+ * Есть ли в payload правильный ответ, который можно показать.
+ *
+ * Сервер в `JUST_CORRECTNESS` возвращает заглушки `{"id":null}`,
+ * `{"ids":[]}`, `{"match":{}}` и `{"cells":{}}`; их нельзя выдавать за ответ.
+ */
+fun hasVisibleAnswer(answer: JSONObject?): Boolean {
+    if (answer == null || answer.length() == 0) return false
+    if (answer.has("id") && !answer.isNull("id") && answer.optString("id").isNotBlank()) return true
+    answer.optJSONArray("ids")?.let { return it.length() > 0 }
+    answer.optJSONObject("match")?.let { return it.length() > 0 }
+    answer.optJSONObject("cells")?.let { return parseTableValues(answer).isNotEmpty() }
+    answer.optJSONArray("cells")?.let { return hasAnswer(answer) }
+    answer.optJSONArray("groups")?.let { return hasAnswer(answer) }
+    answer.optJSONArray("ids_order")?.let { return it.length() > 0 }
+    answer.optJSONArray("text_position_answer")?.let { return it.length() > 0 }
+    answer.optJSONArray("answers")?.let { answers ->
+        for (index in 0 until answers.length()) {
+            val item = answers.optJSONObject(index) ?: continue
+            item.optJSONArray("strings")?.let { strings ->
+                for (stringIndex in 0 until strings.length()) {
+                    if (strings.optString(stringIndex).isNotBlank()) return true
+                }
+            }
+        }
+    }
+    answer.optJSONArray("string")?.let { array ->
+        for (index in 0 until array.length()) {
+            if (array.optString(index).isNotBlank()) return true
+        }
+    }
+    answer.optJSONArray("number")?.let { array ->
+        for (index in 0 until array.length()) {
+            if (array.optString(index).isNotBlank()) return true
+        }
+    }
+    if (answer.optString("string").isNotBlank()) return true
+    if (answer.optString("number").isNotBlank()) return true
+    return false
 }

@@ -1234,7 +1234,7 @@ GET .../assignment/context/{assignment_context_id}/result
 | `score` | получено баллов за задание |
 | `max_score` | максимум за задание |
 | `criteria_score` | балл по критериям или `null` |
-| `status` | `DONE` (выполнено); вероятны `NOT_DONE`/`WAITING` — не наблюдались |
+| `status` | `DONE` (проверено автоматически) или `AWAIT_FOR_REVIEW` (ждёт проверки учителем) |
 | `result_impact` | `INCLUDED` — задание учтено в результате |
 | `id`, `task_order` | ID и порядок задания |
 | `question_elements[]` | условие задания (как в `start-attempt`) |
@@ -1249,6 +1249,81 @@ GET .../assignment/context/{assignment_context_id}/result
 * `answer/match` → `{"match": {}}`.
 
 То есть даже после завершения правильные ответы не раскрываются.
+
+#### 9.3.1. Проверка на реальных попытках 16–22.11.2026
+
+Через историю `assignments/my` → `context/{id}/result` и
+`attempt/{id}/result` проверены **13 ЦДЗ и 17 попыток** (включая повторные
+попытки по истории). Это подтвердило несколько важных частных случаев.
+
+**Ручная проверка.** Если в задании есть развёрнутый ответ, оно может прийти
+со статусом `AWAIT_FOR_REVIEW`, пустым `answer_feedback` (`{"type":"EMPTY"}`)
+и `score: 0` до проверки учителем. При этом итоговая попытка уже может иметь
+`got_score: 4` из `max_score: 5`, а в `attempt_info` появляется:
+
+```json
+{
+  "amount_correct_answer": 4,
+  "amount_waiting_review_answer": 1,
+  "amount_wrong_answer": 0
+}
+```
+
+Поэтому `score: 0` у задания в статусе `AWAIT_FOR_REVIEW` нельзя показывать
+как «неверно»: это «на проверке», а не окончательный ноль.
+
+**`answer/gap/match/text`.** В реальном задании `answer.text_position[]`
+содержит только `position_id`, `text_id` и `position`; сами варианты лежат
+общим массивом в `answer.options[]`. Ответ ученика содержит только
+`text_position_answer[]`:
+
+```json
+{
+  "@answer_type": "answer/gap/match/text",
+  "text_position_answer": [
+    { "position_id": "<position_id>", "text_id": "<text_id>", "id": "<option_id>" }
+  ]
+}
+```
+
+**`answer/table`.** Заголовки и сетка лежат не в `question_elements`, а в
+`answer.options[0].content[0]`:
+
+```json
+{
+  "type": "content/table",
+  "table": {
+    "cells": { "0": { "0": ["Жизнеспособность"], "1": ["Количество хлорофилла"] } },
+    "rows": 2,
+    "columns": 2,
+    "rowHeaders": false,
+    "columnHeaders": true
+  }
+}
+```
+
+Типы ячеек — в `answer.cell_types`, например
+`{"1":{"0":"MANUAL_INPUT","1":"MANUAL_INPUT"}}`. Ответ ученика и скрытый
+`right_answer` используют объект `cells`:
+
+```json
+{"@answer_type":"answer/table","cells":{"1":{"0":["3"],"1":["1"]}}}
+```
+
+**Правильный ответ.** Во всех 78 проверенных заданиях `answer_feedback.type`
+был только `JUST_CORRECTNESS` (73) или `EMPTY` (5). `right_answer` содержал
+заглушки (`id: null`, `ids: []`, `match: {}`, пустые `cells`), а
+`reference_right_answer` был `null`. `SHOW_CORRECT_ANSWER` с
+`correct_answer` на этих попытках не встретился. Тот же скрытый результат
+возвращает read-only
+`GET /challenge/task/answers?challenge_id={cid}&challenge_attempt_id={aid}`
+(дополнительно приходит `can_assess_task_ids`, но правильные ответы не
+раскрываются).
+
+**Картинки.** В `content/atomic` поле `relative_url` бывает как полным
+`https://uchebnik.mos.ru/cms/...`, так и путём `/system/atomic_objects/...`.
+Относительный путь нужно склеивать с `https://uchebnik.mos.ru`, а не с
+`school.mos.ru`; иначе картинка не загрузится.
 
 `user_answer` по типам:
 
@@ -1630,6 +1705,13 @@ cookie/Bearer и посмотреть ответ.
 **Известно:** успешный вызов — это `Authorization: Bearer <действующий accessTokenEom>`,
 тело `null`, ответ `200` + новые токены + `Set-Cookie` сессии на 7 дней. Все три вызова
 в HAR #1 были успешными (в HAR #2 `refresh` не вызывался вовсе).
+
+**Проверено 22.11.2026:** refresh без Bearer, но с `Session-Id-External` +
+`Session-Eom-Profile` (и любым из `aupd_token`/`Ltpatoken2`/`user_login`/`obr_id`)
+возвращает `200` и новые `accessTokenEom`/`accessTokenAupd`/`Set-Cookie`.
+Без двух `Session-*` cookies сервер отвечает
+`401 {"error_code":"401","error_description":"Required cookies are missing."}` —
+одного `aupd_token` и профильных cookie из `auth_cookies` недостаточно.
 
 **Версия из `mesh-cdz-api.md` §9:** «`POST /acl/api/session/v2/refresh` — поднимает
 **или** обновляет сессию uchebnik по cookie». Если это так, то refresh умеет работать
@@ -2015,7 +2097,7 @@ answer = {
 | `answer/table` | `{"cells":{"<row>":{"<col>":[…]}}}` | **[код]** (ячейки с `MANUAL_INPUT` триммируются) |
 | `answer/grid` | `{"cells":[{"input_type":"MANUAL_INPUT","answer":"…"}]}` | **[код]** |
 | `answer/inline/choice/single` | `{"text_position_answer":[…]}` | **[код]** |
-| `answer/gap/match/text` | `{"text_input_answer":[…],"text_position_answer":[…]}` | **[код]** |
+| `answer/gap/match/text` | `{"text_position_answer":[…]}` | **[факт 22.11.2026]**; `text_input_answer` в проверенных ответах не приходил |
 | `answer/gap/text/input` | `{"text_input_answer":[{"input_strings":[…],"caseSensitive":false}],"text_position_answer":[…]}` | **[код]** |
 | `answer/color/match`, `answer/gap/match/text/image`, `answer/text/line_highlighting/match` | `{"text_position_answer":[…]}` | **[код]** |
 | `answer/gap/match/background/image` | `{"position_answer":[…]}` | **[код]** |

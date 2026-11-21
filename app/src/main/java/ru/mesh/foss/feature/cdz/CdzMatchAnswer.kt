@@ -346,24 +346,20 @@ private fun MatchColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        CdzRemoteImage(
-                            url = option.imageUrl,
-                            description = option.description,
-                        )
-                        val video = option.video
-                        if (video != null) CdzRemoteVideo(video)
-                        CdzRichText(
-                            text = option.text.ifBlank {
-                                option.description.ifBlank { Words.Option.text }
-                            },
-                            spans = if (option.text.isNotBlank()) {
-                                option.textSpans
-                            } else {
-                                emptyList()
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        CdzOptionMedia(option)
+                        val label = option.label()
+                        if (label.isNotBlank()) {
+                            CdzRichText(
+                                text = label,
+                                spans = if (option.text.isNotBlank()) {
+                                    option.textSpans
+                                } else {
+                                    emptyList()
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                     if (isSource) {
                         MatchDot(
