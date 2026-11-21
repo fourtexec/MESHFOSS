@@ -43,7 +43,7 @@ class CdzNativeActivity : FragmentActivity() {
         val viewModel = ViewModelProvider(
             this,
             CdzNativeViewModel.Factory(
-                application = application,
+                app = application,
                 url = intent.getStringExtra(EXTRA_URL).orEmpty(),
             ),
         )[CdzNativeViewModel::class.java]
