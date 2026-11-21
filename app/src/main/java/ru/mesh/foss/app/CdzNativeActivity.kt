@@ -534,56 +534,22 @@ class CdzNativeActivity : AppCompatActivity() {
         return view
     }
 
-    /** answer/match: source → target; картинки вариантов показываем в тексте (~MD §7.2). */
+    /** answer/match — Compose + M3 Expressive: верхний/нижний ряды и цветные линии. */
     private fun renderMatch(answer: JSONObject, chosen: JSONObject, answerKey: String) {
-        val options = answer.optJSONArray("options") ?: return
-        val sources = mutableListOf<JSONObject>()
-        val targets = mutableListOf<JSONObject>()
-        for (i in 0 until options.length()) {
-            val option = options.optJSONObject(i) ?: continue
-            when (option.optString("type")) {
-                "option_type/match/source" -> sources += option
-                "option_type/match/target" -> targets += option
+        val composeView = androidx.compose.ui.platform.ComposeView(this)
+        composeView.setContent {
+            MeshRankerTheme {
+                CdzMatchScreen(
+                    answer = answer,
+                    savedMatch = chosen.optJSONObject("match") ?: JSONObject(),
+                    onChanged = { json ->
+                        draft.put(answerKey, JSONObject().put("@answer_type", "answer/match").put("match", json))
+                        keepDraft(); saved.remove(current); renderNavState()
+                    },
+                )
             }
         }
-        val currentMatch = chosen.optJSONObject("match") ?: JSONObject()
-        sources.forEach { source ->
-            val sid = source.optString("id")
-            val selected = currentMatch.optJSONArray(sid)?.optString(0).orEmpty()
-            content.addView(optionView(source) {
-                val next = targets.firstOrNull { it.optString("id") == selected }
-                val index = targets.indexOf(next).let { if (it < 0) -1 else it }
-                AlertDialog.Builder(this)
-                    .setTitle(source.optString("text").ifBlank { Words.Option.text })
-                    .setSingleChoiceItems(
-                        targets.map { it.optString("text").ifBlank { Words.Option.text } }.toTypedArray(),
-                        index
-                    ) { dialog, which ->
-                        val map = (draft.optJSONObject(answerKey)?.optJSONObject("match")
-                            ?: chosen.optJSONObject("match") ?: JSONObject())
-                        val target = targets[which].optString("id")
-                        map.put(sid, JSONArray().put(target))
-                        val result = JSONObject()
-                            .put("@answer_type", "answer/match")
-                            .put("match", map)
-                        draft.put(answerKey, result)
-                        keepDraft()
-                        saved.remove(current)
-                        renderNavState()
-                        dialog.dismiss()
-                        renderTask()
-                    }
-                    .setNegativeButton(Words.Close.text, null)
-                    .show()
-            })
-            val target = targets.firstOrNull { it.optString("id") == selected }
-            if (target != null) {
-                val label = TextView(this)
-                label.text = "→ " + target.optString("text")
-                label.setTextIsSelectable(true)
-                content.addView(label)
-            }
-        }
+        content.addView(composeView)
     }
 
     private fun renderNumber(chosen: JSONObject, answerKey: String) {
