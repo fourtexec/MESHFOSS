@@ -1,15 +1,45 @@
-# MESH Ranker for Linux
+# MESHFOSS для Linux
 
-Native Linux desktop build based on Compose for Desktop. It reuses the existing MЭШ API client and provides session login plus рейтинг, оценки, домашние задания, расписание, предметы and profile data.
+Десктопный клиент Московской электронной школы для Linux x86-64. Приложение написано на Rust. Интерфейс Leptos работает в окне Tauri 2.
 
-## Build
+## Установка
 
-Requires JDK 17 and Linux packaging tools (`fakeroot`, `dpkg`):
+В выпуске Linux есть пакет Debian/Ubuntu и AppImage. Пакет можно открыть в системном установщике. Для AppImage включите разрешение на запуск и откройте файл. Для установки из терминала в каталоге загрузки выполните одну из команд.
 
 ```bash
-./gradlew :linuxApp:packageReleaseDeb
+sudo apt install ./MESHFOSS_*_amd64.deb
 ```
 
-The `.deb` and a self-contained app directory are written under `linuxApp/build/compose/binaries/main-release/`. CI publishes the `.deb` and a portable `.tar.gz` archive as a GitHub prerelease from branch `linux-app`.
+```bash
+chmod +x MESHFOSS_*_amd64.AppImage
+./MESHFOSS_*_amd64.AppImage
+```
 
-Sign in by pasting a МЭШ token from the browser session. The app stores the session under `~/.config/mesh-ranker/session.json` with owner-only file permissions. The token is not encrypted at rest.
+## Работа с дневником
+
+Войдите через окно mos.ru, подтвердите вход в дневник и нажмите «Завершить вход». Для входа по QR выберите QR-код на странице авторизации и подтвердите его на телефоне. Также доступен ручной вход по личному токену. Кнопка «Открыть демоверсию» позволяет пройти сценарии на примере вымышленной семьи.
+
+- Из расписания можно перейти к заданию, открыть материалы и отметить выполнение. В узком окне клавиша Esc возвращает к списку. F5 обновляет раздел.
+- Оценки доступны по датам, предметам и учебным годам. Есть подробности работы, распределение оценок, недельная динамика и рейтинг класса.
+- В питании доступны меню, баланс и предзаказы. Для карты «Москвёнок» предусмотрены отдельный вход в mos.ru, подключение и обновление QR.
+- В настройках меняются пять языков, тема, цвета и стиль. Есть каналы стабильных и предварительных выпусков Linux.
+- Сохранённая сессия хранится в Secret Service. При недоступной связке ключей приложение сообщает об этом и поддерживает вход на время работы. Для сохранённой сессии можно включить обновление при закрытом окне через пользовательский таймер systemd.
+
+## Сборка
+
+Из каталога `linuxApp`. На Ubuntu 24.04 для сборки нужны пакеты `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf`. Пакеты релиза собираются в CI на Ubuntu 24.04.
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install trunk --version 0.21.14 --locked
+cargo install tauri-cli --version 2.12.6 --locked
+cargo tauri dev
+```
+
+```bash
+trunk build --release
+cargo test --locked -p mesh-core -p mesh-ranker
+cargo tauri build --bundles deb,appimage
+```
+
+Готовые файлы лежат в `target/release/bundle/deb` и `target/release/bundle/appimage`. Push в `linux-app` выпускает предварительную версию. Тег `linux-vX.Y.Z` выпускает стабильную. Лицензия GPLv3.

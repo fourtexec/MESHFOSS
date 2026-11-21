@@ -1,0 +1,30 @@
+[package]
+name = "mesh-ranker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MESHFOSS desktop school diary"
+authors = ["MESHFOSS contributors"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+mesh-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+tokio = { version = "1", features = ["sync", "time", "macros", "rt-multi-thread"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+url = "2"
+semver = "1"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+base64 = "0.22"
+open = "5"
+uuid = { version = "1", features = ["v4"] }
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "windows-native"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

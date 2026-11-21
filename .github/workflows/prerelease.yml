@@ -3,6 +3,7 @@ name: Linux and Android pre-release
 on:
   push:
     branches: [test-branch-lexus, linux-app]
+    tags: ['linux-v*']
   workflow_dispatch:
 
 permissions:
@@ -59,54 +60,83 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   linux:
-    name: Build native Linux packages
-    if: github.ref == 'refs/heads/linux-app' || github.event_name == 'workflow_dispatch'
+    name: Test and package MESHFOSS for Linux x86-64
+    if: github.ref == 'refs/heads/linux-app' || startsWith(github.ref, 'refs/tags/linux-v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: linuxApp
+    env:
+      NO_COLOR: "true"
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+      NO_STRIP: "true"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set build version
+      - name: Install Linux libraries
         run: |
-          echo "VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-          echo "VERSION_NAME=1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-
-      - name: Install Linux packaging tools
-        run: sudo apt-get update && sudo apt-get install -y fakeroot dpkg rpm libfuse2
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf libfuse2t64 xvfb webkit2gtk-driver dbus-x11
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build .deb and portable archive
-        run: ./gradlew --no-daemon --warning-mode all :linuxApp:packageReleaseDeb
-
-      - name: Prepare Linux artifacts
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: linuxApp
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.21.14
+      - name: Determine package version
+        id: version
         run: |
-          cp linuxApp/build/compose/binaries/main-release/deb/*.deb "mesh-ranker-${VERSION_NAME}-amd64.deb"
-          mkdir -p portable
-          dpkg-deb -x linuxApp/build/compose/binaries/main-release/deb/*.deb portable
-          MAIN_JAR=$(find portable/opt/mesh-ranker/lib/app -maxdepth 1 -name 'linuxApp-*.jar' -print -quit)
-          test -n "$MAIN_JAR"
-          jar tf "$MAIN_JAR" | grep -qx 'ru/meshrating/app/LinuxMainKt.class'
-          grep -qx 'app.mainclass=ru.meshrating.app.LinuxMainKt' portable/opt/mesh-ranker/lib/app/mesh-ranker.cfg
-          tar -czf "mesh-ranker-${VERSION_NAME}-linux-x64.tar.gz" -C portable .
-
-      - name: Publish Linux GitHub pre-release
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          base = json.loads(Path("src-tauri/tauri.conf.json").read_text())["version"]
+          tag_build = os.environ["GITHUB_REF"].startswith("refs/tags/linux-v")
+          if tag_build:
+              version = os.environ["GITHUB_REF_NAME"].removeprefix("linux-v")
+          else:
+              major, minor, patch = base.split(".")
+              version = f"{major}.{minor}.{int(patch) + 1}-dev.{os.environ['GITHUB_RUN_NUMBER']}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              print(f"version={version}", file=out)
+              print(f"prerelease={str('-' in version).lower()}", file=out)
+          Path(os.environ["RUNNER_TEMP"], "mesh-version.json").write_text(json.dumps({"version": version}))
+          PY
+      - name: Test Rust and WebAssembly targets
+        run: |
+          trunk build --release
+          cargo test --locked -p mesh-core -p mesh-ranker
+          cargo check --locked -p mesh-ui --target wasm32-unknown-unknown
+      - name: Build Linux packages
+        run: npx --yes --package=@tauri-apps/cli@2.12.6 tauri build --bundles deb,appimage --config "$RUNNER_TEMP/mesh-version.json"
+      - name: Verify package payloads
+        run: |
+          dpkg-deb --contents target/release/bundle/deb/*.deb > "$RUNNER_TEMP/mesh-files"
+          grep -q '/usr/bin/mesh-ranker$' "$RUNNER_TEMP/mesh-files"
+          target/release/bundle/appimage/*.AppImage --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          dpkg-deb -x target/release/bundle/deb/*.deb "$RUNNER_TEMP/mesh-installed"
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1400x950x24' python3 tests/desktop_smoke.py "$RUNNER_TEMP/mesh-installed/usr/bin/mesh-ranker"
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1400x950x24' python3 tests/desktop_smoke.py squashfs-root/AppRun
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: meshfoss-linux-x86_64
+          path: |
+            linuxApp/target/release/bundle/deb/*.deb
+            linuxApp/target/release/bundle/appimage/*.AppImage
+      - name: Publish Linux release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: linux-app-${{ github.run_number }}
-          name: MESH Ranker ${{ env.VERSION_NAME }}
-          prerelease: true
+          tag_name: linux-v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: MESHFOSS Linux ${{ steps.version.outputs.version }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           generate_release_notes: true
           files: |
-            mesh-ranker-${{ env.VERSION_NAME }}-amd64.deb
-            mesh-ranker-${{ env.VERSION_NAME }}-linux-x64.tar.gz
+            linuxApp/target/release/bundle/deb/*.deb
+            linuxApp/target/release/bundle/appimage/*.AppImage
           fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
