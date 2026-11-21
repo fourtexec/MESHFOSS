@@ -205,6 +205,7 @@ fun AppRoot(
     var retryKey by remember { mutableStateOf(0) }
     var loginLoading by remember { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
+    var addingAccount by remember { mutableStateOf(false) }
     var screen by remember { mutableStateOf(if (store.token != null) "main" else "login") }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     val scope = rememberCoroutineScope()
