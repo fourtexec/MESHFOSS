@@ -1,15 +1,12 @@
 package ru.mesh.foss.app
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,18 +21,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.abs
 
-private data class MatchNode(
-    val id: String,
-    val label: String,
-    val source: Boolean,
-    val order: Int,
-)
+private data class MatchNode(val id: String, val label: String, val source: Boolean)
 
 private val PairColors = listOf(
     Color(0xFF4F8DF7), Color(0xFFEF6C7E), Color(0xFF39B98B),
@@ -43,9 +33,12 @@ private val PairColors = listOf(
 )
 
 /**
- * Красивое сопоставление: верхний и нижний ряды кругов, цветные кривые между
- * ними, drag от круга к кругу ИЛИ выбор «сначала верх, потом низ»/наоборот.
- * Совместимо со всеми дизайнами — цвета берутся из MaterialTheme.
+ * Сопоставление «верх → низ» по мотивам рабочего графового примера
+ * Android By Example (startLine/endLine, findAt, линия рисуется в Canvas).
+ *
+ * Жест начинается на КРУГЕ верхнего ряда; палец тянет ЛИНИЮ к кругу нижнего
+ * ряда; на отпускании ищется ближайший кружок радиуса [hitRadius]. Тап по
+ * уже существующей линии (или по её кругу) удаляет пару.
  */
 @Composable
 fun CdzMatchScreen(
@@ -60,133 +53,137 @@ fun CdzMatchScreen(
     if (options != null) {
         for (i in 0 until options.length()) {
             val option = options.optJSONObject(i) ?: continue
-            val node = MatchNode(
-                id = option.optString("id"),
-                label = option.optString("text").ifBlank {
-                    option.optJSONArray("content")?.let { content ->
-                        (0 until content.length()).mapNotNull { content.optJSONObject(it) }
-                            .firstOrNull { it.optString("atomic_type") == "image" }
-                            ?.optString("description")
-                    }.orEmpty().ifBlank { "·" }
-                },
-                source = option.optString("type") == "option_type/match/source",
-                order = i,
-            )
+            val label = option.optString("text").ifBlank {
+                option.optJSONArray("content")?.let { content ->
+                    (0 until content.length()).mapNotNull { content.optJSONObject(it) }
+                        .firstOrNull { it.optString("atomic_type") == "image" }
+                        ?.optString("description")
+                }.orEmpty().ifBlank { "·" }
+            }
+            val node = MatchNode(option.optString("id"), label, option.optString("type") == "option_type/match/source")
             if (node.source) sources += node else targets += node
         }
     }
 
-    var links by remember { mutableStateOf<LinkedHashMap<String, String>>(
-        LinkedHashMap<String, String>().apply {
+    var links by remember {
+        mutableStateOf<LinkedHashMap<String, String>>(LinkedHashMap<String, String>().apply {
             savedMatch.keys().forEach { key ->
                 val array = savedMatch.optJSONArray(key)
                 if (array != null && array.length() > 0) put(key, array.optString(0))
             }
-        }
-    ) }
-    var selected by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    var drag by remember { mutableStateOf<Pair<Offset, Offset>?>(null) }
-    val nodeCenters = remember { mutableStateMapOf<String, Offset>() }
-    val palette = PairColors
+        })
+    }
+    // линия, которую тянет пользователь: верхний id + текущая точка пальца
+    var pending by remember { mutableStateOf<Pair<String, Offset>?>(null) }
+    val centers = remember { mutableStateMapOf<String, Offset>() }
     val dragColor = MaterialTheme.colorScheme.primary
+    val hitRadius = 90f
 
-    fun commit(first: Pair<Boolean, String>, second: Pair<Boolean, String>) {
-        val (sourceId, targetId) = if (first.first) first.second to second.second
-        else second.second to first.second
-        if (first.first == second.first) return
-        // один target можно использовать один раз
-        val updated = LinkedHashMap(links)
-        updated.entries.removeIf { it.value == targetId }
-        updated[sourceId] = targetId
-        links = updated
+    fun publish(map: LinkedHashMap<String, String>) {
+        links = map
         val json = JSONObject()
-        updated.forEach { (key, value) -> json.put(key, JSONArray().put(value)) }
+        map.forEach { (key, value) -> json.put(key, JSONArray().put(value)) }
         onChanged(json)
-        selected = null
+    }
+
+    fun cancel() { pending = null }
+
+    fun finish(sourceId: String, finger: Offset) {
+        val target = targets.minByOrNull { id ->
+            centers[id]?.let { (it - finger).getDistance() } ?: Float.MAX_VALUE
+        }
+        val center = target?.let { centers[it] }
+        if (target != null && center != null && (center - finger).getDistance() <= hitRadius) {
+            val map = LinkedHashMap(links)
+            map.entries.removeIf { it.value == target.id }  // один target — одна пара
+            map[sourceId] = target.id
+            publish(map)
+        }
+        cancel()
     }
 
     Column(modifier.fillMaxWidth()) {
-        Text(
-            text = "Соедините пары",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Соедините пары",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = {
+                    val map = LinkedHashMap(links)
+                    if (map.isNotEmpty()) map.remove(map.keys.last())
+                    publish(map); cancel()
+                },
+                enabled = links.isNotEmpty()
+            ) { Text("Отменить") }
+            TextButton(onClick = { publish(linkedMapOf()); cancel() }, enabled = links.isNotEmpty()) {
+                Text("Очистить")
+            }
+        }
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(260.dp)
+                .heightIn(min = 260.dp, max = 420.dp)
                 .clip(MaterialTheme.shapes.large)
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest)
         ) {
-            androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            Canvas(Modifier.matchParentSize()) {
                 links.entries.forEachIndexed { index, (sourceId, targetId) ->
-                    val from = nodeCenters[sourceId] ?: return@forEachIndexed
-                    val to = nodeCenters[targetId] ?: return@forEachIndexed
-                    val midX = (from.x + to.x) / 2f
+                    val from = centers[sourceId] ?: return@forEachIndexed
+                    val to = centers[targetId] ?: return@forEachIndexed
                     val path = Path().apply {
                         moveTo(from.x, from.y)
-                        quadraticBezierTo(midX, from.y + (to.y - from.y) / 2f, to.x, to.y)
+                        quadraticBezierTo((from.x + to.x) / 2, from.y + (to.y - from.y) / 2, to.x, to.y)
                     }
-                    drawPath(path, palette[index % palette.size], style = Stroke(width = 6f))
+                    drawPath(path, PairColors[index % PairColors.size], style = Stroke(width = 7f))
                 }
-                drag?.let { (from, to) ->
+                pending?.let { (sourceId, finger) ->
+                    val from = centers[sourceId] ?: return@let
                     val path = Path().apply {
                         moveTo(from.x, from.y)
-                        quadraticBezierTo((from.x + to.x) / 2, (from.y + to.y) / 2, to.x, to.y)
+                        quadraticBezierTo((from.x + finger.x) / 2, from.y, finger.x, finger.y)
                     }
-                    drawPath(path, dragColor, style = Stroke(width = 4f))
+                    drawPath(path, dragColor, style = Stroke(width = 5f))
                 }
             }
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                MatchRow(
+                MatchColumn(
                     nodes = sources,
                     links = links,
-                    selected = selected,
-                    nodeCenters = nodeCenters,
-                    onTap = { node ->
-                        val current = selected
-                        if (current == null) selected = true to node.id
-                        else if (current.first) selected = true to node.id
-                        else commit(current, true to node.id)
+                    centers = centers,
+                    onStart = { node, pos -> pending = node.id to pos },
+                    onDrag = { pos -> pending?.let { pending = it.first to pos } },
+                    onEnd = { pending?.let { finish(it.first, it.second) } },
+                    onCancel = { cancel() },
+                    onRemove = { node ->
+                        val map = LinkedHashMap(links); map.remove(node.id); publish(map)
                     },
-                    onDragStart = { node -> selected = true to node.id },
-                    onDrag = { node, start, amount ->
-                        drag = start to (start + amount)
-                        val nearest = targets.minByOrNull {
-                            val center = nodeCenters[it.id] ?: return@minByOrNull Float.MAX_VALUE
-                            (center - (start + amount)).getDistance()
-                        }
-                        if (nearest != null) {
-                            val center = nodeCenters[nearest.id]
-                            if (center != null && (center - (start + amount)).getDistance() < 80f) {
-                                commit(true to node.id, false to nearest.id)
-                                drag = null
-                            }
-                        }
-                    },
-                    onDragEnd = { drag = null },
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.width(32.dp))
-                MatchRow(
+                Spacer(Modifier.width(36.dp))
+                MatchColumn(
                     nodes = targets,
                     links = links,
-                    selected = selected,
-                    nodeCenters = nodeCenters,
-                    onTap = { node ->
-                        val current = selected
-                        if (current == null) selected = false to node.id
-                        else commit(current, false to node.id)
+                    centers = centers,
+                    onStart = { _, _ -> },
+                    onDrag = { },
+                    onEnd = { },
+                    onCancel = { cancel() },
+                    onRemove = { node ->
+                        val map = LinkedHashMap(links)
+                        map.entries.removeIf { it.value == node.id }
+                        publish(map)
                     },
-                    onDragStart = { node -> selected = false to node.id },
-                    onDrag = { node, start, amount -> drag = start to (start + amount) },
-                    onDragEnd = { drag = null },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -195,74 +192,66 @@ fun CdzMatchScreen(
 }
 
 @Composable
-private fun MatchRow(
+private fun MatchColumn(
     nodes: List<MatchNode>,
     links: Map<String, String>,
-    selected: Pair<Boolean, String>?,
-    nodeCenters: MutableMap<String, Offset>,
-    onTap: (MatchNode) -> Unit,
-    onDragStart: (MatchNode) -> Unit,
-    onDrag: (MatchNode, Offset, Offset) -> Unit,
-    onDragEnd: () -> Unit,
+    centers: MutableMap<String, Offset>,
+    onStart: (MatchNode, Offset) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onEnd: () -> Unit,
+    onCancel: () -> Unit,
+    onRemove: (MatchNode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         nodes.forEach { node ->
-            val colorIndex = links.entries.indexOfFirst {
-                if (node.source) it.key == node.id else it.value == node.id
-            }
-            val container by animateColorAsState(
-                if (selected?.second == node.id) MaterialTheme.colorScheme.primaryContainer
-                else if (colorIndex >= 0) PairColors[colorIndex % PairColors.size].copy(alpha = 0.18f)
-                else MaterialTheme.colorScheme.surfaceVariant
+            val index = links.entries.indexOfFirst { if (node.source) it.key == node.id else it.value == node.id }
+            val tint by animateColorAsState(
+                if (index >= 0) PairColors[index % PairColors.size]
+                else MaterialTheme.colorScheme.outline
             )
-            val elevation by animateDpAsState(if (selected?.second == node.id) 6.dp else 2.dp)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = container),
-                elevation = CardDefaults.cardElevation(elevation),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
+            Row(
+                Modifier
                     .fillMaxWidth()
                     .clip(MaterialTheme.shapes.medium)
-                    .onGloballyPositioned { coords ->
-                        val p = coords.positionInParent()
-                        nodeCenters[node.id] = Offset(p.x + coords.size.width / 2f, p.y + coords.size.height / 2f)
-                    }
-                    .pointerInput(node.id) {
-                        detectDragGestures(
-                            onDragStart = { onDragStart(node) },
-                            onDrag = { change, amount -> change.consume(); onDrag(node, change.position - amount, amount) },
-                            onDragEnd = { onDragEnd() },
-                            onDragCancel = { onDragEnd() }
-                        )
-                    }
-                    .padding(4.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), MaterialTheme.shapes.medium)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
+                Box(
                     Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.medium)
-                        .padding(12.dp)
-                        .clickable { onTap(node) },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        Modifier
-                            .size(14.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (colorIndex >= 0) PairColors[colorIndex % PairColors.size]
-                                else MaterialTheme.colorScheme.outline
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(tint)
+                        .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                        .onGloballyPositioned { coords ->
+                            val p = coords.positionInParent()
+                            centers[node.id] = Offset(p.x + coords.size.width / 2f, p.y + coords.size.height / 2f)
+                        }
+                        .pointerInput(node.id) {
+                            detectTapGestures(onTap = { if (index >= 0) onRemove(node) })
+                        }
+                        .pointerInput(node.id) {
+                            detectDragGestures(
+                                onDragStart = { },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    if (node.source) onStart(node, change.position - Offset.Zero)
+                                    else onDrag(change.position)
+                                },
+                                onDragEnd = { onEnd() },
+                                onDragCancel = { onCancel() }
                             )
-                    )
-                    Text(
-                        node.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                        }
+                )
+                Text(
+                    node.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
