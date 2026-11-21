@@ -34,6 +34,8 @@ class CdzNativeClient(
     companion object {
         private const val BASE = "https://uchebnik.mos.ru"
         private const val SECURE = "$BASE/webtests/exam/rest/secure"
+        // uchebnik привязывает сессию к desktop UA: с Android UA refresh отдаёт 401.
+        private const val UA = "Mozilla/5.0 (X11; Linux x86_64; rv:160.0) Gecko/20100101 Firefox/160.0"
         const val PROFILE_KEY = "cdz_native_profile_v1"
 
         /** uchebnik ждёт профиль school (1002991417), а не student_id (36847597). */
@@ -90,6 +92,7 @@ class CdzNativeClient(
     private fun cookieHeader(): String = jar.entries.joinToString("; ") { "${it.key}=${it.value}" }
 
     private fun baseHeaders(contentType: String): Map<String, String> = buildMap {
+        put("User-Agent", UA)
         put("Accept", "application/json;charset=UTF-8")
         put("Content-Type", contentType)
         put("User-Id", eomUserId.ifBlank { userId.orEmpty() })
@@ -133,6 +136,7 @@ class CdzNativeClient(
      */
     suspend fun refreshSession(): Boolean = withContext(Dispatchers.IO) {
         val headers = buildMap {
+            put("User-Agent", UA)
             put("Accept", "application/json;charset=UTF-8")
             put("Content-Type", "application/json")
             // docs §16.1: первый refresh уходит без Bearer и пользовательских ID —
