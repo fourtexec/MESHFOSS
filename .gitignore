@@ -11,3 +11,4 @@ out/
 linuxApp/target/
 linuxApp/ui/dist/
 linuxApp/src-tauri/gen/
+linuxApp/tests/__pycache__/

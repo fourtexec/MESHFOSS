@@ -7,7 +7,7 @@ use url::Url;
 
 const REPOSITORY: &str = match option_env!("GITHUB_REPOSITORY") {
     Some(name) => name,
-    None => "fourtexec/meshfoss",
+    None => "fourtexec/MESHFOSS",
 };
 pub fn pick(all: &Value, installed: &Version, preview: bool, manual: bool) -> Option<Value> {
     let mut best: Option<(Version, Value)> = None;
@@ -39,8 +39,10 @@ pub fn pick(all: &Value, installed: &Version, preview: bool, manual: bool) -> Op
         if !Url::parse(&url).is_ok_and(|u| {
             u.scheme() == "https"
                 && u.host_str() == Some("github.com")
-                && u.path()
-                    .starts_with(&format!("/{REPOSITORY}/releases/download/"))
+                && u.path().to_ascii_lowercase().starts_with(&format!(
+                    "/{}/releases/download/",
+                    REPOSITORY.to_ascii_lowercase()
+                ))
         }) {
             continue;
         }

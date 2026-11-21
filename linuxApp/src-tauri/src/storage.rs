@@ -13,6 +13,7 @@ use std::{
 pub struct Local {
     pub prefs: Preferences,
     pub demo: bool,
+    pub saved_session: Option<bool>,
     pub completed: BTreeSet<String>,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -37,7 +38,10 @@ impl Storage {
             Ok(bytes) => {
                 serde_json::from_slice(&bytes).map_err(|_| "Не удалось прочитать настройки".into())
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Local::default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Local {
+                saved_session: Some(false),
+                ..Local::default()
+            }),
             Err(_) => Err("Не удалось прочитать настройки".into()),
         }
     }
@@ -87,5 +91,30 @@ pub fn clear_secret() -> Result<()> {
     match key()?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err(KEYRING.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_new_or_memory_only_profile_does_not_request_saved_credentials() {
+        let directory =
+            std::env::temp_dir().join(format!("mesh-storage-test-{}", uuid::Uuid::new_v4()));
+        let store = Storage::new(directory.clone());
+        let mut profile = store.load().unwrap();
+        assert_eq!(profile.saved_session, Some(false));
+        profile.demo = true;
+        profile.completed.insert("demo-task".into());
+        store.save(&profile).unwrap();
+        let restored = store.load().unwrap();
+        assert!(restored.demo);
+        assert_eq!(restored.saved_session, Some(false));
+        assert!(restored.completed.contains("demo-task"));
+        // A settings file created before opt-in tracking may already have a keyring entry.
+        fs::write(&store.path, b"{\"demo\":false}").unwrap();
+        assert_eq!(store.load().unwrap().saved_session, None);
+        fs::remove_dir_all(directory).unwrap();
     }
 }

@@ -63,6 +63,10 @@ impl Desk {
             api::token_value(&token).ok_or("Некорректный токен")?,
         );
         candidate.identify(active).await?;
+        if !remember && self.local.saved_session != Some(false) {
+            storage::clear_secret()?;
+            self.local.saved_session = Some(false);
+        }
         self.client = Some(candidate);
         self.local.demo = false;
         self.cache.clear();
@@ -73,6 +77,7 @@ impl Desk {
         } else {
             String::new()
         };
+        self.local.saved_session = Some(self.remember);
         self.storage.save(&self.local)?;
         Ok(self.snapshot(message))
     }
@@ -113,7 +118,7 @@ impl Desk {
     async fn handle(&mut self, app: &AppHandle, action: Action) -> Result<Value> {
         match action {
             Action::Start => {
-                if self.account().is_some() {
+                if self.account().is_some() || self.local.saved_session == Some(false) {
                     return Ok(self.snapshot(String::new()));
                 }
                 match storage::read_secret() {
@@ -127,7 +132,12 @@ impl Desk {
                             Err(e) => Ok(self.snapshot(e)),
                         }
                     }
-                    _ => Ok(self.snapshot(String::new())),
+                    Ok(None) => {
+                        self.local.saved_session = Some(false);
+                        self.storage.save(&self.local)?;
+                        Ok(self.snapshot(String::new()))
+                    }
+                    Err(e) => Ok(self.snapshot(e)),
                 }
             }
             Action::Demo => {
@@ -175,13 +185,14 @@ impl Desk {
                 Ok(outcome)
             }
             Action::Logout => {
-                if self.remember && !self.local.demo {
-                    storage::clear_secret()?;
-                }
                 #[cfg(target_os = "linux")]
                 if self.local.prefs.renew_when_closed {
                     background::configure(false)?;
                     self.local.prefs.renew_when_closed = false;
+                }
+                if self.remember && !self.local.demo {
+                    storage::clear_secret()?;
+                    self.local.saved_session = Some(false);
                 }
                 self.client = None;
                 self.auth = Credentials::default();

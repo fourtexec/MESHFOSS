@@ -81,8 +81,7 @@ fn Notices(u: Ui) -> impl IntoView {
                     })
             }}
             {move || {
-                u
-                    .update
+                u.update
                     .get()
                     .map(|(version, url)| {
                         view! {
@@ -109,14 +108,13 @@ fn PortalStatus(u: Ui) -> impl IntoView {
         <div class="portal-panel">
             <p>
                 {move || {
-                    u
-                        .t(
-                            if u.portal.get() == "qr" {
-                                "В окне mos.ru выберите QR-код и подтвердите вход на телефоне."
-                            } else {
-                                "Завершите авторизацию в окне mos.ru и вернитесь сюда."
-                            },
-                        )
+                    u.t(
+                        if u.portal.get() == "qr" {
+                            "В окне mos.ru выберите QR-код и подтвердите вход на телефоне."
+                        } else {
+                            "Завершите авторизацию в окне mos.ru и вернитесь сюда."
+                        },
+                    )
                 }}
             </p>
             <button
@@ -151,10 +149,9 @@ fn Login(u: Ui) -> impl IntoView {
                     <h1>{move || u.t("Школьный дневник")}</h1>
                     <p>
                         {move || {
-                            u
-                                .t(
-                                    "Расписание, задания и оценки Московской электронной школы.",
-                                )
+                            u.t(
+                                "Расписание, задания и оценки Московской электронной школы.",
+                            )
                         }}
                     </p>
                     <div class="preview">
@@ -230,11 +227,10 @@ fn Login(u: Ui) -> impl IntoView {
                                     type="button"
                                     class="text-btn"
                                     on:click=move |_| {
-                                        u
-                                            .open(
-                                                "https://school.mos.ru/v2/token/refresh?roleId=1&subsystem=2"
-                                                    .into(),
-                                            )
+                                        u.open(
+                                            "https://school.mos.ru/v2/token/refresh?roleId=1&subsystem=2"
+                                                .into(),
+                                        )
                                     }
                                 >
                                     {move || {
@@ -278,6 +274,11 @@ fn Login(u: Ui) -> impl IntoView {
                         </span>
                     </Show>
                     <Notices u />
+                    <Show when=move || !u.info.get().is_empty() && u.portal.get().is_empty()>
+                        <button class="text-btn" on:click=move |_| u.session(Action::Start)>
+                            {move || u.t("Обновить")}
+                        </button>
+                    </Show>
                 </section>
             </div>
         </main>
@@ -324,8 +325,7 @@ fn Shell(u: Ui) -> impl IntoView {
                     >
                         <span class="avatar">
                             {move || {
-                                u
-                                    .account
+                                u.account
                                     .get()
                                     .and_then(|a| {
                                         a.student().map(|s| s.name.chars().next().unwrap_or('М'))
@@ -335,20 +335,17 @@ fn Shell(u: Ui) -> impl IntoView {
                         <span>
                             <b>
                                 {move || {
-                                    u
-                                        .account
+                                    u.account
                                         .get()
                                         .and_then(|a| a.student().map(|s| s.name.clone()))
                                 }}
                             </b>
                             <small>
                                 {move || {
-                                    u
-                                        .account
+                                    u.account
                                         .get()
                                         .and_then(|a| {
-                                            a
-                                                .student()
+                                            a.student()
                                                 .map(|s| {
                                                     if a.demo {
                                                         u.t("Демоверсия")

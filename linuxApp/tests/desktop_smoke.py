@@ -57,6 +57,11 @@ class Browser:
         element_id = element["element-6066-11e4-a52e-4f735466cecf"]
         self.request("POST", self.session + f"/element/{element_id}/click", {})
 
+    def open_first_row(self):
+        element = self.wait(lambda: self.script("return document.querySelector('.record-list .record')"))
+        element_id = element["element-6066-11e4-a52e-4f735466cecf"]
+        self.request("POST", self.session + f"/element/{element_id}/click", {})
+
     def expect(self, text):
         self.wait(lambda: self.script("return document.body.innerText.includes(arguments[0])", text))
 
@@ -65,7 +70,7 @@ def exercise(ui):
     ui.open()
     ui.click("Открыть демоверсию")
     ui.expect("Алгебра")
-    ui.script("document.querySelector('.record').click()")
+    ui.open_first_row()
     ui.click("Домашнее задание")
     ui.click("Отметить выполненным")
     ui.expect("Снять отметку")
@@ -74,7 +79,7 @@ def exercise(ui):
 
     ui.open()
     ui.expect("Алгебра")
-    ui.script("document.querySelector('.record').click()")
+    ui.open_first_row()
     ui.click("Домашнее задание")
     ui.expect("Снять отметку")
     for tab, expected in [("Оценки", "Средневзвешенный"), ("Итоговые", "Алгебра"),
@@ -92,7 +97,7 @@ def exercise(ui):
     ui.click("Schedule")
     ui.expect("Lessons")
     ui.request("POST", ui.session + "/window/rect", {"width": 590, "height": 670})
-    ui.script("document.querySelector('.record').click()")
+    ui.open_first_row()
     ui.wait(lambda: ui.script("return getComputedStyle(document.querySelector('.list-col')).display==='none'"))
     assert ui.script("return document.documentElement.scrollWidth <= innerWidth")
     ui.request("POST", ui.session + "/actions", {"actions": [{"type": "key", "id": "keyboard", "actions": [
