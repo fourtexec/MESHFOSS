@@ -805,11 +805,15 @@ fun MainScaffold(
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             val motion = MaterialTheme.motionScheme
-            val tabOrder = listOf("ranking", "marks", "homeworks", "schedule", "attendance", "moskvenok", "food", "settings")
+            // Порядок анимации должен совпадать с реальной панелью, а не с
+            // исходным списком: вкладки можно переставлять в «Ещё».
+            val tabOrder = navLayout.bottom + "more"
+            fun tabIndex(key: String): Int =
+                tabOrder.indexOf(key).let { if (it >= 0) it else Int.MAX_VALUE }
             AnimatedContent(
                 targetState = currentTab,
                 transitionSpec = {
-                    val forward = tabOrder.indexOf(targetState) >= tabOrder.indexOf(initialState)
+                    val forward = tabIndex(targetState) >= tabIndex(initialState)
                     val slide = motion.defaultSpatialSpec<IntOffset>()
                     val fade = motion.defaultEffectsSpec<Float>()
                     val scale = motion.defaultSpatialSpec<Float>()

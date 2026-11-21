@@ -257,7 +257,6 @@ private fun ResultTaskCard(
     number: Int,
     task: CdzResultTask,
 ) {
-    val answerText = remember(task.answer, task.userAnswer) { formatUserAnswer(task) }
     val correctness = task.feedback?.optString("correctness").orEmpty()
     val verdict = correctnessLabel(correctness)
 
@@ -294,11 +293,7 @@ private fun ResultTaskCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    text = answerText.ifBlank { Words.CdzNoAnswer.text },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                ResultUserAnswer(task)
             }
             if (verdict != null) {
                 Surface(
@@ -315,6 +310,164 @@ private fun ResultTaskCard(
             }
         }
     }
+}
+
+/** Ответ ученика с теми же `text_styles`, что и формулы в задании. */
+@Composable
+private fun ResultUserAnswer(task: CdzResultTask) {
+    val userAnswer = task.userAnswer
+    if (userAnswer == null || userAnswer.length() == 0) {
+        NoAnswer()
+        return
+    }
+    val type = answerType(task.answer).ifBlank { userAnswer.optString("@answer_type") }
+    val options = remember(task.answer) { parseOptions(task.answer) }
+    val byId = remember(options) { options.associateBy { it.id } }
+
+    when (type) {
+        "answer/single", "answer/multiple" -> {
+            val ids = selectedOptionIds(userAnswer).toList()
+            if (ids.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ids.forEach { id -> RichOptionLine(byId[id], id) }
+            }
+        }
+        "answer/order" -> {
+            val ids = stringIds(userAnswer.optJSONArray("ids_order"))
+            if (ids.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ids.forEachIndexed { index, id ->
+                    RichOptionLine(byId[id], id, prefix = "${index + 1}. ")
+                }
+            }
+        }
+        "answer/match" -> {
+            val pairs = parseMatch(userAnswer)
+            if (pairs.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                pairs.forEach { (sourceId, targetId) ->
+                    RichMatchLine(
+                        source = byId[sourceId],
+                        sourceFallback = sourceId,
+                        target = byId[targetId],
+                        targetFallback = targetId,
+                    )
+                }
+            }
+        }
+        "answer/groups" -> {
+            val groups = userAnswer.optJSONArray("groups") ?: JSONArray()
+            val lines = (0 until groups.length()).mapNotNull { index ->
+                val group = groups.optJSONObject(index) ?: return@mapNotNull null
+                val ids = stringIds(group.optJSONArray("options_ids"))
+                if (ids.isEmpty()) null else index to ids
+            }
+            if (lines.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                lines.forEach { (groupIndex, ids) ->
+                    Text(
+                        text = Words.CdzGroup(groupIndex + 1),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    ids.forEach { id -> RichOptionLine(byId[id], id) }
+                }
+            }
+        }
+        "answer/inline/choice/single" -> {
+            val choices = remember(task.answer) { parseInlineChoices(task.answer) }
+            val selections = inlineSelections(userAnswer)
+            val picked = choices.mapNotNull { choice ->
+                choice.options.firstOrNull { it.id == selections[choice.positionId] }
+            }
+            if (picked.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                picked.forEach { option -> RichOptionLine(option, option.id) }
+            }
+        }
+        else -> {
+            val text = formatUserAnswer(task)
+            if (text.isBlank()) {
+                NoAnswer()
+            } else {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RichOptionLine(
+    option: CdzOption?,
+    fallback: String,
+    prefix: String = "",
+) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (prefix.isNotBlank()) {
+            Text(
+                text = prefix,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        val text = option?.let { item ->
+            item.text.ifBlank { item.description.ifBlank { fallback } }
+        } ?: fallback
+        CdzRichText(
+            text = text,
+            spans = option?.takeIf { it.text.isNotBlank() }?.textSpans.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun RichMatchLine(
+    source: CdzOption?,
+    sourceFallback: String,
+    target: CdzOption?,
+    targetFallback: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        RichOptionLine(source, sourceFallback)
+        Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = "→",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val text = target?.let { item ->
+                item.text.ifBlank { item.description.ifBlank { targetFallback } }
+            } ?: targetFallback
+            CdzRichText(
+                text = text,
+                spans = target?.takeIf { it.text.isNotBlank() }?.textSpans.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoAnswer() {
+    Text(
+        text = Words.CdzNoAnswer.text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+private fun stringIds(ids: JSONArray?): List<String> {
+    if (ids == null) return emptyList()
+    return (0 until ids.length())
+        .mapNotNull { ids.optString(it).takeIf { id -> id.isNotBlank() } }
 }
 
 private fun correctnessLabel(value: String): String? = when (value) {
@@ -335,6 +488,7 @@ private fun correctnessColor(value: String): Color = when (value) {
 /** Человекочитаемый ответ ученика по данным `attempt/{id}/result` (§9, §16.3). */
 private fun formatUserAnswer(task: CdzResultTask): String {
     val userAnswer = task.userAnswer ?: return ""
+    if (userAnswer.length() == 0) return ""
     val type = answerType(task.answer).ifBlank { userAnswer.optString("@answer_type") }
     val options = parseOptions(task.answer)
     val names = options.associate { option ->
@@ -355,6 +509,13 @@ private fun formatUserAnswer(task: CdzResultTask): String {
             textAnswer(userAnswer).trim()
         "answer/order" ->
             idsText(userAnswer.optJSONArray("ids_order"), ::name)
+        "answer/inline/choice/single" -> {
+            val selections = inlineSelections(userAnswer)
+            parseInlineChoices(task.answer).mapNotNull { choice ->
+                choice.options.firstOrNull { it.id == selections[choice.positionId] }
+                    ?.let { name(it.id) }
+            }.joinToString("\n")
+        }
         "answer/order/multiple" -> {
             val groups = userAnswer.optJSONArray("grouped_options") ?: JSONArray()
             (0 until groups.length()).mapNotNull { index ->
@@ -379,7 +540,7 @@ private fun formatUserAnswer(task: CdzResultTask): String {
         else -> {
             val copy = JSONObject(userAnswer.toString())
             copy.remove("@answer_type")
-            copy.toString()
+            if (copy.length() == 0) "" else copy.toString()
         }
     }
 }

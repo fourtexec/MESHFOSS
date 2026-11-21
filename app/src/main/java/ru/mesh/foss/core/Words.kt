@@ -3028,6 +3028,27 @@ internal enum class Words(
         "El tipo «%1\$s» aún no es compatible por completo. Puede escribir la respuesta.",
         "Le type « %1\$s » n’est pas encore entièrement pris en charge. Vous pouvez saisir la réponse."
     ),
+    CdzChoose(
+        "Выберите",
+        "Choose",
+        "Válasszon",
+        "Elija",
+        "Choisir"
+    ),
+    CdzVideoUnavailable(
+        "Видео недоступно",
+        "Video is unavailable",
+        "A videó nem érhető el",
+        "El vídeo no está disponible",
+        "La vidéo n’est pas disponible"
+    ),
+    CdzVideoSubtitles(
+        "Есть субтитры",
+        "Subtitles available",
+        "Feliratok elérhetők",
+        "Hay subtítulos",
+        "Sous-titres disponibles"
+    ),
     WidgetUpdated(
         "Обновлено %s",
         "Updated %s",

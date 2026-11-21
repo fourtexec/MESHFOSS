@@ -19,7 +19,20 @@ data class CdzTask(
     val serverAnswer: JSONObject?,
 )
 
-/** Один вариант ответа: текст, картинка и роль в сопоставлении. */
+/**
+ * Стилевой диапазон API (`text_styles`).
+ *
+ * Позиции приходят в UTF-16 координатах исходной строки. Диапазон намеренно
+ * не меняет текст: формулы в API лежат обычными символами (`H2O`), а
+ * `SUB`/`SUP` лишь говорят, как их показать.
+ */
+data class CdzTextSpan(
+    val start: Int,
+    val end: Int,
+    val tokens: Set<String>,
+)
+
+/** Один вариант ответа: текст, картинка, видео и роль в сопоставлении. */
 data class CdzOption(
     val id: String,
     val text: String,
@@ -27,6 +40,23 @@ data class CdzOption(
     val description: String,
     val source: Boolean,
     val groupId: String = "",
+    val textSpans: List<CdzTextSpan> = emptyList(),
+    val video: JSONObject? = null,
+)
+
+/** Пропуск в тексте `answer/inline/choice/single`. */
+data class CdzInlineChoice(
+    val positionId: String,
+    val textId: String,
+    val position: Int,
+    val options: List<CdzOption>,
+)
+
+/** Выбранный вариант для одного пропуска inline-задания. */
+data class CdzInlineSelection(
+    val textId: String,
+    val positionId: String,
+    val optionId: String,
 )
 
 /** Стабильный порядок заданий: группа, затем task_order внутри группы. */
@@ -157,29 +187,154 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
         val content = option.optJSONArray("content")
         var image = ""
         var description = ""
+        var video: JSONObject? = null
         if (content != null) {
             for (j in 0 until content.length()) {
                 val item = content.optJSONObject(j) ?: continue
-                if (item.optString("atomic_type") == "image") {
-                    image = item.optString("relative_url")
-                        .ifBlank { item.optString("preview_url") }
-                        .trim()
-                    description = item.optString("description").trim()
-                    if (image.isNotBlank()) break
+                when (item.optString("atomic_type")) {
+                    "image" -> {
+                        if (image.isBlank()) {
+                            image = item.optString("relative_url")
+                                .ifBlank { item.optString("preview_url") }
+                                .trim()
+                            description = item.optString("description").trim()
+                        }
+                    }
+                    "video" -> {
+                        video = JSONObject(item.toString())
+                        if (description.isBlank()) {
+                            description = item.optString("description").trim()
+                        }
+                    }
                 }
             }
         }
+        val styled = trimmedStyledText(
+            raw = option.optString("text"),
+            styles = option.optJSONArray("text_styles"),
+        )
         result += CdzOption(
             id = id,
-            text = option.optString("text").trim(),
+            text = styled.text,
             imageUrl = image,
             description = description,
             source = option.optString("type") == "option_type/match/source",
             groupId = option.optString("group_id").trim(),
+            textSpans = styled.spans,
+            video = video,
         )
     }
     return result
 }
+
+/** Разбирает `text_styles` и обрезает диапазоны по границам текста. */
+fun parseTextSpans(text: String, styles: JSONArray?): List<CdzTextSpan> {
+    if (text.isEmpty() || styles == null) return emptyList()
+    val result = mutableListOf<CdzTextSpan>()
+    for (index in 0 until styles.length()) {
+        val style = styles.optJSONObject(index) ?: continue
+        val rawStart = style.optInt("position", -1)
+        if (rawStart < 0) continue
+        var start = rawStart.coerceAtMost(text.length)
+        var end = (rawStart + style.optInt("offset", 0)).coerceAtLeast(start).coerceAtMost(text.length)
+        // API иногда включает в SUB завершающий пробел: "O2 " с offset=2.
+        while (start < end && text[start].isWhitespace()) start++
+        while (end > start && text[end - 1].isWhitespace()) end--
+        if (start >= end) continue
+
+        val tokens = linkedSetOf<String>()
+        val content = style.optJSONArray("content")
+        if (content != null) {
+            for (tokenIndex in 0 until content.length()) {
+                content.optString(tokenIndex).trim()
+                    .takeIf { it.isNotBlank() }
+                    ?.uppercase()
+                    ?.let(tokens::add)
+            }
+        } else {
+            style.optString("content").trim()
+                .takeIf { it.isNotBlank() }
+                ?.uppercase()
+                ?.let(tokens::add)
+        }
+        if (tokens.isNotEmpty()) result += CdzTextSpan(start, end, tokens)
+    }
+    return result
+}
+
+private data class StyledText(val text: String, val spans: List<CdzTextSpan>)
+
+/**
+ * Обрезает внешние пробелы и сдвигает стилевые диапазоны на ту же величину.
+ * Для обычного текста это сохраняет визуальную позицию формулы.
+ */
+private fun trimmedStyledText(raw: String, styles: JSONArray?): StyledText {
+    val first = raw.indexOfFirst { !it.isWhitespace() }
+    if (first < 0) return StyledText("", emptyList())
+    val last = raw.indexOfLast { !it.isWhitespace() }
+    val text = raw.substring(first, last + 1)
+    val spans = parseTextSpans(raw, styles).mapNotNull { span ->
+        val start = (span.start - first).coerceIn(0, text.length)
+        val end = (span.end - first).coerceIn(0, text.length)
+        if (end > start) span.copy(start = start, end = end) else null
+    }
+    return StyledText(text, spans)
+}
+
+/** Пропуски `answer/inline/choice/single`. */
+fun parseInlineChoices(answer: JSONObject): List<CdzInlineChoice> {
+    val positions = answer.optJSONArray("text_position") ?: return emptyList()
+    val result = mutableListOf<CdzInlineChoice>()
+    for (index in 0 until positions.length()) {
+        val position = positions.optJSONObject(index) ?: continue
+        val positionId = position.optString("position_id").trim()
+        val textId = position.optString("text_id").trim()
+        val charPosition = position.optInt("position", -1)
+        val options = parseOptions(position)
+        if (positionId.isBlank() || textId.isBlank() || charPosition < 0 || options.isEmpty()) continue
+        result += CdzInlineChoice(
+            positionId = positionId,
+            textId = textId,
+            position = charPosition,
+            options = options,
+        )
+    }
+    return result
+}
+
+/** id вариантов inline-задания: position_id → id. */
+fun inlineSelections(answer: JSONObject): Map<String, String> {
+    val positions = answer.optJSONArray("text_position_answer") ?: return emptyMap()
+    val result = linkedMapOf<String, String>()
+    for (index in 0 until positions.length()) {
+        val item = positions.optJSONObject(index) ?: continue
+        val positionId = item.optString("position_id").trim()
+        val optionId = item.optString("id").trim()
+        if (positionId.isNotBlank() && optionId.isNotBlank()) result[positionId] = optionId
+    }
+    return result
+}
+
+/** Тело ответа `answer/inline/choice/single` в формате сервера. */
+fun inlineAnswer(type: String, selections: List<CdzInlineSelection>): JSONObject {
+    if (selections.isEmpty()) return JSONObject()
+    val positions = JSONArray()
+    selections.forEach { selection ->
+        positions.put(
+            JSONObject()
+                .put("text_id", selection.textId)
+                .put("position_id", selection.positionId)
+                .put("id", selection.optionId)
+        )
+    }
+    return JSONObject()
+        .put("@answer_type", type)
+        .put("text_position_answer", positions)
+}
+
+/** true для типов, где ответ выбирается прямо в тексте задания. */
+fun isInlineChoice(type: String): Boolean =
+    type == "answer/inline/choice/single"
 
 /** Пары из `answer.match` (source → target). */
 fun parseMatch(value: JSONObject?): LinkedHashMap<String, String> {
@@ -251,6 +406,7 @@ fun hasAnswer(answer: JSONObject): Boolean {
     answer.optJSONObject("match")?.let { return it.length() > 0 }
     answer.optJSONArray("ids")?.let { return it.length() > 0 }
     answer.optJSONArray("ids_order")?.let { return it.length() > 0 }
+    answer.optJSONArray("text_position_answer")?.let { return it.length() > 0 }
     answer.optJSONArray("groups")?.let { groups ->
         for (i in 0 until groups.length()) {
             val ids = groups.optJSONObject(i)?.optJSONArray("options_ids")

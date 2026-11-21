@@ -530,28 +530,40 @@ private fun GamePanel(
             if (task == null) {
                 Text(Words.CdzNativeError.text, color = MaterialTheme.colorScheme.error)
             } else {
+                val answer = viewModel.answerOf(task.id)
+                val inline = isInlineChoice(task.type)
                 GlassCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        CdzQuestionContent(task.question)
+                        if (inline) {
+                            CdzInlineChoiceContent(
+                                task = task,
+                                answer = answer,
+                                onChanged = { next -> viewModel.updateAnswer(task.id, next) },
+                            )
+                        } else {
+                            CdzQuestionContent(task.question)
+                        }
                     }
                 }
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(
-                            text = Words.CdzAnswerLabel.text,
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        CdzAnswerContent(
-                            task = task,
-                            answer = viewModel.answerOf(task.id),
-                            onChanged = { answer -> viewModel.updateAnswer(task.id, answer) },
-                        )
+                if (!inline) {
+                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                text = Words.CdzAnswerLabel.text,
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            CdzAnswerContent(
+                                task = task,
+                                answer = answer,
+                                onChanged = { next -> viewModel.updateAnswer(task.id, next) },
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

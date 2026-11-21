@@ -165,7 +165,10 @@ fun HomeworksScreen(
                     client.launchHomeworkMaterial(homeworkEntryId, materialId)
                 }
                 val nativeMode = prefs.getBoolean("cdz_in_app", false)
-                MeshLog.log("CDZ", "launch: нативный режим=$nativeMode url=${url.take(160)}")
+                MeshLog.log(
+                    "CDZ",
+                    "launch: нативный режим=$nativeMode url=${url.substringBefore('?').take(160)}"
+                )
                 cdzReturnEntry = homeworkEntryId
                 if (!forceBrowser && prefs.getBoolean("cdz_in_app", false)) {
                     context.startActivity(

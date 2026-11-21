@@ -59,8 +59,7 @@ class CdzNativeClient(
             val token = jar["aupd_token"]?.takeIf { it.isNotBlank() } ?: store.token
             MeshLog.log(
                 "CDZ",
-                "session: аккаунт=${AccountRegistry(context).activeScope()} cookies=${jar.size} " +
-                    "есть токен=${!token.isNullOrBlank()}"
+                "session: cookies=${jar.size} есть токен=${!token.isNullOrBlank()}"
             )
             return CdzNativeClient(
                 pageUrl = pageUrl,
@@ -226,8 +225,35 @@ class CdzNativeClient(
             JSONObject(String(java.util.Base64.getUrlDecoder().decode(padded), Charsets.UTF_8))
         }.getOrDefault(JSONObject())
         claims.optString("usr").takeIf { it.isNotBlank() }?.let { eomUserId = it }
-        MeshLog.log("CDZ", "refresh ok: userId=$eomUserId profileId=$eomProfileId token=${accessToken.isNotBlank()}")
+        MeshLog.log(
+            "CDZ",
+            "refresh ok: user=${eomUserId.isNotBlank()} profile=${eomProfileId.isNotBlank()} " +
+                "token=${accessToken.isNotBlank()}"
+        )
         accessToken.isNotBlank()
+    }
+
+    /**
+     * Метаданные видео-материала: `custom_meta.file_url` и субтитры.
+     *
+     * Это только чтение. Если accessTokenEom ещё нет или он истёк, сначала
+     * обновляем сессию; повторяем запрос один раз после 401.
+     */
+    suspend fun loadMaterial(materialId: String): JSONObject? = withContext(Dispatchers.IO) {
+        if (materialId.isBlank()) return@withContext null
+        if (accessToken.isBlank()) refreshSession()
+        fun fetch(): HttpResult = request(
+            "GET",
+            "$BASE/cms/api/v5/materials/$materialId",
+            null,
+        )
+        var result = fetch()
+        if (result.status == 401 && refreshSession()) result = fetch()
+        if (result.status !in 200..299) {
+            MeshLog.log("CDZ", "material: HTTP ${result.status}")
+            return@withContext null
+        }
+        runCatching { JSONObject(result.body) }.getOrNull()
     }
 
     /**
@@ -250,7 +276,10 @@ class CdzNativeClient(
         val rest = params.entries.joinToString("&") { (key, value) ->
             "${URLEncoder.encode(key, "UTF-8")}=${URLEncoder.encode(value, "UTF-8")}"
         }
-        MeshLog.log("CDZ", "derivePageUrl: activity=$activity params=${params.keys}")
+        MeshLog.log(
+            "CDZ",
+            "derivePageUrl: activity=${activity.substringBefore('?').take(180)} params=${params.keys}"
+        )
         return activity + if (rest.isBlank()) "" else "?$rest"
     }
     suspend fun resolveChallengeUrl(startUrl: String): String = withContext(Dispatchers.IO) {
@@ -261,7 +290,7 @@ class CdzNativeClient(
                 throw IllegalStateException("цикл редиректов на шаге $hop")
             }
             seen.add(current)
-            MeshLog.log("CDZ", "redirect #$hop -> ${current.take(180)}")
+            MeshLog.log("CDZ", "redirect #$hop -> ${current.substringBefore('?').take(180)}")
             val connection = URL(current).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 20_000
@@ -296,7 +325,11 @@ class CdzNativeClient(
                     MeshLog.trace("CDZ") { "cookie $name обновлена" }
                 }
             }
-            MeshLog.log("CDZ", "redirect #$hop: HTTP $status location=${location?.take(120).orEmpty()} body=${body.take(120)}")
+            MeshLog.log(
+                "CDZ",
+                "redirect #$hop: HTTP $status " +
+                    "location=${location?.substringBefore('?')?.take(120).orEmpty()} body=${body.take(120)}"
+            )
 
             val candidates = listOfNotNull(
                 location,
@@ -392,8 +425,7 @@ class CdzNativeClient(
         val started = runCatching { JSONObject(result.body) }.getOrDefault(JSONObject())
         MeshLog.log(
             "CDZ",
-            "start-attempt: HTTP ${result.status} actor=$accountName registration=" + param("registration") + " " +
-                "attemptId=${started.optLong("challenge_attempt_id")} " +
+            "start-attempt: HTTP ${result.status} attemptId=${started.optLong("challenge_attempt_id")} " +
                 "startedAt=${started.optString("challenge_attempt_started_at")} " +
                 "elongated=${started.has("challenge_attempt_started_at")}"
         )

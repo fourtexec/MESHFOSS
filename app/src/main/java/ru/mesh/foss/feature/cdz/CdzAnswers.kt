@@ -85,6 +85,11 @@ fun CdzAnswerContent(
             "answer/order" -> OrderAnswer(task, answer, onChanged)
             "answer/groups" -> GroupsAnswer(task, answer, onChanged)
             "answer/grid" -> GridAnswer(task, answer, onChanged)
+            "answer/inline/choice/single" -> Text(
+                text = Words.CdzChoose.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             else -> UnsupportedAnswer(task, answer, onChanged)
         }
     }
@@ -145,11 +150,10 @@ private fun ChoiceAnswer(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    CdzRemoteImage(option.imageUrl, option.description)
-                    Text(
-                        text = option.text.ifBlank {
-                            option.description.ifBlank { Words.Option.text }
-                        },
+                    CdzOptionMedia(option)
+                    CdzRichText(
+                        text = option.label(),
+                        spans = option.labelSpans(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -180,7 +184,22 @@ private fun TextAnswer(
                 .put("files", JSONArray())
             "answer/number", "answer/number/interval" -> JSONObject()
                 .put("@answer_type", task.type)
-                .put("number", if (task.type == "answer/number") JSONArray().put(next) else next)
+                .put(
+                    "number",
+                    if (task.type == "answer/number") {
+                        // API ждёт массив чисел: number:[42], а не number:["42"].
+                        val number = next.toDoubleOrNull()
+                        JSONArray().put(
+                            when {
+                                number == null -> next
+                                number % 1.0 == 0.0 -> number.toLong()
+                                else -> number
+                            }
+                        )
+                    } else {
+                        next
+                    }
+                )
             else -> JSONObject()
                 .put("@answer_type", task.type)
                 .put("string", JSONArray().put(next))
@@ -255,11 +274,10 @@ private fun OrderAnswer(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    CdzRemoteImage(option.imageUrl, option.description)
-                    Text(
-                        text = option.text.ifBlank {
-                            option.description.ifBlank { Words.Option.text }
-                        },
+                    CdzOptionMedia(option)
+                    CdzRichText(
+                        text = option.label(),
+                        spans = option.labelSpans(),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -361,10 +379,9 @@ private fun GroupsAnswer(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Checkbox(checked = checked, onCheckedChange = null)
-                    Text(
-                        text = option.text.ifBlank {
-                            option.description.ifBlank { Words.Option.text }
-                        },
+                    CdzRichText(
+                        text = option.label(),
+                        spans = option.labelSpans(),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
@@ -451,6 +468,19 @@ private fun UnsupportedAnswer(
         modifier = Modifier.fillMaxWidth(),
     )
 }
+
+@Composable
+private fun CdzOptionMedia(option: CdzOption) {
+    CdzRemoteImage(option.imageUrl, option.description)
+    val video = option.video
+    if (video != null) CdzRemoteVideo(video)
+}
+
+private fun CdzOption.label(): String =
+    text.ifBlank { description.ifBlank { Words.Option.text } }
+
+private fun CdzOption.labelSpans(): List<CdzTextSpan> =
+    if (text.isNotBlank()) textSpans else emptyList()
 
 private fun Collection<String>.toJsonArray(): JSONArray {
     val result = JSONArray()

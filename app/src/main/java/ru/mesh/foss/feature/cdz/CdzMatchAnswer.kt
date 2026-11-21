@@ -350,9 +350,16 @@ private fun MatchColumn(
                             url = option.imageUrl,
                             description = option.description,
                         )
-                        Text(
+                        val video = option.video
+                        if (video != null) CdzRemoteVideo(video)
+                        CdzRichText(
                             text = option.text.ifBlank {
                                 option.description.ifBlank { Words.Option.text }
+                            },
+                            spans = if (option.text.isNotBlank()) {
+                                option.textSpans
+                            } else {
+                                emptyList()
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
