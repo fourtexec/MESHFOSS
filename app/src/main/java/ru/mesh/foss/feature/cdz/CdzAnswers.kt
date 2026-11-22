@@ -85,7 +85,7 @@ fun CdzAnswerContent(
             "answer/order" -> OrderAnswer(task, answer, onChanged)
             "answer/groups" -> GroupsAnswer(task, answer, onChanged)
             "answer/table" -> CdzTableAnswer(task, answer, onChanged)
-            "answer/grid" -> GridAnswer(task, answer, onChanged)
+            "answer/grid" -> CdzGridAnswer(task, answer, onChanged)
             "answer/inline/choice/single" -> Text(
                 text = Words.CdzChoose.text,
                 style = MaterialTheme.typography.bodyMedium,
@@ -412,48 +412,6 @@ private fun GroupsAnswer(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
             )
         }
-    }
-}
-
-@Composable
-private fun GridAnswer(
-    task: CdzTask,
-    answer: JSONObject,
-    onChanged: (JSONObject) -> Unit,
-) {
-    val cells = answer.optJSONArray("cells")
-    val count = maxOf(3, cells?.length() ?: 0)
-    var values by remember(task.id) {
-        mutableStateOf(
-            List(count) { index -> cells?.optJSONObject(index)?.optString("answer").orEmpty() }
-        )
-    }
-
-    fun commit(next: List<String>) {
-        values = next
-        if (next.all { it.isBlank() }) {
-            onChanged(JSONObject())
-            return
-        }
-        val out = JSONArray()
-        next.forEach { cell ->
-            out.put(JSONObject().put("input_type", "MANUAL_INPUT").put("answer", cell))
-        }
-        onChanged(JSONObject().put("@answer_type", task.type).put("cells", out))
-    }
-
-    values.forEachIndexed { index, value ->
-        OutlinedTextField(
-            value = value,
-            onValueChange = { next ->
-                val copy = values.toMutableList()
-                copy[index] = next
-                commit(copy)
-            },
-            label = { Text(Words.CdzCell(index + 1)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 

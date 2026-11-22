@@ -428,6 +428,11 @@ private fun ResultAnswerPayload(
             val values = remember(payload) { parseTableValues(payload) }
             if (values.isEmpty()) NoAnswer() else CdzTableResult(table = table, values = values)
         }
+        "answer/grid" -> {
+            val grid = remember(task.answer) { parseGrid(task.answer) }
+            val values = remember(payload) { parseGridValues(payload) }
+            if (values.isEmpty()) NoAnswer() else CdzGridResult(grid = grid, values = values)
+        }
         "answer/inline/choice/single", "answer/gap/match/text" -> {
             val choices = remember(task.answer) { parseInlineChoices(task.answer) }
             val selections = inlineSelections(payload)

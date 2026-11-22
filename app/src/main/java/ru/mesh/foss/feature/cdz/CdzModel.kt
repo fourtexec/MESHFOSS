@@ -69,6 +69,45 @@ data class CdzTable(
     fun isInput(row: Int, column: Int): Boolean = row to column in inputCells
 }
 
+/**
+ * Сетка `answer/grid` (таблица V2).
+ *
+ * В отличие от `answer/table`, каждая ячейка — самостоятельный объект с
+ * координатами и вариантами ответа. Заголовки помечены `is_header`, а поля
+ * ввода — `type=cell/input` и `input_type=cell-input/...`.
+ */
+data class CdzGridCell(
+    val row: Int,
+    val column: Int,
+    val header: Boolean,
+    val input: Boolean,
+    val inputType: String,
+    val text: String,
+    val textSpans: List<CdzTextSpan>,
+    val imageUrl: String,
+    val imageDescription: String,
+    val options: List<CdzOption>,
+) {
+    val manualInput: Boolean get() = input && options.isEmpty()
+    val multiple: Boolean get() =
+        inputType.contains("multi", ignoreCase = true) ||
+            inputType.contains("multiple", ignoreCase = true)
+}
+
+data class CdzGrid(
+    val rows: List<Int>,
+    val columns: List<Int>,
+    val cells: Map<Pair<Int, Int>, CdzGridCell>,
+) {
+    fun cell(row: Int, column: Int): CdzGridCell? = cells[row to column]
+}
+
+/** Значение одной ячейки `answer/grid`. */
+data class CdzGridValue(
+    val optionIds: List<String> = emptyList(),
+    val manual: String = "",
+)
+
 /** Пропуск в тексте `answer/inline/choice/single`. */
 data class CdzInlineChoice(
     val positionId: String,
@@ -364,6 +403,197 @@ fun tableAnswer(type: String, values: Map<Pair<Int, Int>, String>): JSONObject {
         .put("cells", cells)
 }
 
+/**
+ * Разбирает `answer/grid`. Координаты строк/столбцов приходят с единицы и
+ * могут быть разреженными, поэтому сетка хранит реальные ключи API, а не
+ * предполагаемый диапазон `0..rows`.
+ */
+fun parseGrid(answer: JSONObject): CdzGrid? {
+    val rawCells = answer.optJSONArray("cells") ?: return null
+    val cells = linkedMapOf<Pair<Int, Int>, CdzGridCell>()
+    val rowKeys = linkedSetOf<Int>()
+    val columnKeys = linkedSetOf<Int>()
+
+    for (index in 0 until rawCells.length()) {
+        val raw = rawCells.optJSONObject(index) ?: continue
+        val row = raw.optInt("row", -1)
+        val column = raw.optInt("column", -1)
+        if (row < 0 || column < 0) continue
+
+        val type = raw.optString("type").trim()
+        val inputType = raw.optString("input_type").trim()
+        val optionArray = raw.optJSONArray("options")
+        val options = if (optionArray == null) {
+            emptyList()
+        } else {
+            parseOptions(JSONObject().put("options", optionArray))
+        }
+        val header = raw.optBoolean("is_header", false) ||
+            (type == "cell/attachment" && inputType.isBlank() && options.isEmpty())
+        val input = !header && (
+            type == "cell/input" ||
+                inputType.isNotBlank() ||
+                options.isNotEmpty()
+            )
+        val styled = gridCellContent(raw)
+
+        cells[row to column] = CdzGridCell(
+            row = row,
+            column = column,
+            header = header,
+            input = input,
+            inputType = inputType,
+            text = styled.text,
+            textSpans = styled.spans,
+            imageUrl = styled.imageUrl,
+            imageDescription = styled.imageDescription,
+            options = options,
+        )
+        rowKeys += row
+        columnKeys += column
+    }
+
+    if (cells.isEmpty()) return null
+    return CdzGrid(
+        rows = rowKeys.sorted(),
+        columns = columnKeys.sorted(),
+        cells = cells,
+    )
+}
+
+/** Заголовок/подпись ячейки сетки: текст, формулы и картинка. */
+private fun gridCellContent(cell: JSONObject): StyledTextWithImage {
+    val texts = mutableListOf<String>()
+    val spans = mutableListOf<CdzTextSpan>()
+    var imageUrl = ""
+    var imageDescription = ""
+
+    fun addText(raw: String, styles: JSONArray?) {
+        val styled = trimmedStyledText(raw, styles)
+        if (styled.text.isBlank()) return
+        val offset = if (texts.isEmpty()) 0 else texts.sumOf { it.length + 1 }
+        texts += styled.text
+        spans += styled.spans.map { span ->
+            span.copy(start = span.start + offset, end = span.end + offset)
+        }
+    }
+
+    val content = cell.optJSONArray("content")
+    if (content != null) {
+        for (index in 0 until content.length()) {
+            val part = content.optJSONObject(index) ?: continue
+            val atomic = part.optString("atomic_type").trim()
+            if (atomic == "image" || part.optString("type") == "content/atomic") {
+                if (imageUrl.isBlank()) {
+                    imageUrl = cdzAbsoluteUrl(
+                        part.optString("relative_url")
+                            .ifBlank { part.optString("preview_url") }
+                    )
+                    imageDescription = part.optString("description").trim()
+                }
+                continue
+            }
+            addText(part.optString("text"), part.optJSONArray("text_styles"))
+        }
+    }
+
+    if (texts.isEmpty()) {
+        addText(cell.optString("text"), cell.optJSONArray("text_styles"))
+    }
+
+    return StyledTextWithImage(
+        text = texts.joinToString("\n"),
+        spans = spans,
+        imageUrl = imageUrl,
+        imageDescription = imageDescription,
+    )
+}
+
+private data class StyledTextWithImage(
+    val text: String,
+    val spans: List<CdzTextSpan>,
+    val imageUrl: String,
+    val imageDescription: String,
+)
+
+/** Значения ячеек из `user_answer` или `right_answer` сетки. */
+fun parseGridValues(answer: JSONObject?): Map<Pair<Int, Int>, CdzGridValue> {
+    val cells = answer?.optJSONArray("cells") ?: return emptyMap()
+    val result = linkedMapOf<Pair<Int, Int>, CdzGridValue>()
+    for (index in 0 until cells.length()) {
+        val cell = cells.optJSONObject(index) ?: continue
+        val row = cell.optInt("row", index + 1)
+        val column = cell.optInt("column", 1)
+        if (row < 0 || column < 0) continue
+
+        val optionIds = linkedSetOf<String>()
+        cell.optString("option_id").trim()
+            .takeIf { it.isNotBlank() }
+            ?.let(optionIds::add)
+        cell.optJSONArray("option_ids")?.let { ids ->
+            for (idIndex in 0 until ids.length()) {
+                ids.optString(idIndex).trim()
+                    .takeIf { it.isNotBlank() }
+                    ?.let(optionIds::add)
+            }
+        }
+        cell.optJSONArray("ids")?.let { ids ->
+            for (idIndex in 0 until ids.length()) {
+                ids.optString(idIndex).trim()
+                    .takeIf { it.isNotBlank() }
+                    ?.let(optionIds::add)
+            }
+        }
+        val manual = cellText(cell.opt("answer")).trim()
+        if (optionIds.isEmpty() && manual.isBlank()) continue
+        result[row to column] = CdzGridValue(optionIds.toList(), manual)
+    }
+    return result
+}
+
+/** Тело ответа `answer/grid` в формате сервера. */
+fun gridAnswer(
+    type: String,
+    values: Map<Pair<Int, Int>, CdzGridValue>,
+    grid: CdzGrid? = null,
+): JSONObject {
+    val cells = JSONArray()
+    values.toSortedMap(compareBy<Pair<Int, Int>>({ it.first }, { it.second }))
+        .forEach { (key, value) ->
+            if (value.optionIds.isEmpty() && value.manual.isBlank()) return@forEach
+            val cell = grid?.cell(key.first, key.second)
+            val multi = cell?.multiple == true
+            val inputType = cell?.inputType?.takeIf { it.isNotBlank() }
+                ?: when {
+                    multi -> "cell-input/multi-select"
+                    value.optionIds.isNotEmpty() -> "cell-input/single-select"
+                    else -> "cell-input/manual-input"
+                }
+            val out = JSONObject()
+                .put("input_type", inputType)
+                .put("row", key.first)
+                .put("column", key.second)
+
+            if (value.optionIds.isNotEmpty()) {
+                if (multi) {
+                    out.put("option_ids", JSONArray().apply {
+                        value.optionIds.forEach { id -> put(id) }
+                    })
+                } else {
+                    out.put("option_id", value.optionIds.first())
+                }
+            }
+            if (value.manual.isNotBlank()) out.put("answer", value.manual)
+
+            cells.put(out)
+        }
+
+    if (cells.length() == 0) return JSONObject()
+    return JSONObject()
+        .put("@answer_type", type)
+        .put("cells", cells)
+}
+
 private fun findTable(answer: JSONObject): JSONObject? {
     answer.optJSONObject("table")?.let { return it }
     val options = answer.optJSONArray("options") ?: return null
@@ -599,7 +829,15 @@ fun hasAnswer(answer: JSONObject): Boolean {
     }
     answer.optJSONArray("cells")?.let { cells ->
         for (i in 0 until cells.length()) {
-            if (cells.optJSONObject(i)?.optString("answer").orEmpty().isNotBlank()) return true
+            val cell = cells.optJSONObject(i) ?: continue
+            if (cell.optString("answer").isNotBlank()) return true
+            if (cell.optString("option_id").isNotBlank()) return true
+            cell.optJSONArray("option_ids")?.let { ids ->
+                if (ids.length() > 0) return true
+            }
+            cell.optJSONArray("ids")?.let { ids ->
+                if (ids.length() > 0) return true
+            }
         }
         return false
     }
