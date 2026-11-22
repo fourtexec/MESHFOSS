@@ -1,8 +1,10 @@
 package ru.mesh.foss.data.api
 
 import com.google.gson.JsonElement
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Call
+import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.HeaderMap
@@ -85,6 +87,21 @@ interface MeshApiService {
         @Query("student_id") studentId: String?,
         @Query("from") from: String,
         @Query("to") to: String,
+        @HeaderMap headers: Map<String, String>,
+    ): Call<JsonElement>
+
+    /** Расширенные карточки цифровых материалов ДЗ. */
+    @POST("api/family/materials/v1/additional_materials")
+    fun additionalMaterials(
+        @Body body: RequestBody,
+        @HeaderMap headers: Map<String, String>,
+    ): Call<JsonElement>
+
+    /** Статус выполнения материала ЦДЗ в LRS. */
+    @GET("api/lrs/v2/results")
+    fun materialResult(
+        @Query("context") context: String,
+        @Query("size") size: Int,
         @HeaderMap headers: Map<String, String>,
     ): Call<JsonElement>
 

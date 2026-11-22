@@ -237,6 +237,7 @@ class DemoMeshServer(
                 val path = parts[1]
                 var authorization = ""
                 var authToken = ""
+                var profileId = ""
                 var contentLength = 0
                 while (true) {
                     val line = reader.readLine() ?: break
@@ -245,6 +246,7 @@ class DemoMeshServer(
                     when {
                         lower.startsWith("authorization:") -> authorization = line.substringAfter(':').trim()
                         lower.startsWith("auth-token:") -> authToken = line.substringAfter(':').trim()
+                        lower.startsWith("profile-id:") -> profileId = line.substringAfter(':').trim()
                         lower.startsWith("content-length:") -> contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
                     }
                 }
@@ -268,7 +270,7 @@ class DemoMeshServer(
                     respondRaw(socket, 200, "text/html; charset=utf-8", demoCdzPage(path))
                     return
                 }
-                val (status, payload) = route(path, token, method, body, bothAuth)
+                val (status, payload) = route(path, token, method, body, bothAuth, profileId)
                 if (payload.has(RAW_BODY)) {
                     respondRaw(socket, status, "application/json", payload.optString(RAW_BODY))
                 } else {
@@ -340,6 +342,7 @@ class DemoMeshServer(
         method: String = "GET",
         body: String = "",
         bothAuth: Boolean = false,
+        profileId: String = "",
     ): Pair<Int, JSONObject> {
         val (path, params) = query(fullPath)
 
@@ -347,6 +350,13 @@ class DemoMeshServer(
         // Authorization и Auth-Token, и принимает любой из них по отдельности.
         if (bothAuth && path == MeshCore.Paths.VISIT_DURATIONS) {
             return 401 to JSONObject().put("message", "Authorization and Auth-Token together")
+        }
+
+        // LRS не принимает Profile-Id от родительского/школьного профиля:
+        // веб-дневник шлёт этот запрос без него. Старый клиент из-за этого
+        // получал 401, затем бесполезный refresh 403 и «Статус недоступен».
+        if (profileId.isNotBlank() && path == MeshCore.Paths.LRS_RESULTS) {
+            return 401 to JSONObject().put("message", "Profile-Id is not allowed for LRS")
         }
 
         // обновление токена: нужен действующий токен

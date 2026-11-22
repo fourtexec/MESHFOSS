@@ -4,18 +4,16 @@ import ru.mesh.foss.core.*
 
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
-import java.io.BufferedReader
 import java.io.IOException
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URLEncoder
-import java.net.URL
 import java.net.UnknownHostException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
 import org.json.JSONArray
 import org.json.JSONObject
@@ -49,6 +47,14 @@ class MeshClient(
     /** Счётчик запросов — используется в диагностике. */
     var requestCount: Int = 0
         private set
+
+    /**
+     * После неудачного продления не дёргаем /v2/token/refresh на каждый
+     * параллельный запрос: иначе один протухший токен превращается в шторм 403.
+     */
+    @Volatile
+    private var refreshBlockedUntil: Long = 0L
+    private val refreshFailureCooldownMs = 30_000L
 
     private val gson = GsonBuilder().setLenient().create()
 
@@ -211,7 +217,12 @@ class MeshClient(
     @Synchronized
     fun refreshToken(): String? {
         val current = token?.takeIf { it.isNotBlank() } ?: return null
-        return try {
+        val now = System.currentTimeMillis()
+        if (now < refreshBlockedUntil) {
+            MeshLog.log("AUTH", "refresh: пропуск после недавней ошибки")
+            return null
+        }
+        val fresh = try {
             requestCount++
             MeshLog.log("AUTH", "→ refresh token")
             val response = api()
@@ -219,25 +230,27 @@ class MeshClient(
                 .execute()
             if (!response.isSuccessful) {
                 MeshLog.log("AUTH", "refresh: HTTP ${response.code()}")
-                return null
-            }
-            val body = response.body()?.string().orEmpty()
-            val fresh = MeshCore.extractTokenFromText(body)
-                ?: MeshCore.extractTokenFromUrl(body)
-                ?: looseToken(body)
-            if (!fresh.isNullOrBlank() && fresh != current) {
-                MeshLog.log("AUTH", "refresh: ok")
-                token = fresh
-                onToken?.invoke(fresh)
-                fresh
-            } else {
-                MeshLog.log("AUTH", "refresh: токен не получен")
                 null
+            } else {
+                val body = response.body()?.string().orEmpty()
+                MeshCore.extractTokenFromText(body)
+                    ?: MeshCore.extractTokenFromUrl(body)
+                    ?: looseToken(body)
             }
         } catch (error: Exception) {
             MeshLog.error("AUTH", error)
             null
         }
+        if (!fresh.isNullOrBlank() && fresh != current) {
+            MeshLog.log("AUTH", "refresh: ok")
+            refreshBlockedUntil = 0L
+            token = fresh
+            onToken?.invoke(fresh)
+            return fresh
+        }
+        MeshLog.log("AUTH", "refresh: токен не получен")
+        refreshBlockedUntil = System.currentTimeMillis() + refreshFailureCooldownMs
+        return null
     }
 
     /**
@@ -459,79 +472,26 @@ class MeshClient(
     // ------------------------------------------------------------------ ЦДЗ ----
 
     /**
-     * Один HTTP-обмен с разбором ошибок сети и автообновлением токена по 401.
-     * Возвращает (status, body); коды ≥ 400 превращаются в [MeshCore.MeshError].
-     */
-    private fun exchange(
-        method: String,
-        path: String,
-        params: Map<String, Any?> = emptyMap(),
-        body: String? = null,
-        headerBuilder: () -> Map<String, String> = { headers() }
-    ): Pair<Int, String> {
-        val url = buildUrl(path, params)
-        var attempt = 0
-        val maxAttempts = if (autoRefresh) 2 else 1
-        while (attempt < maxAttempts) {
-            attempt++
-            val connection = try {
-                (URL(url).openConnection() as HttpURLConnection).apply {
-                    requestMethod = method
-                    connectTimeout = timeoutMs
-                    readTimeout = timeoutMs
-                    instanceFollowRedirects = false
-                    headerBuilder().forEach { (key, value) -> setRequestProperty(key, value) }
-                    if (body != null) {
-                        val bytes = body.toByteArray(Charsets.UTF_8)
-                        doOutput = true
-                        setFixedLengthStreamingMode(bytes.size)
-                        outputStream.use { it.write(bytes) }
-                    }
-                }
-            } catch (error: SocketTimeoutException) {
-                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
-            } catch (error: UnknownHostException) {
-                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
-            } catch (error: Exception) {
-                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
-            }
-            requestCount++
-            val status: Int
-            val text: String
-            try {
-                status = connection.responseCode
-                val stream = runCatching { connection.inputStream }.getOrNull() ?: connection.errorStream
-                text = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: ""
-            } catch (error: SocketTimeoutException) {
-                throw MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
-            } catch (error: UnknownHostException) {
-                throw MeshCore.MeshError(Words.CannotReachSchoolMosRu.text, "network", 0, error)
-            } catch (error: Exception) {
-                throw MeshCore.MeshError(Words.NetworkError(error.message), "network", 0, error)
-            } finally {
-                connection.disconnect()
-            }
-            when {
-                status == 401 && attempt < maxAttempts -> {
-                    if (refreshToken() != null) continue
-                    throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
-                }
-                status == 401 -> throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
-                status == 403 -> throw MeshCore.MeshError(Words.AccessDenied.text, "forbidden", 403)
-                status == 404 -> throw MeshCore.MeshError(Words.MethodNotFound(path), "not-found", 404)
-                status >= 400 -> throw MeshCore.MeshError(Words.MeshErrorHttp(status), "http-$status", status)
-            }
-            return status to text
-        }
-        throw MeshCore.MeshError(Words.RequestFailed(path), "exhausted")
-    }
-
-    /**
      * Заголовки `additional_materials`: веб шлёт их без Profile-Id/Profile-Type,
      * но с `X-Mes-GlobalRoleId: 1` (docs/mesh-cdz-api.md §2).
      */
     private fun materialsHeaders(): Map<String, String> =
         (headers() - "Profile-Id" - "Profile-Type") + ("X-Mes-GlobalRoleId" to MeshCore.ROLE_ID)
+
+    /**
+     * LRS иногда отвечает 401, если рядом с Bearer-токеном пришёл `Profile-Id`
+     * от родительского профиля. Веб-дневник для этого запроса профиль не шлёт,
+     * поэтому пробуем несколько совместимых наборов заголовков.
+     */
+    private fun lrsHeaders(
+        includeAuthToken: Boolean = true,
+        authTokenOnly: Boolean = false,
+        profileId: String? = null
+    ): Map<String, String> {
+        val base = headers(includeAuthToken = includeAuthToken) - "Profile-Id"
+        val withProfile = if (profileId.isNullOrBlank()) base else base + ("Profile-Id" to profileId)
+        return if (authTokenOnly) withProfile - "Authorization" else withProfile
+    }
 
     /**
      * Расширенные карточки ЦДЗ: описание, издатель, ссылки (§5).
@@ -543,16 +503,12 @@ class MeshClient(
         if (entry.isBlank() || materials.isEmpty()) return emptyMap()
         val body = MeshCdz.additionalMaterialsBody(entry, materials)
         if ((body.optJSONArray("materials")?.length() ?: 0) == 0) return emptyMap()
-        val (status, text) = exchange(
-            "POST",
-            MeshCore.Paths.ADDITIONAL_MATERIALS,
-            body = body.toString(),
-            headerBuilder = ::materialsHeaders
-        )
-        if (text.isBlank()) return emptyMap()
-        val json = runCatching { JSONObject(text) }.getOrElse {
-            throw MeshCore.MeshError(Words.InvalidResponseFromMesh.text, "invalid-json", status, it)
-        }
+        val request = body.toString()
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+        val json = asObject(
+            { api().additionalMaterials(request, materialsHeaders()) },
+            MeshCore.Paths.ADDITIONAL_MATERIALS
+        ) ?: return emptyMap()
         return MeshCdz.normalizeAdditionalMaterials(json)
     }
 
@@ -567,16 +523,35 @@ class MeshClient(
         if (material.isBlank() || person.isBlank() || entry.isBlank()) {
             throw MeshCore.MeshError(Words.MissingHomeworkMaterial.text, "bad-material")
         }
-        val (status, text) = exchange(
-            "GET",
-            MeshCore.Paths.LRS_RESULTS,
-            mapOf("context" to MeshCdz.lrsContext(material, person, entry), "size" to 20)
+        val context = MeshCdz.lrsContext(material, person, entry)
+        val variants = listOf(
+            lrsHeaders(),
+            lrsHeaders(profileId = person),
+            lrsHeaders(includeAuthToken = false),
+            lrsHeaders(authTokenOnly = true),
+            headers()
         )
-        if (text.isBlank()) return MeshCdz.normalizeLrsResults(null)
-        val json = runCatching { JSONObject(text) }.getOrElse {
-            throw MeshCore.MeshError(Words.InvalidResponseFromMesh.text, "invalid-json", status, it)
+        var lastAuthError: MeshCore.MeshError? = null
+        variants.forEachIndexed { index, variant ->
+            try {
+                val json = toObject(
+                    execute(
+                        { api().materialResult(context, 20, variant) },
+                        MeshCore.Paths.LRS_RESULTS,
+                        // Первая попытка может обновить протухший токен.
+                        retryOn401 = index == 0
+                    )
+                )
+                if (index > 0) MeshLog.log("CDZ", "result: LRS подошёл вариант заголовков ${index + 1}")
+                return MeshCdz.normalizeLrsResults(json)
+            } catch (error: MeshCore.MeshError) {
+                if (error.code != "unauthorized" && error.code != "forbidden") throw error
+                lastAuthError = error
+                MeshLog.log("CDZ", "result: LRS HTTP ${error.status} вариант ${index + 1}")
+            }
         }
-        return MeshCdz.normalizeLrsResults(json)
+        throw lastAuthError
+            ?: MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
     }
 
     /**
