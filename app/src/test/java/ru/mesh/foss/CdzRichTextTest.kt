@@ -1,11 +1,13 @@
 package ru.mesh.foss
 
 import ru.mesh.foss.feature.cdz.CdzInlineSelection
+import ru.mesh.foss.feature.cdz.cdzAtomicMediaType
 import ru.mesh.foss.feature.cdz.hasAnswer
 import ru.mesh.foss.feature.cdz.inlineAnswer
 import ru.mesh.foss.feature.cdz.inlineSelections
 import ru.mesh.foss.feature.cdz.isInlineChoice
 import ru.mesh.foss.feature.cdz.parseInlineChoices
+import ru.mesh.foss.feature.cdz.parseMathContent
 import ru.mesh.foss.feature.cdz.parseOptions
 import ru.mesh.foss.feature.cdz.parseTasks
 import ru.mesh.foss.feature.cdz.parseTextSpans
@@ -34,6 +36,74 @@ class CdzRichTextTest {
         assertEquals(7, spans[0].start)
         assertEquals(8, spans[0].end)
         assertEquals(setOf("SUB"), spans[0].tokens)
+    }
+
+    @Test
+    fun `math content renders chemical subscripts`() {
+        assertEquals("H₂S , SO₂", parseMathContent("{H_2S} , {SO_2}"))
+        assertEquals(
+            "Na₂O - NO - B₂O₃",
+            parseMathContent("{Na_2O} - {NO} - {B_2O_3}")
+        )
+        assertEquals("x² + H₂O", parseMathContent("x^{2} + H_2O"))
+    }
+
+    @Test
+    fun `option math content is not rendered as a bare Variant`() {
+        val option = JSONObject()
+            .put("id", "math-option")
+            .put(
+                "content",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", "content/math")
+                        .put("content", "{Na_2S}")
+                )
+            )
+        val parsed = parseOptions(
+            JSONObject().put("options", JSONArray().put(option))
+        ).single()
+        assertEquals("Na₂S", parsed.text)
+    }
+
+    @Test
+    fun `atomic content without type is treated as photo when it has an image url`() {
+        val photo = JSONObject()
+            .put("type", "content/atomic")
+            .put("relative_url", "/system/atomic_objects/files/table.png")
+
+        assertEquals("image", cdzAtomicMediaType(photo))
+    }
+
+    @Test
+    fun `atomic video stays video`() {
+        val video = JSONObject()
+            .put("type", "content/atomic")
+            .put("atomic_type", "video")
+            .put("relative_url", "/video/lesson.mp4")
+
+        assertEquals("video", cdzAtomicMediaType(video))
+    }
+
+    @Test
+    fun `option photo is parsed as image and not as a video`() {
+        val option = JSONObject()
+            .put("id", "photo-option")
+            .put(
+                "content",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", "content/atomic")
+                        .put("relative_url", "/system/atomic_objects/files/photo.png")
+                )
+            )
+        val parsed = parseOptions(
+            JSONObject().put("options", JSONArray().put(option))
+        ).single()
+
+        assertEquals("", parsed.text)
+        assertTrue(parsed.imageUrl.endsWith("photo.png"))
+        assertEquals(null, parsed.video)
     }
 
     @Test

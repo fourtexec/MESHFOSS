@@ -3106,11 +3106,11 @@ internal enum class Words(
         "Plein écran"
     ),
     CdzDownloadStarted(
-        "Скачивание началось",
-        "Download started",
-        "A letöltés elindult",
-        "La descarga ha comenzado",
-        "Le téléchargement a commencé"
+        "Скачивание в «Загрузки»",
+        "Downloading to Downloads",
+        "Letöltés a Letöltések mappába",
+        "Descargando en Descargas",
+        "Téléchargement dans Téléchargements"
     ),
     CdzDownloadFailed(
         "Не удалось начать скачивание",

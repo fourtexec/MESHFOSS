@@ -44,6 +44,21 @@ internal fun CdzQuestionBlock(
         CdzAtomicMedia(block, modifier)
         return
     }
+    if (type.startsWith("content/math") || block.optString("atomic_type") == "math") {
+        val math = parseMathContent(
+            block.optString("content").ifBlank { block.optString("text") }
+        )
+        if (math.isNotBlank()) {
+            CdzRichText(
+                text = math,
+                spans = emptyList(),
+                modifier = modifier,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        return
+    }
 
     val text = block.optString("text")
     if (text.isNotBlank()) {
@@ -62,13 +77,29 @@ internal fun CdzQuestionBlock(
     val content = block.optJSONArray("content") ?: return
     for (partIndex in 0 until content.length()) {
         val part = content.optJSONObject(partIndex) ?: continue
-        if (part.optString("type") == "content/atomic" ||
-            part.optString("atomic_type").isNotBlank()
+        val partType = part.optString("type")
+        if (partType.startsWith("content/math") ||
+            part.optString("atomic_type") == "math"
         ) {
+            val math = parseMathContent(
+                part.optString("content").ifBlank { part.optString("text") }
+            )
+            if (math.isNotBlank()) {
+                CdzRichText(
+                    text = math,
+                    spans = emptyList(),
+                    modifier = modifier,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            continue
+        }
+        if (cdzAtomicMediaType(part).isNotBlank()) {
             CdzAtomicMedia(part, modifier)
             continue
         }
-        if (part.optString("type").startsWith("content/text")) {
+        if (partType.startsWith("content/text")) {
             val partText = part.optString("text")
             if (partText.isNotBlank()) {
                 val spans = remember(part) {
@@ -88,7 +119,7 @@ internal fun CdzQuestionBlock(
 
 @Composable
 private fun CdzAtomicMedia(block: JSONObject, modifier: Modifier = Modifier) {
-    when (block.optString("atomic_type")) {
+    when (cdzAtomicMediaType(block)) {
         "image" -> CdzAtomicImage(block, modifier)
         "video" -> CdzRemoteVideo(block, modifier)
     }

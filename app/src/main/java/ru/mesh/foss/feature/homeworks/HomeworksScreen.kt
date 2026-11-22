@@ -170,19 +170,24 @@ fun HomeworksScreen(
                     "launch: нативный режим=$nativeMode url=${url.substringBefore('?').take(160)}"
                 )
                 cdzReturnEntry = homeworkEntryId
-                // Видео-атомы открываются не через ЦДЗ, а сразу в нативном
-                // проигрывателе: в launch-ссылке у них нет /exam/challenge/.
-                val videoMaterialId = cmsMaterialId(url)
-                if (!forceBrowser && videoMaterialId != null) {
+                // Видео-атомы и фото открываются в нативном просмотрщике:
+                // в launch-ссылке у них нет /exam/challenge/. Игры и прочие
+                // материалы так открывать нельзя — их launch-ссылка тоже может
+                // содержать /cms/materials/<uuid>/launch.
+                val mediaMaterialId = cmsMaterialId(url)
+                if (!forceBrowser && mediaMaterialId != null && isMediaMaterial(material)) {
                     context.startActivity(
                         CdzVideoActivity.intent(
                             context = context,
-                            materialId = videoMaterialId,
+                            materialId = mediaMaterialId,
                             title = material.optString("title"),
                             browserUrl = url,
                         )
                     )
-                } else if (!forceBrowser && prefs.getBoolean("cdz_in_app", false)) {
+                } else if (!forceBrowser && material.optBoolean("isCdz") &&
+                    isChallengeLaunch(url) &&
+                    prefs.getBoolean("cdz_in_app", false)
+                ) {
                     context.startActivity(
                         CdzNativeActivity.intent(context, url, material.optString("title"))
                     )
@@ -671,6 +676,14 @@ private fun cmsMaterialId(launchUrl: String): String? {
     return CmsMaterialUrl.find(activity ?: launchUrl)?.groupValues?.getOrNull(1)
 }
 
+/** Нативное прохождение умеет только `/exam/challenge/...`, не игры и не CMS-атомы. */
+private fun isChallengeLaunch(launchUrl: String): Boolean {
+    val activity = runCatching {
+        Uri.parse(launchUrl).getQueryParameter("activity_url")
+    }.getOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+    return (activity ?: launchUrl).contains("/exam/challenge/")
+}
+
 private fun hasCdz(homework: JSONObject): Boolean {
     val materials = homework.optJSONArray("materials") ?: return false
     return (0 until materials.length()).any { materials.optJSONObject(it)?.optBoolean("isCdz") == true }
@@ -680,7 +693,7 @@ private fun hasCdz(homework: JSONObject): Boolean {
  * Видео-атомы (`atomic_object`) приходят в ДЗ без `isCdz` и без прямой ссылки.
  * Для них primary-действие — «Смотреть», а launch уходит в нативный плеер.
  */
-private fun isVideoMaterial(material: JSONObject): Boolean {
+private fun isMediaMaterial(material: JSONObject): Boolean {
     val type = material.optString("type").lowercase(Locale.US)
     val typeName = material.optString("typeName").lowercase(Locale.ROOT)
     return type == "atomic_object" ||
@@ -688,6 +701,13 @@ private fun isVideoMaterial(material: JSONObject): Boolean {
         typeName.contains("видео") ||
         typeName.contains("video")
 }
+
+/**
+ * `atomic_object` — это не только видео: в ДЗ так приходят фото, таблицы и
+ * другие материалы. В нативный просмотрщик их можно вести (он умеет и видео,
+ * и картинки), а вот `game_app` и тесты — нельзя.
+ */
+private fun isVideoMaterial(material: JSONObject): Boolean = isMediaMaterial(material)
 
 /**
  * Строка ЦДЗ в карточке ДЗ: название, тип и издатель, статус выполнения из LRS,

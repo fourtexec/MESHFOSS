@@ -6,12 +6,14 @@ import ru.mesh.foss.R
 import ru.mesh.foss.core.Words
 import ru.mesh.foss.data.CdzNativeClient
 
+import android.Manifest
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -21,6 +23,8 @@ import android.webkit.CookieManager
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,10 +66,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -84,6 +91,8 @@ private data class CdzVideoInfo(
     val title: String,
     val posterUrl: String,
     val cookieHeader: String = "",
+    /** `atomic_object` может быть не видео, а фото/таблицей. */
+    val image: Boolean = false,
 )
 
 private sealed class CdzVideoState {
@@ -122,6 +131,14 @@ fun CdzRemoteVideo(
     var fullscreen by remember(key) { mutableStateOf(false) }
 
     LaunchedEffect(key, context) {
+        // Разрешение URL может застрять в refresh/bootstrap или сетевом запросе.
+        // Через 25 секунд показываем честный fallback вместо вечного спиннера.
+        val watchdog = launch {
+            delay(25_000)
+            if (state is CdzVideoState.Loading) {
+                state = CdzVideoState.Failed(fallbackVideoUrl(block))
+            }
+        }
         state = withContext(Dispatchers.IO) {
             val info = try {
                 resolveCdzVideo(context, block)
@@ -134,6 +151,7 @@ fun CdzRemoteVideo(
                 CdzVideoState.Ready(info)
             }
         }
+        watchdog.cancel()
     }
 
     when (val current = state) {
@@ -148,7 +166,25 @@ fun CdzRemoteVideo(
             LoadingIndicator(modifier = Modifier.size(40.dp))
         }
         is CdzVideoState.Ready -> {
-            if (fullscreen) {
+            if (current.info.image) {
+                Column(
+                    modifier = modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (showTitle && current.info.title.isNotBlank()) {
+                        Text(
+                            text = current.info.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    CdzRemoteImage(
+                        url = current.info.url,
+                        description = current.info.title,
+                        modifier = modifier.fillMaxWidth(),
+                    )
+                }
+            } else if (fullscreen) {
                 CdzVideoFullscreen(
                     info = current.info,
                     onClose = { fullscreen = false },
@@ -217,6 +253,13 @@ private fun CdzVideoPlayer(
     var failed by remember(info.url) { mutableStateOf(false) }
     var ready by remember(info.url) { mutableStateOf(false) }
     val holder = remember(info.url) { arrayOfNulls<VideoView>(1) }
+
+    LaunchedEffect(info.url) {
+        // VideoView может молча висеть на неподходящем URL (например, HLS или
+        // картинке). Не оставляем пользователя с вечным спиннером.
+        delay(20_000)
+        if (!ready && !failed) failed = true
+    }
 
     DisposableEffect(info.url) {
         onDispose {
@@ -357,8 +400,28 @@ private fun CdzVideoFullscreen(
 @Composable
 private fun CdzVideoDownloadButton(info: CdzVideoInfo) {
     val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            downloadVideo(context, info)
+        } else {
+            Toast.makeText(context, Words.CdzDownloadFailed.text, Toast.LENGTH_LONG).show()
+        }
+    }
     FilledTonalButton(
-        onClick = { downloadVideo(context, info) },
+        onClick = {
+            val needsPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                ) != PackageManager.PERMISSION_GRANTED
+            if (needsPermission) {
+                permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            } else {
+                downloadVideo(context, info)
+            }
+        },
         shape = MaterialTheme.shapes.large,
         modifier = Modifier
             .fillMaxWidth()
@@ -389,15 +452,9 @@ private fun downloadVideo(context: Context, info: CdzVideoInfo) {
             addRequestHeader("Referer", "$CdzBaseUrl/")
             val cookies = cookiesFor(info.url, info.cookieHeader)
             if (cookies.isNotBlank()) addRequestHeader("Cookie", cookies)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-            } else {
-                setDestinationInExternalFilesDir(
-                    context,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    fileName,
-                )
-            }
+            // Всегда в общую папку «Загрузки», а не в Android/data/....
+            // На Android 9 и ниже для этого заранее запрошено разрешение.
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
         }
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         manager.enqueue(request)
@@ -493,6 +550,7 @@ private suspend fun resolveCdzVideo(context: Context, block: JSONObject): CdzVid
                     .ifBlank { block.optString("preview_url") }
             ),
         cookieHeader = sessionCookies,
+        image = metadata?.image ?: looksLikeImageUrl(direct),
     )
 }
 
@@ -529,12 +587,23 @@ private fun directVideoUrl(block: JSONObject): String {
 }
 
 private fun looksLikeVideoUrl(value: String): Boolean {
-    val lower = value.lowercase()
-    return lower.contains(".mp4") ||
-        lower.contains(".m3u8") ||
-        lower.contains(".webm") ||
-        lower.contains(".mov") ||
+    val lower = value.substringBefore('?').lowercase()
+    return lower.endsWith(".mp4") ||
+        lower.endsWith(".m3u8") ||
+        lower.endsWith(".webm") ||
+        lower.endsWith(".mov") ||
         lower.contains("/video/")
+}
+
+private fun looksLikeImageUrl(value: String): Boolean {
+    val lower = value.substringBefore('?').lowercase()
+    return lower.endsWith(".png") ||
+        lower.endsWith(".jpg") ||
+        lower.endsWith(".jpeg") ||
+        lower.endsWith(".webp") ||
+        lower.endsWith(".gif") ||
+        lower.endsWith(".bmp") ||
+        lower.endsWith(".svg")
 }
 
 private fun fallbackVideoUrl(block: JSONObject): String {
@@ -582,6 +651,14 @@ private fun videoInfoFromMetadata(json: JSONObject): CdzVideoInfo? {
         meta.optString("file_url").ifBlank { json.optString("file_url") }
     )
     if (url.isBlank()) return null
+    val contentType = meta.optString("content_type")
+        .ifBlank { json.optString("content_type") }
+        .trim()
+        .lowercase()
+    val image = contentType.startsWith("image") || looksLikeImageUrl(url)
+    val video = contentType.startsWith("video") || looksLikeVideoUrl(url)
+    // GameApp, документы и прочие атомы нельзя отдавать в VideoView.
+    if (!image && !video) return null
     return CdzVideoInfo(
         url = url,
         subtitlesUrl = absoluteCdzUrl(
@@ -594,6 +671,7 @@ private fun videoInfoFromMetadata(json: JSONObject): CdzVideoInfo? {
                 .ifBlank { json.optString("cover_url") }
                 .ifBlank { meta.optString("preview_url") }
         ),
+        image = image,
     )
 }
 
