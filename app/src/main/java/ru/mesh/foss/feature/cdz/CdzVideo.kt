@@ -1,4 +1,5 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 
 package ru.mesh.foss.feature.cdz
 
@@ -14,15 +15,11 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.view.View
 import android.webkit.CookieManager
-import android.widget.MediaController
 import android.widget.Toast
-import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -70,6 +67,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -250,21 +255,49 @@ private fun CdzVideoPlayer(
     fullscreen: Boolean = false,
     onFullscreen: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     var failed by remember(info.url) { mutableStateOf(false) }
     var ready by remember(info.url) { mutableStateOf(false) }
-    val holder = remember(info.url) { arrayOfNulls<VideoView>(1) }
+    var buffering by remember(info.url) { mutableStateOf(true) }
+    val exoPlayer = remember(info.url, context) { createCdzPlayer(context, info) }
 
     LaunchedEffect(info.url) {
-        // VideoView может молча висеть на неподходящем URL (например, HLS или
-        // картинке). Не оставляем пользователя с вечным спиннером.
+        // Даже Media3 может застрять на битом URL или сервере без Range.
+        // Не оставляем пользователя с вечным спиннером.
         delay(20_000)
         if (!ready && !failed) failed = true
     }
 
-    DisposableEffect(info.url) {
-        onDispose {
-            holder[0]?.stopPlayback()
-            holder[0] = null
+    DisposableEffect(exoPlayer, info.url, failed) {
+        if (failed) {
+            // Ошибка уже показала fallback. Предыдущий эффект освободил плеер,
+            // поэтому не оставляем звук играть под сообщением об ошибке.
+            onDispose { }
+        } else {
+            val listener = object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    when (playbackState) {
+                        Player.STATE_READY -> {
+                            ready = true
+                            buffering = false
+                        }
+                        Player.STATE_BUFFERING -> buffering = true
+                        Player.STATE_ENDED -> buffering = false
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    failed = true
+                }
+            }
+            exoPlayer.addListener(listener)
+            exoPlayer.setMediaItem(MediaItem.fromUri(info.url))
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
+            onDispose {
+                exoPlayer.removeListener(listener)
+                exoPlayer.release()
+            }
         }
     }
 
@@ -289,28 +322,17 @@ private fun CdzVideoPlayer(
         key(info.url) {
             AndroidView(
                 factory = { viewContext ->
-                    VideoView(viewContext).apply {
-                        holder[0] = this
-                        visibility = View.INVISIBLE
-                        val controller = MediaController(viewContext)
-                        controller.setAnchorView(this)
-                        setMediaController(controller)
-                        setVideoURI(Uri.parse(info.url), videoHeaders(info.url, info.cookieHeader))
-                        setOnPreparedListener { player ->
-                            player.isLooping = false
-                            visibility = View.VISIBLE
-                            ready = true
-                        }
-                        setOnErrorListener { _: MediaPlayer, _: Int, _: Int ->
-                            failed = true
-                            true
-                        }
+                    PlayerView(viewContext).apply {
+                        setUseController(true)
+                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                        this.player = exoPlayer
                     }
                 },
+                update = { view -> view.player = exoPlayer },
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        if (!ready) {
+        if (!ready || buffering) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
@@ -337,6 +359,33 @@ private fun CdzVideoPlayer(
             }
         }
     }
+}
+
+/**
+ * Progressive HTTP-плеер: Media3 читает MP4 по Range и начинает показ после
+ * небольшого стартового буфера, не дожидаясь скачивания всего файла. Это важно
+ * для длинных видео на сотни мегабайт, у которых `moov` лежит в конце.
+ */
+private fun createCdzPlayer(context: Context, info: CdzVideoInfo): ExoPlayer {
+    val dataSourceFactory = DefaultHttpDataSource.Factory()
+        .setUserAgent(BrowserUserAgent)
+        .setDefaultRequestProperties(videoHeaders(info.url, info.cookieHeader))
+        .setConnectTimeoutMs(15_000)
+        .setReadTimeoutMs(30_000)
+        .setAllowCrossProtocolRedirects(true)
+    val loadControl = DefaultLoadControl.Builder()
+        .setBufferDurationsMs(
+            /* minBufferMs = */ 3_000,
+            /* maxBufferMs = */ 30_000,
+            /* bufferForPlaybackMs = */ 750,
+            /* bufferForPlaybackAfterRebufferMs = */ 1_500,
+        )
+        .build()
+    return ExoPlayer.Builder(context)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        .setLoadControl(loadControl)
+        .setHandleAudioBecomingNoisy(true)
+        .build()
 }
 
 @Composable
@@ -657,7 +706,7 @@ private fun videoInfoFromMetadata(json: JSONObject): CdzVideoInfo? {
         .lowercase()
     val image = contentType.startsWith("image") || looksLikeImageUrl(url)
     val video = contentType.startsWith("video") || looksLikeVideoUrl(url)
-    // GameApp, документы и прочие атомы нельзя отдавать в VideoView.
+    // GameApp, документы и прочие атомы нельзя отдавать в видеоплеер.
     if (!image && !video) return null
     return CdzVideoInfo(
         url = url,
