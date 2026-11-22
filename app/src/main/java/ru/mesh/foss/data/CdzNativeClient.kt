@@ -31,6 +31,7 @@ class CdzNativeClient(
     private val userId: String?,
     private val personId: String?,
     private val cookies: Map<String, String>,
+    private val onCookiesChanged: ((Map<String, String>) -> Unit)? = null,
 ) {
     companion object {
         private const val BASE = "https://uchebnik.mos.ru"
@@ -42,6 +43,26 @@ class CdzNativeClient(
         /** uchebnik ждёт профиль school (1002991417), а не student_id (36847597). */
         fun profileJson(profileId: String?, userId: String?): String =
             JSONObject().put("id", profileId.orEmpty()).put("type", "student").toString()
+
+        /** Set-Cookie без зависимости от регистра ключа в headerFields. */
+        private fun setCookies(connection: HttpURLConnection): List<String> {
+            val fields = runCatching { connection.headerFields }.getOrNull() ?: return emptyList()
+            return fields.entries
+                .filter { it.key?.equals("Set-Cookie", ignoreCase = true) == true }
+                .flatMap { it.value.orEmpty() }
+        }
+
+        /** claims из JWT; при ошибке — пустой объект, без логирования токена. */
+        private fun claimsOf(token: String): JSONObject {
+            if (token.isBlank()) return JSONObject()
+            return runCatching {
+                val part = token.substringAfter('.').substringBefore('.')
+                val padded = part + "=".repeat((4 - part.length % 4) % 4)
+                JSONObject(
+                    String(java.util.Base64.getUrlDecoder().decode(padded), Charsets.UTF_8)
+                )
+            }.getOrDefault(JSONObject())
+        }
 
         /**
          * Клиент из активной сессии приложения: те же cookie, токен и профиль,
@@ -68,6 +89,9 @@ class CdzNativeClient(
                 userId = jar["obr_id"],
                 personId = store.personId,
                 cookies = jar,
+                onCookiesChanged = { fresh ->
+                    store.authCookies = JSONObject(fresh as Map<*, *>).toString()
+                },
             )
         }
     }
@@ -80,16 +104,34 @@ class CdzNativeClient(
     private var challengeId: String = ""
 
     /** accessTokenEom (15 мин) и его claims — User-Id/Profile-Id для uchebnik. */
-    private val tokenClaims: JSONObject = runCatching {
-        val part = accessToken.substringAfter('.').substringBefore('.')
-        val padded = part + "=".repeat((4 - part.length % 4) % 4)
-        JSONObject(String(java.util.Base64.getUrlDecoder().decode(padded), Charsets.UTF_8))
-    }.getOrDefault(JSONObject())
+    private var tokenClaims: JSONObject = claimsOf(accessToken)
     private var eomUserId: String = tokenClaims.optString("usr").takeIf { it.isNotBlank() }
         ?: tokenClaims.optString("sub").orEmpty()
     private var eomProfileId: String = tokenClaims.optJSONArray("prf")
         ?.optJSONObject(0)?.optString("id").orEmpty()
     private var eomProfileJson: String = profileJson(eomProfileId, eomUserId)
+
+    private fun persistCookies() {
+        onCookiesChanged?.invoke(jar.toMap())
+    }
+
+    private fun applyAccessToken(value: String) {
+        if (value.isBlank()) return
+        accessToken = value
+        tokenClaims = claimsOf(value)
+        tokenClaims.optString("usr").takeIf { it.isNotBlank() }?.let { eomUserId = it }
+            ?: tokenClaims.optString("sub").takeIf { it.isNotBlank() }?.let { eomUserId = it }
+        val profiles = tokenClaims.optJSONArray("prf")
+        val profile = profiles?.let { list ->
+            (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+                .firstOrNull { it.optString("id") == eomProfileId }
+                ?: list.optJSONObject(0)
+        }
+        if (profile != null) {
+            eomProfileId = profile.optString("id")
+            eomProfileJson = profile.toString()
+        }
+    }
 
     fun setChallengeId(value: String) { challengeId = value }
     fun updateCookie(name: String, value: String) {
@@ -164,13 +206,39 @@ class CdzNativeClient(
      * только авторизация (docs §3.5 и §16.1). Повторяем перед работой, т.к. токен живёт 15 мин.
      */
     suspend fun refreshSession(): Boolean = withContext(Dispatchers.IO) {
+        // QR-вход уже содержит Session-*; обычный refresh дешевле SSO.
+        // JSON-вход (`mos_cookies.json`) даёт только school-куки, поэтому
+        // сразу поднимаем библиотечную сессию, не тратя запрос на 401.
+        if (CdzSessionBootstrap.hasSessionCookies(jar) && refreshOnce()) {
+            return@withContext true
+        }
+
+        MeshLog.log("CDZ", "refresh: поднимаю SSO-сессию uchebnik")
+        val boot = CdzSessionBootstrap.bootstrap(jar)
+        if (boot == null) {
+            MeshLog.log("CDZ", "sso: не удалось")
+            return@withContext false
+        }
+        jar.putAll(boot.cookies)
+        boot.token?.takeIf { it.isNotBlank() }?.let { applyAccessToken(it) }
+        persistCookies()
+        val refreshed = refreshOnce()
+        MeshLog.log(
+            "CDZ",
+            "sso: refresh=$refreshed token=${accessToken.isNotBlank()} " +
+                "session=${CdzSessionBootstrap.hasSessionCookies(jar)}"
+        )
+        refreshed || accessToken.isNotBlank()
+    }
+
+    /** Один refresh по уже существующей `Session-*`; не делает SSO. */
+    private fun refreshOnce(): Boolean {
         val headers = buildMap {
             put("User-Agent", UA)
             put("Accept", "application/json;charset=UTF-8")
             put("Content-Type", "application/json")
             // docs §16.1: первый refresh уходит без Bearer и пользовательских ID —
             // сервер выдаёт accessTokenEom и profileId по cookie-сессии.
-            put("X-Mes-Subsystem", "testw")
             put("X-Mes-Subsystem", "testw")
             put("Origin", BASE)
             put("Referer", pageUrl)
@@ -190,7 +258,7 @@ class CdzNativeClient(
         val cookies: List<String>
         try {
             status = connection.responseCode
-            cookies = connection.headerFields["Set-Cookie"].orEmpty()
+            cookies = setCookies(connection)
             val stream = runCatching { connection.inputStream }.getOrNull() ?: connection.errorStream
             text = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() }.orEmpty()
         } finally {
@@ -198,8 +266,13 @@ class CdzNativeClient(
         }
         MeshLog.log("CDZ", "refresh: HTTP $status setCookie=${cookies.size}")
         if (status !in 200..299) {
-            MeshLog.log("CDZ", "refresh body: ${text.take(200)}")
-            return@withContext false
+            val error = runCatching { JSONObject(text) }.getOrNull()
+            MeshLog.log(
+                "CDZ",
+                "refresh error: code=${error?.optString("error_code").orEmpty()} " +
+                    "desc=${error?.optString("error_description").orEmpty().take(120)}"
+            )
+            return false
         }
         cookies.forEach { raw ->
             val pair = raw.substringBefore(';')
@@ -208,7 +281,7 @@ class CdzNativeClient(
             if (name.isNotBlank() && value.isNotBlank()) jar[name] = value
         }
         val json = runCatching { JSONObject(text) }.getOrDefault(JSONObject())
-        json.optString("accessTokenEom").takeIf { it.isNotBlank() }?.let { accessToken = it }
+        json.optString("accessTokenEom").takeIf { it.isNotBlank() }?.let { applyAccessToken(it) }
         json.optString("profileId").takeIf { it.isNotBlank() }?.let { id ->
             eomProfileId = id
             val prf = tokenClaims.optJSONArray("prf")
@@ -219,18 +292,13 @@ class CdzNativeClient(
             }
             eomProfileJson = found.toString()
         }
-        val claims = runCatching {
-            val part = accessToken.substringAfter('.').substringBefore('.')
-            val padded = part + "=".repeat((4 - part.length % 4) % 4)
-            JSONObject(String(java.util.Base64.getUrlDecoder().decode(padded), Charsets.UTF_8))
-        }.getOrDefault(JSONObject())
-        claims.optString("usr").takeIf { it.isNotBlank() }?.let { eomUserId = it }
+        persistCookies()
         MeshLog.log(
             "CDZ",
             "refresh ok: user=${eomUserId.isNotBlank()} profile=${eomProfileId.isNotBlank()} " +
                 "token=${accessToken.isNotBlank()}"
         )
-        accessToken.isNotBlank()
+        return accessToken.isNotBlank()
     }
 
     /**
@@ -306,25 +374,28 @@ class CdzNativeClient(
             val status: Int
             val body: String
             val location: String?
-            val setCookies: List<String>
+            val rawSetCookies: List<String>
             try {
                 status = connection.responseCode
                 location = connection.getHeaderField("Location")
-                setCookies = connection.headerFields["Set-Cookie"].orEmpty()
+                rawSetCookies = setCookies(connection)
                 val stream = runCatching { connection.inputStream }.getOrNull() ?: connection.errorStream
                 body = stream?.let { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() }.orEmpty()
             } finally {
                 connection.disconnect()
             }
-            setCookies.forEach { raw ->
+            var cookieUpdated = false
+            rawSetCookies.forEach { raw ->
                 val pair = raw.substringBefore(';')
                 val name = pair.substringBefore('=').trim()
                 val value = pair.substringAfter('=').trim()
                 if (name.isNotBlank() && value.isNotBlank()) {
                     jar[name] = value
+                    cookieUpdated = true
                     MeshLog.trace("CDZ") { "cookie $name обновлена" }
                 }
             }
+            if (cookieUpdated) persistCookies()
             MeshLog.log(
                 "CDZ",
                 "redirect #$hop: HTTP $status " +

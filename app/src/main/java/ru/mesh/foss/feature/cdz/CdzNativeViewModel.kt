@@ -129,14 +129,9 @@ class CdzNativeViewModel(
                     return@launch
                 }
                 challenge = id
-                val active = CdzNativeClient(
-                    pageUrl = derived,
-                    token = api.currentToken(),
-                    profileId = api.currentProfileId(),
-                    userId = api.currentUserId(),
-                    personId = api.currentPersonId(),
-                    cookies = api.currentCookies(),
-                )
+                // fromSession сохраняет обновлённые SSO/Session-* cookie обратно
+                // в аккаунт, чтобы следующее открытие не повторяло bootstrap.
+                val active = CdzNativeClient.fromSession(getApplication(), derived)
                 client = active
                 val refreshed = withContext(Dispatchers.IO) { active.refreshSession() }
                 MeshLog.log("CDZ", "native: refresh=$refreshed")
