@@ -263,10 +263,27 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
  */
 fun parseTable(answer: JSONObject): CdzTable? {
     val table = findTable(answer) ?: return null
-    val rows = table.optInt("rows", 0)
-    val columns = table.optInt("columns", 0)
-    if (rows <= 0 || columns <= 0) return null
+    val declaredRows = table.optInt("rows", 0)
+    val declaredColumns = table.optInt("columns", 0)
+    if (declaredRows <= 0 || declaredColumns <= 0) return null
     val rawCells = table.optJSONObject("cells") ?: return null
+
+    // Иногда `rows`/`columns` меньше фактической сетки. Берём максимум,
+    // иначе нижняя строка с полями ввода просто исчезает.
+    var rows = declaredRows
+    var columns = declaredColumns
+    val rowKeys = rawCells.keys()
+    while (rowKeys.hasNext()) {
+        val rowKey = rowKeys.next()
+        val row = rowKey.toIntOrNull() ?: continue
+        rows = maxOf(rows, row + 1)
+        val rowJson = rawCells.optJSONObject(rowKey) ?: continue
+        val columnKeys = rowJson.keys()
+        while (columnKeys.hasNext()) {
+            val column = columnKeys.next().toIntOrNull() ?: continue
+            columns = maxOf(columns, column + 1)
+        }
+    }
 
     val cells = linkedMapOf<Pair<Int, Int>, String>()
     for (row in 0 until rows) {
@@ -368,7 +385,7 @@ private fun cellText(value: Any?): String = when (value) {
         .joinToString("\n")
     is String -> value
     else -> value.toString()
-}
+}.trim()
 
 /**
  * Относительные ссылки ЦДЗ приходят и как `/system/...`, и как полный URL.

@@ -2,24 +2,44 @@
 
 package ru.mesh.foss.feature.cdz
 
+import ru.mesh.foss.R
 import ru.mesh.foss.core.Words
 import ru.mesh.foss.data.CdzNativeClient
 
+import android.app.Activity
+import android.app.DownloadManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.view.View
 import android.webkit.CookieManager
 import android.widget.MediaController
+import android.widget.Toast
 import android.widget.VideoView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,9 +53,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -90,6 +119,7 @@ fun CdzRemoteVideo(
         ).joinToString("|")
     }
     var state by remember(key) { mutableStateOf<CdzVideoState>(CdzVideoState.Loading) }
+    var fullscreen by remember(key) { mutableStateOf(false) }
 
     LaunchedEffect(key, context) {
         state = withContext(Dispatchers.IO) {
@@ -110,29 +140,44 @@ fun CdzRemoteVideo(
         CdzVideoState.Loading -> Box(
             modifier = modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f),
+                .aspectRatio(16f / 9f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
-            LoadingIndicator(modifier = Modifier.size(26.dp))
+            LoadingIndicator(modifier = Modifier.size(40.dp))
         }
-        is CdzVideoState.Ready -> Column(
-            modifier = modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (showTitle && current.info.title.isNotBlank()) {
-                Text(
-                    text = current.info.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+        is CdzVideoState.Ready -> {
+            if (fullscreen) {
+                CdzVideoFullscreen(
+                    info = current.info,
+                    onClose = { fullscreen = false },
                 )
-            }
-            CdzVideoPlayer(current.info)
-            if (current.info.subtitlesUrl.isNotBlank()) {
-                Text(
-                    text = Words.CdzVideoSubtitles.text,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            } else {
+                Column(
+                    modifier = modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (showTitle && current.info.title.isNotBlank()) {
+                        Text(
+                            text = current.info.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    CdzVideoPlayer(
+                        info = current.info,
+                        onFullscreen = { fullscreen = true },
+                    )
+                    CdzVideoDownloadButton(current.info)
+                    if (current.info.subtitlesUrl.isNotBlank()) {
+                        Text(
+                            text = Words.CdzVideoSubtitles.text,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
         is CdzVideoState.Failed -> CdzVideoFallback(
@@ -163,8 +208,14 @@ private fun CdzVideoFallback(url: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CdzVideoPlayer(info: CdzVideoInfo) {
+private fun CdzVideoPlayer(
+    info: CdzVideoInfo,
+    modifier: Modifier = Modifier,
+    fullscreen: Boolean = false,
+    onFullscreen: (() -> Unit)? = null,
+) {
     var failed by remember(info.url) { mutableStateOf(false) }
+    var ready by remember(info.url) { mutableStateOf(false) }
     val holder = remember(info.url) { arrayOfNulls<VideoView>(1) }
 
     DisposableEffect(info.url) {
@@ -179,38 +230,213 @@ private fun CdzVideoPlayer(info: CdzVideoInfo) {
         return
     }
 
-    key(info.url) {
-        AndroidView(
-            factory = { viewContext ->
-                VideoView(viewContext).apply {
-                    holder[0] = this
-                    val controller = MediaController(viewContext)
-                    controller.setAnchorView(this)
-                    setMediaController(controller)
-                    setVideoURI(Uri.parse(info.url), videoHeaders(info.url, info.cookieHeader))
-                    setOnPreparedListener { player ->
-                        player.isLooping = false
-                    }
-                    setOnErrorListener { _: MediaPlayer, _: Int, _: Int ->
-                        failed = true
-                        true
-                    }
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(MaterialTheme.shapes.medium),
-        )
+    val playerModifier = if (fullscreen) {
+        modifier.fillMaxSize()
+    } else {
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(MaterialTheme.shapes.medium)
     }
+    Box(
+        modifier = playerModifier.background(
+            if (ready) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+    ) {
+        key(info.url) {
+            AndroidView(
+                factory = { viewContext ->
+                    VideoView(viewContext).apply {
+                        holder[0] = this
+                        visibility = View.INVISIBLE
+                        val controller = MediaController(viewContext)
+                        controller.setAnchorView(this)
+                        setMediaController(controller)
+                        setVideoURI(Uri.parse(info.url), videoHeaders(info.url, info.cookieHeader))
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
+                            visibility = View.VISIBLE
+                            ready = true
+                        }
+                        setOnErrorListener { _: MediaPlayer, _: Int, _: Int ->
+                            failed = true
+                            true
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (!ready) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                LoadingIndicator(
+                    modifier = Modifier.size(if (fullscreen) 52.dp else 40.dp)
+                )
+            }
+        }
+        if (onFullscreen != null) {
+            IconButton(
+                onClick = onFullscreen,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.52f), CircleShape),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_fullscreen),
+                    contentDescription = Words.CdzFullscreen.text,
+                    tint = Color.White,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CdzVideoFullscreen(
+    info: CdzVideoInfo,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val activity = context.findActivity()
+        if (activity == null) return@DisposableEffect onDispose {}
+        val previousOrientation = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+            activity.requestedOrientation = previousOrientation
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        Surface(
+            color = Color.Black,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                CdzVideoPlayer(
+                    info = info,
+                    modifier = Modifier.fillMaxSize(),
+                    fullscreen = true,
+                )
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(20.dp)
+                        .size(44.dp)
+                        .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                        .semantics { contentDescription = Words.Close.text },
+                ) {
+                    Text(
+                        text = "✕",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CdzVideoDownloadButton(info: CdzVideoInfo) {
+    val context = LocalContext.current
+    FilledTonalButton(
+        onClick = { downloadVideo(context, info) },
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_download),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(Words.Download.text)
+    }
+}
+
+private fun downloadVideo(context: Context, info: CdzVideoInfo) {
+    runCatching {
+        val fileName = videoFileName(info)
+        val request = DownloadManager.Request(Uri.parse(info.url)).apply {
+            setTitle(info.title.ifBlank { Words.Download.text })
+            setMimeType("video/mp4")
+            setNotificationVisibility(
+                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+            )
+            setAllowedOverMetered(true)
+            setAllowedOverRoaming(true)
+            addRequestHeader("User-Agent", BrowserUserAgent)
+            addRequestHeader("Referer", "$CdzBaseUrl/")
+            val cookies = cookiesFor(info.url, info.cookieHeader)
+            if (cookies.isNotBlank()) addRequestHeader("Cookie", cookies)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            } else {
+                setDestinationInExternalFilesDir(
+                    context,
+                    Environment.DIRECTORY_DOWNLOADS,
+                    fileName,
+                )
+            }
+        }
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        manager.enqueue(request)
+        Toast.makeText(context, Words.CdzDownloadStarted.text, Toast.LENGTH_SHORT).show()
+    }.onFailure {
+        Toast.makeText(context, Words.CdzDownloadFailed.text, Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun videoFileName(info: CdzVideoInfo): String {
+    val lastSegment = Uri.parse(info.url).lastPathSegment.orEmpty()
+    val extension = lastSegment.substringAfterLast('.', "")
+        .lowercase()
+        .takeIf { it in setOf("mp4", "m4v", "mov", "webm") }
+        ?: "mp4"
+    val base = info.title.trim()
+        .ifBlank { lastSegment.substringBeforeLast('.').trim() }
+        .ifBlank { "video" }
+        .removeSuffix(".$extension")
+        .replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "_")
+        .trim()
+        .take(72)
+        .ifBlank { "video" }
+    return "$base.$extension"
+}
+
+private fun cookiesFor(url: String, cookieHeader: String = ""): String =
+    cookieHeader.ifBlank { CookieManager.getInstance().getCookie(url).orEmpty() }
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private fun videoHeaders(url: String, cookieHeader: String = ""): Map<String, String> = buildMap {
     put("User-Agent", BrowserUserAgent)
     put("Referer", "$CdzBaseUrl/")
-    val cookies = cookieHeader.ifBlank {
-        CookieManager.getInstance().getCookie(url).orEmpty()
-    }
+    val cookies = cookiesFor(url, cookieHeader)
     if (cookies.isNotBlank()) put("Cookie", cookies)
 }
 

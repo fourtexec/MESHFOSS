@@ -5,17 +5,20 @@ package ru.mesh.foss.feature.cdz
 import ru.mesh.foss.core.Words
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,11 +28,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 
 private val CdzTableCellWidth = 132.dp
+private val CdzTableCellHeight = 64.dp
 
 /** `answer/table`: заголовки и ручной ввод в ячейки. */
 @Composable
@@ -100,28 +108,38 @@ private fun CdzTableContent(
     modifier: Modifier = Modifier,
 ) {
     val scroll = rememberScrollState()
-    val tableWidth = CdzTableCellWidth * table.columns.toFloat()
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(scroll),
-    ) {
-        Column(modifier = Modifier.width(tableWidth)) {
-            for (row in 0 until table.rows) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    for (column in 0 until table.columns) {
-                        val header = row < table.headerRows || column < table.headerColumns
-                        val text = table.value(row, column)
-                        val input = editable && !header && table.isInput(row, column)
-                        CdzTableCell(
-                            text = values[row to column] ?: text,
-                            header = header,
-                            input = input,
-                            onValueChange = { value ->
-                                onValueChange?.invoke(row, column, value)
-                            },
-                        )
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        // На широком экране растягиваем немногочисленные колонки, а на узком
+        // оставляем минимальную ширину и прокручиваем таблицу по горизонтали.
+        val cellWidth = maxOf(CdzTableCellWidth, maxWidth / table.columns.toFloat())
+        val tableWidth = cellWidth * table.columns.toFloat()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scroll),
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(tableWidth)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surface),
+            ) {
+                for (row in 0 until table.rows) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        for (column in 0 until table.columns) {
+                            val header = row < table.headerRows || column < table.headerColumns
+                            val text = table.value(row, column)
+                            val input = editable && !header && table.isInput(row, column)
+                            CdzTableCell(
+                                text = values[row to column] ?: text,
+                                header = header,
+                                input = input,
+                                width = cellWidth,
+                                onValueChange = { value ->
+                                    onValueChange?.invoke(row, column, value)
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -134,46 +152,53 @@ private fun CdzTableCell(
     text: String,
     header: Boolean,
     input: Boolean,
+    width: Dp,
     onValueChange: (String) -> Unit,
 ) {
-    val background = if (header) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    } else {
-        MaterialTheme.colorScheme.surface
+    val background = when {
+        header -> MaterialTheme.colorScheme.surfaceContainerHigh
+        input -> MaterialTheme.colorScheme.surfaceContainerLowest
+        else -> MaterialTheme.colorScheme.surface
     }
     Surface(
         color = background,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
-            .width(CdzTableCellWidth)
-            .heightIn(min = 52.dp),
+            .width(width)
+            .height(CdzTableCellHeight),
     ) {
         if (input) {
-            OutlinedTextField(
-                value = text,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(4.dp),
-            )
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         } else {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
                     text = text.ifBlank { if (header) "" else "—" },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (header) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (header) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

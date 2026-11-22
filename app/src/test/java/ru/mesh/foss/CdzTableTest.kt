@@ -79,6 +79,47 @@ class CdzTableTest {
     }
 
     @Test
+    fun `answer table trims header line breaks and expands hidden cells`() {
+        val table = JSONObject()
+            .put("rows", 1)
+            .put("columns", 1)
+            .put("columnHeaders", true)
+            .put(
+                "cells",
+                JSONObject()
+                    .put(
+                        "0",
+                        JSONObject().put("0", JSONArray().put("Энергия, Дж\n"))
+                    )
+                    .put(
+                        "1",
+                        JSONObject().put("0", JSONArray().put("42"))
+                    )
+            )
+        val parsed = parseTable(
+            JSONObject().put(
+                "options",
+                JSONArray().put(
+                    JSONObject().put(
+                        "content",
+                        JSONArray().put(
+                            JSONObject()
+                                .put("type", "content/table")
+                                .put("table", table)
+                        )
+                    )
+                )
+            )
+        )
+        assertNotNull(parsed)
+        parsed ?: return
+        assertEquals("Энергия, Дж", parsed.value(0, 0))
+        assertEquals("42", parsed.value(1, 0))
+        assertEquals(2, parsed.rows)
+        assertTrue(parsed.isInput(1, 0))
+    }
+
+    @Test
     fun `answer table round trips through user cells`() {
         val payload = JSONObject().put(
             "cells",

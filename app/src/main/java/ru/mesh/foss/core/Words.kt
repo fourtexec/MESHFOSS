@@ -3098,6 +3098,27 @@ internal enum class Words(
         "Hay subtítulos",
         "Sous-titres disponibles"
     ),
+    CdzFullscreen(
+        "На весь экран",
+        "Full screen",
+        "Teljes képernyő",
+        "Pantalla completa",
+        "Plein écran"
+    ),
+    CdzDownloadStarted(
+        "Скачивание началось",
+        "Download started",
+        "A letöltés elindult",
+        "La descarga ha comenzado",
+        "Le téléchargement a commencé"
+    ),
+    CdzDownloadFailed(
+        "Не удалось начать скачивание",
+        "Could not start the download",
+        "Nem sikerült elindítani a letöltést",
+        "No se pudo iniciar la descarga",
+        "Impossible de démarrer le téléchargement"
+    ),
     WidgetUpdated(
         "Обновлено %s",
         "Updated %s",
