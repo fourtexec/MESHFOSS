@@ -884,46 +884,64 @@ fun MainScaffold(
     }
 
     if (showMore) {
+        val moreSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = {
                 showMore = false
                 editNav = false
             },
-            // В liquid-дизайне шторка — та же стеклянная пластина, что и диалоги:
-            // редактирование не выбивается из материала и не трогает линзу таб-бара.
-            modifier = if (design == Design.LIQUID) Modifier.dialogGlass() else Modifier,
-            containerColor = if (design == Design.LIQUID) {
-                Color.Transparent
+            sheetState = moreSheetState,
+            // Стекло рисуем внутри шторки, а не на её корне: корень ещё до анимации
+            // стоит в TopCenter, поэтому фон/клип на нём оставался сверху пустой
+            // пластиной, пока содержимое уезжало вниз.
+            modifier = Modifier,
+            containerColor = if (liquid) Color.Transparent else MaterialTheme.colorScheme.surface,
+            contentWindowInsets = if (liquid) {
+                { WindowInsets(0, 0, 0, 0) }
             } else {
-                MaterialTheme.colorScheme.surface
+                { BottomSheetDefaults.modalWindowInsets }
             },
+            dragHandle = if (liquid) null else { { BottomSheetDefaults.DragHandle() } },
         ) {
-            if (editNav) {
-                NavEditor(
-                    layout = navLayout,
-                    onChange = { applyNav(it) },
-                    onDone = { editNav = false },
-                )
-            } else {
-                ListItem(
-                    modifier = Modifier.fillMaxWidth().clickable { showAccounts = true },
-                    headlineContent = { Text(Words.Accounts.text) },
-                    leadingContent = { Text("◉") },
-                )
-                ListItem(
-                    modifier = Modifier.fillMaxWidth().clickable { editNav = true },
-                    headlineContent = { Text(Words.EditTabs.text) },
-                    leadingContent = { Text("✎") },
-                )
-                HorizontalDivider()
-                navLayout.more.forEach { key ->
-                    MoreSheetItem(NavTabs.label(key), NavTabs.icon(key)) {
-                        showMore = false
-                        editNav = false
-                        navigateTo(NavState(tab = key))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (liquid) Modifier.dialogGlass() else Modifier)
+            ) {
+                if (liquid) BottomSheetDefaults.DragHandle()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (liquid) Modifier.navigationBarsPadding() else Modifier)
+                ) {
+                    if (editNav) {
+                        NavEditor(
+                            layout = navLayout,
+                            onChange = { applyNav(it) },
+                            onDone = { editNav = false },
+                        )
+                    } else {
+                        ListItem(
+                            modifier = Modifier.fillMaxWidth().clickable { showAccounts = true },
+                            headlineContent = { Text(Words.Accounts.text) },
+                            leadingContent = { Text("◉") },
+                        )
+                        ListItem(
+                            modifier = Modifier.fillMaxWidth().clickable { editNav = true },
+                            headlineContent = { Text(Words.EditTabs.text) },
+                            leadingContent = { Text("✎") },
+                        )
+                        HorizontalDivider()
+                        navLayout.more.forEach { key ->
+                            MoreSheetItem(NavTabs.label(key), NavTabs.icon(key)) {
+                                showMore = false
+                                editNav = false
+                                navigateTo(NavState(tab = key))
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
-                Spacer(Modifier.height(16.dp))
             }
         }
     }
