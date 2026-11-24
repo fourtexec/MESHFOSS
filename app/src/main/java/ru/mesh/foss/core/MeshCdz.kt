@@ -24,6 +24,12 @@ object MeshCdz {
     /** Назначение материала в запросе additional_materials. */
     const val PURPOSE_HOME = "for_home"
 
+    /** Ключ настройки «открывать ЦДЗ в нативном решателе». */
+    const val PREF_IN_APP = "cdz_in_app"
+
+    /** Нативное ЦДЗ — стабильный режим, включённый по умолчанию. */
+    const val IN_APP_DEFAULT = true
+
     const val TYPE_FIZIKON = "fizikon_module"
     const val TYPE_TEST_TASK = "test_task_binding"
     const val TYPE_TEST_SPEC = "test_spec_binding"

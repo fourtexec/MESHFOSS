@@ -2126,18 +2126,18 @@ internal enum class Words(
         "Regarder"
     ),
     CdzOpenInApp(
-        "Нативное решение ЦДЗ (эксперимент)",
-        "Native digital homework (experimental)",
-        "Natív digitális házi (kísérleti)",
-        "Resolución nativa de tareas digitales (experimental)",
-        "Résolution native des devoirs numériques (expérimental)"
+        "Нативное решение ЦДЗ",
+        "Native digital homework",
+        "Natív digitális házi",
+        "Resolución nativa de tareas digitales",
+        "Résolution native des devoirs numériques"
     ),
     CdzOpenInAppHint(
-        "Решать ЦДЗ в приложении:сохранение вручную и предупреждение перед завершением. По умолчанию выключено — открывается веб-страница.",
-        "Solve digital homework in the app with manual saving and a completion warning. Off by default — opens the web page.",
-        "Digitális házi megoldása az appban kézi mentéssel és figyelmeztetéssel. Alapértelmezés szerint ki van kapcsolva — akkor a weboldal nyílik meg.",
-        "Resolver tareas digitales en la app con guardado manual y aviso antes de terminar. Desactivado por defecto: se abre la página web.",
-        "Résoudre les devoirs numériques dans l’app avec enregistrement manuel et avertissement. Désactivé par défaut — la page Web s’ouvre."
+        "Решать ЦДЗ в приложении: сохранение вручную и предупреждение перед завершением. Включено по умолчанию; можно открывать в веб-странице.",
+        "Solve digital homework in the app with manual saving and a completion warning. On by default; you can switch to the web page.",
+        "Digitális házi megoldása az appban kézi mentéssel és figyelmeztetéssel. Alapértelmezés szerint be van kapcsolva; átválthat a weboldalra.",
+        "Resolver tareas digitales en la app con guardado manual y aviso antes de terminar. Activado por defecto; puede cambiar a la página web.",
+        "Résoudre les devoirs numériques dans l’app avec enregistrement manuel et avertissement. Activé par défaut ; vous pouvez passer à la page Web."
     ),
     CdzReusedLink(
         "Ссылка запуска одноразовая — получаем новую…",
