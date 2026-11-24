@@ -7,6 +7,8 @@ package ru.mesh.foss.feature.cdz
 
 import ru.mesh.foss.core.Words
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -121,20 +124,39 @@ private fun ChoiceAnswer(
         }
     }
 
+    val motion = MaterialTheme.motionScheme
     options.forEach { option ->
         val isSelected = option.id in selected
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        val corner by animateDpAsState(
+            targetValue = if (isSelected) 24.dp else 16.dp,
+            animationSpec = motion.defaultSpatialSpec(),
+            label = "choiceCorner",
+        )
+        val shape = RoundedCornerShape(corner)
+        val container by animateColorAsState(
+            targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceContainerHigh,
-            border = if (isSelected) {
-                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-            } else {
-                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            },
+            animationSpec = motion.defaultEffectsSpec(),
+            label = "choiceContainer",
+        )
+        val borderColor by animateColorAsState(
+            targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant,
+            animationSpec = motion.defaultEffectsSpec(),
+            label = "choiceBorder",
+        )
+        val borderWidth by animateDpAsState(
+            targetValue = if (isSelected) 2.dp else 1.dp,
+            animationSpec = motion.defaultSpatialSpec(),
+            label = "choiceBorderWidth",
+        )
+        Surface(
+            shape = shape,
+            color = container,
+            border = BorderStroke(borderWidth, borderColor),
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
+                .clip(shape)
                 .clickable { choose(option.id) },
         ) {
             Row(
@@ -352,6 +374,7 @@ private fun GroupsAnswer(
         )
     }
 
+    val motion = MaterialTheme.motionScheme
     groups.forEachIndexed { groupIndex, group ->
         val groupId = group.first
         val groupLabel = group.second
@@ -364,13 +387,36 @@ private fun GroupsAnswer(
         )
         itemOptions.forEach { option ->
             val checked = selection[groupId]?.contains(option.id) == true
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = if (checked) MaterialTheme.colorScheme.secondaryContainer
+            val corner by animateDpAsState(
+                targetValue = if (checked) 24.dp else 16.dp,
+                animationSpec = motion.defaultSpatialSpec(),
+                label = "groupCorner",
+            )
+            val shape = RoundedCornerShape(corner)
+            val container by animateColorAsState(
+                targetValue = if (checked) MaterialTheme.colorScheme.secondaryContainer
                 else MaterialTheme.colorScheme.surfaceContainerHigh,
+                animationSpec = motion.defaultEffectsSpec(),
+                label = "groupContainer",
+            )
+            val borderColor by animateColorAsState(
+                targetValue = if (checked) MaterialTheme.colorScheme.secondary
+                else MaterialTheme.colorScheme.outlineVariant,
+                animationSpec = motion.defaultEffectsSpec(),
+                label = "groupBorder",
+            )
+            val borderWidth by animateDpAsState(
+                targetValue = if (checked) 2.dp else 1.dp,
+                animationSpec = motion.defaultSpatialSpec(),
+                label = "groupBorderWidth",
+            )
+            Surface(
+                shape = shape,
+                color = container,
+                border = BorderStroke(borderWidth, borderColor),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
+                    .clip(shape)
                     .clickable {
                         val next = selection.mapValues { (_, ids) -> ids.toMutableSet() }
                             .toMutableMap()

@@ -9,6 +9,13 @@ import ru.mesh.foss.core.Words
 import ru.mesh.foss.ui.GlassCard
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -74,6 +81,7 @@ fun CdzNativeScreen(
     onOpenInBrowser: (() -> Unit)? = null,
 ) {
     val snackbar = remember { SnackbarHostState() }
+    val phaseMotion = MaterialTheme.motionScheme
     var confirmFinish by remember { mutableStateOf(false) }
     var confirmLeave by remember { mutableStateOf(false) }
     var confirmStart by remember { mutableStateOf(false) }
@@ -125,22 +133,29 @@ fun CdzNativeScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when (viewModel.phase) {
-                CdzPhase.Loading -> LoadingPanel(
-                    error = viewModel.error,
-                    onRetry = viewModel::openChallenge,
-                    onOpenInBrowser = onOpenInBrowser,
-                )
-                CdzPhase.Choice -> ChoicePanel(
-                    viewModel = viewModel,
-                    onContinue = viewModel::beginAttempt,
-                    onStart = { confirmStart = true },
-                    onHistory = viewModel::showHistory,
-                )
-                CdzPhase.Game -> GamePanel(
-                    viewModel = viewModel,
-                    onFinish = { confirmFinish = true },
-                )
+            AnimatedContent(
+                targetState = viewModel.phase,
+                transitionSpec = { cdzPhaseTransition(phaseMotion) },
+                label = "cdzPhase",
+                modifier = Modifier.fillMaxSize(),
+            ) { phase ->
+                when (phase) {
+                    CdzPhase.Loading -> LoadingPanel(
+                        error = viewModel.error,
+                        onRetry = viewModel::openChallenge,
+                        onOpenInBrowser = onOpenInBrowser,
+                    )
+                    CdzPhase.Choice -> ChoicePanel(
+                        viewModel = viewModel,
+                        onContinue = viewModel::beginAttempt,
+                        onStart = { confirmStart = true },
+                        onHistory = viewModel::showHistory,
+                    )
+                    CdzPhase.Game -> GamePanel(
+                        viewModel = viewModel,
+                        onFinish = { confirmFinish = true },
+                    )
+                }
             }
         }
     }
@@ -476,12 +491,18 @@ private fun GamePanel(
     viewModel: CdzNativeViewModel,
     onFinish: () -> Unit,
 ) {
-    val task = viewModel.currentTask
+    val taskMotion = MaterialTheme.motionScheme
     val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
     LaunchedEffect(viewModel.current, viewModel.total) {
         if (viewModel.total > 0) {
             listState.animateScrollToItem(viewModel.current.coerceIn(0, viewModel.total - 1))
         }
+    }
+    LaunchedEffect(viewModel.current) {
+        // При смене задания возвращаемся к началу вопроса, иначе свайп
+        // оставляет пользователя в середине предыдущего текста.
+        scrollState.scrollTo(0)
     }
     Column(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -523,50 +544,81 @@ private fun GamePanel(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
+                .swipeCdzTasks(
+                    onPrev = {
+                        if (viewModel.current > 0) {
+                            viewModel.selectTask(viewModel.current - 1)
+                        }
+                    },
+                    onNext = {
+                        if (viewModel.current < viewModel.total - 1) {
+                            viewModel.selectTask(viewModel.current + 1)
+                        }
+                    },
+                )
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (task == null) {
-                Text(Words.CdzNativeError.text, color = MaterialTheme.colorScheme.error)
-            } else {
-                val answer = viewModel.answerOf(task.id)
-                val inline = isInlineChoice(task.type)
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (inline) {
-                            CdzInlineChoiceContent(
-                                task = task,
-                                answer = answer,
-                                onChanged = { next -> viewModel.updateAnswer(task.id, next) },
-                            )
-                        } else {
-                            CdzQuestionContent(task.question)
+            AnimatedContent(
+                targetState = viewModel.current,
+                transitionSpec = {
+                    cdzTaskTransition(
+                        motion = taskMotion,
+                        direction = if (targetState >= initialState) 1 else -1,
+                    )
+                },
+                label = "cdzTask",
+                modifier = Modifier.fillMaxWidth(),
+            ) { index ->
+                val task = viewModel.tasks.getOrNull(index)
+                if (task == null) {
+                    Text(Words.CdzNativeError.text, color = MaterialTheme.colorScheme.error)
+                } else {
+                    val answer = viewModel.answerOf(task.id)
+                    val inline = isInlineChoice(task.type)
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                if (inline) {
+                                    CdzInlineChoiceContent(
+                                        task = task,
+                                        answer = answer,
+                                        onChanged = { next ->
+                                            viewModel.updateAnswer(task.id, next)
+                                        },
+                                    )
+                                } else {
+                                    CdzQuestionContent(task.question)
+                                }
+                            }
                         }
+                        if (!inline) {
+                            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text(
+                                        text = Words.CdzAnswerLabel.text,
+                                        style = MaterialTheme.typography.titleSmall,
+                                    )
+                                    CdzAnswerContent(
+                                        task = task,
+                                        answer = answer,
+                                        onChanged = { next ->
+                                            viewModel.updateAnswer(task.id, next)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
-                if (!inline) {
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Text(
-                                text = Words.CdzAnswerLabel.text,
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            CdzAnswerContent(
-                                task = task,
-                                answer = answer,
-                                onChanged = { next -> viewModel.updateAnswer(task.id, next) },
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
             }
         }
     }
@@ -580,18 +632,27 @@ private fun TaskNumberChip(
     answered: Boolean,
     onClick: () -> Unit,
 ) {
-    val container = when {
-        current -> MaterialTheme.colorScheme.primary
-        done -> MaterialTheme.colorScheme.primaryContainer
-        answered -> MaterialTheme.colorScheme.tertiaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-    val content = when {
-        current -> MaterialTheme.colorScheme.onPrimary
-        done -> MaterialTheme.colorScheme.onPrimaryContainer
-        answered -> MaterialTheme.colorScheme.onTertiaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val motion = MaterialTheme.motionScheme
+    val container by animateColorAsState(
+        targetValue = when {
+            current -> MaterialTheme.colorScheme.primary
+            done -> MaterialTheme.colorScheme.primaryContainer
+            answered -> MaterialTheme.colorScheme.tertiaryContainer
+            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "taskChipContainer",
+    )
+    val content by animateColorAsState(
+        targetValue = when {
+            current -> MaterialTheme.colorScheme.onPrimary
+            done -> MaterialTheme.colorScheme.onPrimaryContainer
+            answered -> MaterialTheme.colorScheme.onTertiaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "taskChipContent",
+    )
     Surface(
         onClick = onClick,
         shape = CircleShape,
@@ -619,6 +680,7 @@ private fun GameActions(
     onNext: () -> Unit,
     onSave: () -> Unit,
 ) {
+    val motion = MaterialTheme.motionScheme
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 3.dp,
@@ -632,7 +694,13 @@ private fun GameActions(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (canPrev) {
+            AnimatedVisibility(
+                visible = canPrev,
+                enter = fadeIn(animationSpec = motion.defaultEffectsSpec()) +
+                    scaleIn(animationSpec = motion.defaultSpatialSpec(), initialScale = 0.8f),
+                exit = fadeOut(animationSpec = motion.defaultEffectsSpec()) +
+                    scaleOut(animationSpec = motion.defaultSpatialSpec(), targetScale = 0.8f),
+            ) {
                 NavArrow(
                     symbol = "←",
                     description = Words.CdzPreviousTask.text,
@@ -651,7 +719,13 @@ private fun GameActions(
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            if (canNext) {
+            AnimatedVisibility(
+                visible = canNext,
+                enter = fadeIn(animationSpec = motion.defaultEffectsSpec()) +
+                    scaleIn(animationSpec = motion.defaultSpatialSpec(), initialScale = 0.8f),
+                exit = fadeOut(animationSpec = motion.defaultEffectsSpec()) +
+                    scaleOut(animationSpec = motion.defaultSpatialSpec(), targetScale = 0.8f),
+            ) {
                 NavArrow(
                     symbol = "→",
                     description = Words.CdzNextTask.text,

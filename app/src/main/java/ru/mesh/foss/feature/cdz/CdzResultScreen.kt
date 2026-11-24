@@ -10,6 +10,8 @@ import ru.mesh.foss.core.Words
 import ru.mesh.foss.ui.GlassCard
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,17 +71,32 @@ fun CdzResultScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when {
-                viewModel.loading && viewModel.info == null -> ResultLoading()
-                viewModel.error != null && viewModel.info == null -> ResultError(
-                    error = viewModel.error.orEmpty(),
-                    onRetry = viewModel::load,
-                )
-                else -> ResultContent(viewModel)
+            val motion = MaterialTheme.motionScheme
+            val phase = when {
+                viewModel.loading && viewModel.info == null -> ResultPhase.Loading
+                viewModel.error != null && viewModel.info == null -> ResultPhase.Error
+                else -> ResultPhase.Content
+            }
+            AnimatedContent(
+                targetState = phase,
+                transitionSpec = { cdzPhaseTransition(motion) },
+                label = "cdzResultPhase",
+                modifier = Modifier.fillMaxSize(),
+            ) { shown ->
+                when (shown) {
+                    ResultPhase.Loading -> ResultLoading()
+                    ResultPhase.Error -> ResultError(
+                        error = viewModel.error.orEmpty(),
+                        onRetry = viewModel::load,
+                    )
+                    ResultPhase.Content -> ResultContent(viewModel)
+                }
             }
         }
     }
 }
+
+private enum class ResultPhase { Loading, Error, Content }
 
 @Composable
 private fun ResultLoading() {
@@ -269,11 +287,16 @@ private fun ResultTaskCard(
     val correctness = task.feedback?.optString("correctness").orEmpty()
     val awaitingReview = task.status == "AWAIT_FOR_REVIEW"
     val verdict = if (awaitingReview) Words.CdzAwaitingReview.text else correctnessLabel(correctness)
-    val verdictColor = if (awaitingReview) {
-        MaterialTheme.colorScheme.secondary
-    } else {
-        correctnessColor(correctness)
-    }
+    val motion = MaterialTheme.motionScheme
+    val verdictColor by animateColorAsState(
+        targetValue = if (awaitingReview) {
+            MaterialTheme.colorScheme.secondary
+        } else {
+            correctnessColor(correctness)
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "resultVerdictColor",
+    )
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(
