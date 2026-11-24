@@ -5,6 +5,7 @@ package ru.mesh.foss.feature.cdz
 import ru.mesh.foss.core.Words
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -266,6 +268,7 @@ private fun MatchColumn(
     dragCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val motion = MaterialTheme.motionScheme
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -273,19 +276,35 @@ private fun MatchColumn(
         options.forEach { option ->
             val pairColor = colorForNode(option.id)
             val isSelected = selected == option.id
+            val linked = isSelected || pairColor != null
+            val corner by animateDpAsState(
+                targetValue = if (linked) 22.dp else 16.dp,
+                animationSpec = motion.defaultSpatialSpec(),
+                label = "matchCorner",
+            )
+            val shape = RoundedCornerShape(corner)
             val container by animateColorAsState(
-                when {
+                targetValue = when {
                     isSelected -> MaterialTheme.colorScheme.primaryContainer
                     pairColor != null -> pairColor.copy(alpha = 0.14f)
                     else -> MaterialTheme.colorScheme.surfaceContainerHigh
-                }
+                },
+                animationSpec = motion.defaultEffectsSpec(),
+                label = "matchContainer",
             )
             val border by animateColorAsState(
-                when {
+                targetValue = when {
                     isSelected -> MaterialTheme.colorScheme.primary
                     pairColor != null -> pairColor
                     else -> MaterialTheme.colorScheme.outlineVariant
-                }
+                },
+                animationSpec = motion.defaultEffectsSpec(),
+                label = "matchBorder",
+            )
+            val borderWidth by animateDpAsState(
+                targetValue = if (linked) 2.dp else 1.dp,
+                animationSpec = motion.defaultSpatialSpec(),
+                label = "matchBorderWidth",
             )
             val dotColor = pairColor
                 ?: if (isSelected) MaterialTheme.colorScheme.primary
@@ -295,15 +314,15 @@ private fun MatchColumn(
             val removable = !isSource && pairColor != null
 
             Surface(
-                shape = MaterialTheme.shapes.medium,
+                shape = shape,
                 color = container,
-                border = BorderStroke(if (isSelected || pairColor != null) 2.dp else 1.dp, border),
+                border = BorderStroke(borderWidth, border),
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
                         rootTops[option.id] = coordinates.positionInRoot()
                     }
-                    .clip(MaterialTheme.shapes.medium)
+                    .clip(shape)
                     .clickable { currentTap(option.id) }
                     .pointerInput(option.id) {
                         // Только горизонтальный жест: вертикальная прокрутка страницы

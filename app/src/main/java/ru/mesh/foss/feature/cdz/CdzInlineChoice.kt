@@ -7,7 +7,10 @@ package ru.mesh.foss.feature.cdz
 
 import ru.mesh.foss.core.Words
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,9 +32,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import org.json.JSONArray
@@ -150,27 +162,47 @@ private fun CdzInlineChoiceText(
         onChanged(inlineAnswer(type, answer))
     }
 
-    val placeholders = choices.mapIndexed { index, choice ->
-        CdzInlinePlaceholder(
-            position = choice.position,
-            id = "inline_${choice.positionId}_$index",
-            alternateText = optionLabel(
-                choice.options.firstOrNull { it.id == selected[choice.positionId] }
-            ).ifBlank { "…" },
+    // Ширина пропуска зависит от выбранного слова, а не от фиксированных
+    // 7em: короткие ответы больше не растягивают строку и не наезжают на
+    // соседний текст. Длинные варианты ограничены и обрезаются с ellipsis.
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelMedium
+    val placeholderData = choices.map { choice ->
+        val selectedOption = choice.options.firstOrNull { it.id == selected[choice.positionId] }
+        val label = optionLabel(selectedOption).ifBlank { "…" }
+        InlinePlaceholderData(
+            choice = choice,
+            label = label,
+            width = inlinePlaceholderWidth(
+                label = label,
+                style = labelStyle,
+                measurer = measurer,
+                density = density,
+            ),
         )
     }
-    val inlineContent = choices.mapIndexed { index, choice ->
+    val placeholders = placeholderData.mapIndexed { index, data ->
+        CdzInlinePlaceholder(
+            position = data.choice.position,
+            id = "inline_${data.choice.positionId}_$index",
+            alternateText = data.label,
+        )
+    }
+    val inlineContent = placeholderData.mapIndexed { index, data ->
         placeholders[index].id to InlineTextContent(
             placeholder = Placeholder(
-                width = 7.0.em,
-                height = 2.1.em,
+                width = data.width,
+                // Компактная высота: поле остаётся частью строки текста,
+                // а не отдельной высокой плашкой поверх соседних слов.
+                height = 1.5.em,
                 placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
             ),
         ) {
             CdzInlineChoiceDropdown(
-                choice = choice,
-                selectedId = selected[choice.positionId],
-                onSelected = { optionId -> choose(choice, optionId) },
+                choice = data.choice,
+                selectedId = selected[data.choice.positionId],
+                onSelected = { optionId -> choose(data.choice, optionId) },
             )
         }
     }.toMap()
@@ -185,6 +217,44 @@ private fun CdzInlineChoiceText(
     )
 }
 
+private data class InlinePlaceholderData(
+    val choice: CdzInlineChoice,
+    val label: String,
+    val width: TextUnit,
+)
+
+/**
+ * Ширина inline-поля по реальному тексту варианта.
+ *
+ * `Placeholder.width` измеряется в единицах текста, поэтому переводим
+ * измеренные пиксели в `sp` через текущую density/fontScale. В ширину входят
+ * горизонтальные отступы и стрелка; минимум и максимум не дают полю стать
+ * ни микроскопическим, ни шире строки.
+ */
+private fun inlinePlaceholderWidth(
+    label: String,
+    style: TextStyle,
+    measurer: TextMeasurer,
+    density: Density,
+): TextUnit {
+    val minWidth = with(density) { 36.dp.toPx() }
+    val maxWidth = with(density) { 124.dp.toPx() }
+    val chromeWidth = with(density) { 24.dp.toPx() }
+    val textWidth = if (label.isBlank()) {
+        0f
+    } else {
+        measurer.measure(
+            text = AnnotatedString(label),
+            style = style,
+            maxLines = 1,
+            softWrap = false,
+        ).size.width.toFloat()
+    }
+    return with(density) {
+        (textWidth + chromeWidth).coerceIn(minWidth, maxWidth).toSp()
+    }
+}
+
 @Composable
 private fun CdzInlineChoiceDropdown(
     choice: CdzInlineChoice,
@@ -193,45 +263,73 @@ private fun CdzInlineChoiceDropdown(
 ) {
     var expanded by remember(choice.positionId) { mutableStateOf(false) }
     val selected = choice.options.firstOrNull { it.id == selectedId }
+    val motion = MaterialTheme.motionScheme
+    val corner by animateDpAsState(
+        targetValue = if (selected != null) 16.dp else 10.dp,
+        animationSpec = motion.defaultSpatialSpec(),
+        label = "inlineChoiceCorner",
+    )
+    val shape = RoundedCornerShape(corner)
+    val container by animateColorAsState(
+        targetValue = if (selected != null) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "inlineChoiceContainer",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected != null) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "inlineChoiceContent",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected != null) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outlineVariant
+        },
+        animationSpec = motion.defaultEffectsSpec(),
+        label = "inlineChoiceBorder",
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Не используем clickable-Surface: M3 добавляет ему минимальный
+        // touch-target 48dp, из-за чего компактное inline-поле снова
+        // выходило бы за высоту строки. Клик вешаем на обычный Surface.
         Surface(
-            onClick = { expanded = true },
-            shape = MaterialTheme.shapes.small,
-            color = if (selected != null) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            },
-            contentColor = if (selected != null) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            border = BorderStroke(
-                width = 1.dp,
-                color = if (selected != null) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-            ),
-            modifier = Modifier.fillMaxSize(),
+            shape = shape,
+            color = container,
+            contentColor = contentColor,
+            border = BorderStroke(1.dp, borderColor),
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(shape)
+                .clickable { expanded = true },
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 CdzRichText(
-                    text = optionLabel(selected).ifBlank { Words.CdzChoose.text },
+                    text = optionLabel(selected).ifBlank { "…" },
                     spans = selected?.textSpans.orEmpty(),
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Text("▾", style = MaterialTheme.typography.labelSmall)
+                Text(
+                    text = "▾",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
             }
         }
 
