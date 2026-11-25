@@ -153,10 +153,13 @@ class MeshClient(
             cookieToken != null || refreshWithCookies != null -> 3
             else -> 2
         }
-        var refreshed = false
         while (attempt < maxAttempts) {
             attempt++
             requestCount++
+            // Токен, с которым ушёл именно этот запрос. Если параллельный
+            // запрос уже обновил токен, повтор не должен запускать второй
+            // refresh: иначе короткоживущие токены будут гоняться друг за другом.
+            val usedToken = token
             val call = callFactory()
             if (MeshLog.enabled) MeshLog.log("HTTP", "→ " + describe(call.request()))
             val response = try {
@@ -194,8 +197,10 @@ class MeshClient(
             }
             if (code == 401 && attempt < maxAttempts) {
                 MeshLog.log("AUTH", "401 — обновляю токен: ${call.request().url}")
-                if (refreshToken(force = refreshed) != null) {
-                    refreshed = true
+                // Параллельный запрос мог уже обновить токен: тогда не крутим
+                // refresh ещё раз, а сразу повторяем с актуальным.
+                val alreadyRefreshed = token != usedToken
+                if (alreadyRefreshed || refreshToken(force = true) != null) {
                     continue
                 }
                 throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
@@ -257,7 +262,7 @@ class MeshClient(
         }
 
         val now = System.currentTimeMillis()
-        if (now < refreshBlockedUntil) {
+        if (!force && now < refreshBlockedUntil) {
             MeshLog.log("AUTH", "refresh: пропуск после недавней ошибки")
             return null
         }

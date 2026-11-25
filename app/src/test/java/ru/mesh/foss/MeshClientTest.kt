@@ -119,6 +119,23 @@ class MeshClientTest {
     }
 
     @Test
+    fun `повторный 401 после refresh не блокируется кулдауном`() {
+        val refreshed = mutableListOf<String>()
+        val client = client(onToken = { refreshed.add(it) })
+        client.signIn(DemoMeshServer.DEMO_TOKEN)
+
+        // tokenLifetime = 2: первый refresh случится на третьем запросе,
+        // второй — сразу после него, когда новый токен тоже успеет истечь.
+        client.getRank(DemoMeshServer.UUID_ME, "2026-10-12")
+        client.getRank(DemoMeshServer.UUID_ME, "2026-10-12")
+        client.getRank(DemoMeshServer.UUID_ME, "2026-10-12")
+        val subjects = client.getSubjects(DemoMeshServer.UUID_ME, "2026-10-12")
+
+        assertEquals(14, subjects.length())
+        assertEquals(2, refreshed.size)
+    }
+
+    @Test
     fun `LRS берёт свежий aupd_token из cookie jar`() {
         val client = MeshClient(
             baseUrl = "http://127.0.0.1:$port",
