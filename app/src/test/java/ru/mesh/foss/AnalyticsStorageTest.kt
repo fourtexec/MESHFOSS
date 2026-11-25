@@ -55,6 +55,17 @@ class AnalyticsStorageTest {
         assertEquals(AnalyticsState(), store.load())
     }
 
+    @Test
+    fun legacyDailyAuthBlockIsResetOnUpgrade() {
+        val file = File(temp.root, "state.json")
+        file.writeText(
+            """{"last_version":"2.5.2","last_active_at":100,"last_request_at":200,"blocked_until":999999}"""
+        )
+        val loaded = AnalyticsStateStore(file).load()
+        assertEquals(0L, loaded.blockedUntil)
+        assertEquals(2, loaded.schemaVersion)
+    }
+
     private fun event(name: String) = AnalyticsEvent(
         event = name,
         timestamp = "2026-11-25T19:30:00.123Z",

@@ -101,7 +101,10 @@ Retrofit + Gson, не ломая поведение и тесты.
 1. UUID установки — случайный, хранится в `noBackupFilesDir`:
    переживает обновление, не переживает переустановку, не уходит в backup.
 2. События: `app_install`, `app_update`, `app_active`, `error`.
-3. `app_active` отправляется при запуске UI, если прошло больше 24 часов.
+3. `app_install`, `app_update` и `error` ставятся в очередь при каждом событии
+   и не подавляются 24-часовым окном. `app_active` — отдельный heartbeat
+   «client alive»: отправляется дополнительно при запуске UI, если прошло
+   больше 24 часов с предыдущего heartbeat.
 4. Ошибки отправляются после `Sensitive.scrub` + `AnalyticsSanitizer`.
 5. В аналитику не попадают токены, cookie, ФИО, email, телефоны, UUID материалов,
    `student_id`, `person_id`, `markId`, `context`, `activity_url`, длинные

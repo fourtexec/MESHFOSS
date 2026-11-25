@@ -102,13 +102,15 @@ core       ──►  (ничего из перечисленного)
   переживает переустановку и не уходит в backup;
 - `AnalyticsQueue` — дисковая очередь (200 событий / 256 КБ), пачки ≤ 60 КБ,
   не более 5 запросов в минуту;
-- `AnalyticsReporter` — install/update/active, ошибки, дедупликация, backoff;
+- `AnalyticsReporter` — install/update/heartbeat, ошибки, дедупликация, backoff;
 - `AnalyticsSanitizer` — дополнительная редакция ПИИ и id перед отправкой.
 
-Событие `app_active` проверяется в `MainActivity.onCreate` раз в 24 часа.
-Ошибки приходят из `MeshLog.error` и uncaught handler. Ключ endpoint'а —
-GitHub secret `ANALYTICS_API_KEY`, в код и логи не попадает. Подробности —
-[`ANALYTICS.md`](ANALYTICS.md).
+`app_install`, `app_update` и `error` ставятся в очередь при каждом событии и
+не подавляются суточным окном. `app_active` — отдельный heartbeat «client
+alive»; он проверяется в `MainActivity.onCreate` раз в 24 часа и добавляется
+дополнительно к install/update. Ошибки приходят из `MeshLog.error` и uncaught
+handler. Ключ endpoint'а — GitHub secret `ANALYTICS_API_KEY`, в код и логи не
+попадает. Подробности — [`ANALYTICS.md`](ANALYTICS.md).
 
 ## Посещаемость
 

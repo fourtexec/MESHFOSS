@@ -27,7 +27,7 @@ class AnalyticsReporterTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     @Test
-    fun installThenDailyActiveThenUpdate() = runBlocking {
+    fun installUpdateAndHeartbeatAreAllSent() = runBlocking {
         var now = 1_000_000L
         val identity = AnalyticsIdentity(File(temp.root, "id"))
         val stateStore = AnalyticsStateStore(File(temp.root, "state.json"))
@@ -35,22 +35,66 @@ class AnalyticsReporterTest {
         val transport = FakeTransport()
         val reporter = reporter(identity, stateStore, queue, transport, "2.5.2") { now }
 
+        // Первый запуск: install и heartbeat идут вместе, ничего не теряется.
         reporter.launchNow()
-        assertEquals(listOf(AnalyticsEvent.INSTALL), transport.types())
+        assertEquals(listOf(AnalyticsEvent.INSTALL, AnalyticsEvent.ACTIVE), transport.types())
         assertTrue(queue.load().isEmpty())
 
+        // Через 23 часа heartbeat ещё не нужен.
         now += 23 * 60 * 60 * 1_000L
         reporter.launchNow()
         assertEquals(1, transport.bodies.size)
 
-        now += 2 * 60 * 60 * 1_000L
-        reporter.launchNow()
-        assertEquals(listOf(AnalyticsEvent.INSTALL, AnalyticsEvent.ACTIVE), transport.types())
-
+        // Через 24 часа обновление и heartbeat отправляются в одном запуске.
+        now += 60 * 60 * 1_000L
         val updated = FakeTransport()
         val next = reporter(identity, stateStore, queue, updated, "2.6.0") { now }
         next.launchNow()
-        assertEquals(listOf(AnalyticsEvent.UPDATE), updated.types())
+        assertEquals(listOf(AnalyticsEvent.UPDATE, AnalyticsEvent.ACTIVE), updated.types())
+    }
+
+    @Test
+    fun authFailureUsesShortBackoffInsteadOfDailyBlock() = runBlocking {
+        var now = 1_000_000L
+        val identity = AnalyticsIdentity(File(temp.root, "id"))
+        val stateStore = AnalyticsStateStore(File(temp.root, "state.json"))
+        val queue = AnalyticsQueue(File(temp.root, "queue.jsonl"))
+        val transport = FakeTransport(
+            mutableListOf(AnalyticsResult.Fatal(401), AnalyticsResult.Success)
+        )
+        val reporter = reporter(identity, stateStore, queue, transport, "2.5.2") { now }
+
+        reporter.launchNow()
+        assertEquals(1, transport.bodies.size)
+        assertEquals(2, queue.load().size)
+
+        // Сразу повторять нельзя, но и суточного блока больше нет.
+        reporter.flushNow()
+        assertEquals(1, transport.bodies.size)
+
+        now += 60_001L
+        reporter.flushNow()
+        assertEquals(2, transport.bodies.size)
+        assertTrue(queue.load().isEmpty())
+    }
+
+    @Test
+    fun errorIsSentTogetherWithInstallAndHeartbeat() = runBlocking {
+        var now = 1_000_000L
+        val identity = AnalyticsIdentity(File(temp.root, "id"))
+        val stateStore = AnalyticsStateStore(File(temp.root, "state.json"))
+        val queue = AnalyticsQueue(File(temp.root, "queue.jsonl"))
+        val transport = FakeTransport()
+        val reporter = reporter(identity, stateStore, queue, transport, "2.5.2") { now }
+
+        reporter.recordError("HTTP", IllegalStateException("boom"))
+        reporter.launchNow()
+
+        assertEquals(
+            listOf(AnalyticsEvent.ERROR, AnalyticsEvent.INSTALL, AnalyticsEvent.ACTIVE),
+            transport.types(),
+        )
+        assertTrue(queue.load().isEmpty())
     }
 
     @Test

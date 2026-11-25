@@ -13,10 +13,13 @@ import ru.mesh.foss.core.analytics.AnalyticsTime
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Оркестратор аналитики: установка/обновление/дневная активность + ошибки.
+ * Оркестратор аналитики: установка/обновление/heartbeat + ошибки.
  *
  * Все данные проходят [AnalyticsSanitizer]. Очередь и id установки лежат в
  * noBackupFilesDir. Сеть трогаем только в фоне, не чаще 5 запросов в минуту.
+ *
+ * Install/update/error не подавляются 24-часовым окном. Heartbeat `app_active`
+ * добавляется отдельно, если с прошлого heartbeat прошло не меньше суток.
  */
 class AnalyticsReporter(
     private val identity: AnalyticsIdentity,
@@ -29,7 +32,7 @@ class AnalyticsReporter(
     private val os: String,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val activeIntervalMs: Long = 24 * 60 * 60 * 1_000L,
+    private val heartbeatIntervalMs: Long = 24 * 60 * 60 * 1_000L,
     private val minRequestIntervalMs: Long = 12_000L,
     private val errorDebounceMs: Long = 2_000L,
     private val autoFlushOnError: Boolean = true,
@@ -44,7 +47,7 @@ class AnalyticsReporter(
     @Volatile
     private var cachedUuid: String? = null
 
-    /** Вызывается при открытии UI: решает, нужно ли отправить install/update/active. */
+    /** Вызывается при открытии UI: ставит install/update и, отдельно, heartbeat. */
     fun reportLaunch() {
         scope.launch { launchNow() }
     }
@@ -62,27 +65,46 @@ class AnalyticsReporter(
                 state = AnalyticsState()
             }
 
-            val launchEvent = when {
-                state.lastVersion == null -> event(
+            val launchEvents = mutableListOf<AnalyticsEvent>()
+            var stateChanged = false
+
+            if (state.lastVersion == null) {
+                event(
                     type = AnalyticsEvent.INSTALL,
                     text = "app installed",
                     level = "info",
-                )
-                state.lastVersion != version -> event(
+                )?.let {
+                    launchEvents += it
+                    state = state.copy(lastVersion = version)
+                    stateChanged = true
+                }
+            } else if (state.lastVersion != version) {
+                event(
                     type = AnalyticsEvent.UPDATE,
                     text = "app updated from ${state.lastVersion} to $version",
                     level = "info",
-                )
-                now - state.lastActiveAt >= activeIntervalMs -> event(
-                    type = AnalyticsEvent.ACTIVE,
-                    text = "app active",
-                    level = "info",
-                )
-                else -> null
+                )?.let {
+                    launchEvents += it
+                    state = state.copy(lastVersion = version)
+                    stateChanged = true
+                }
             }
-            if (launchEvent != null) {
-                queue.append(launchEvent)
-                state = state.copy(lastVersion = version, lastActiveAt = now)
+
+            // Heartbeat не заменяет install/update, а идёт в дополнение к ним.
+            if (now - state.lastActiveAt >= heartbeatIntervalMs) {
+                event(
+                    type = AnalyticsEvent.ACTIVE,
+                    text = "client alive",
+                    level = "info",
+                )?.let {
+                    launchEvents += it
+                    state = state.copy(lastActiveAt = now)
+                    stateChanged = true
+                }
+            }
+
+            if (stateChanged) {
+                launchEvents.forEach(queue::append)
                 stateStore.save(state)
             }
             flushLocked()
@@ -159,9 +181,11 @@ class AnalyticsReporter(
                 }
 
                 is AnalyticsResult.Fatal -> {
+                    // Это backoff, а не суточный фильтр событий: install,
+                    // update и ошибки уже лежат в очереди и уйдут после паузы.
                     val block = when (result.status) {
-                        401, 403, 415 -> 24 * 60 * 60 * 1_000L
-                        else -> 60 * 60 * 1_000L
+                        401, 403, 415 -> 60_000L
+                        else -> 5 * 60_000L
                     }
                     state = state.copy(blockedUntil = sentAt + block)
                     stateStore.save(state)

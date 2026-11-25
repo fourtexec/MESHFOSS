@@ -41,11 +41,15 @@ _stream_fields=app,version,device,level,event_type,uuid
 |---|---|---|
 | `app_install` | первый запуск с новым UUID | `info` |
 | `app_update` | версия отличается от последней отправленной | `info` |
-| `app_active` | при запуске UI, если с прошлой активности прошло ≥ 24 ч | `info` |
+| `app_active` | heartbeat «client alive» при запуске UI, если с прошлого heartbeat прошло ≥ 24 ч | `info` |
 | `error` | ошибка, ушедшая через `MeshLog.error` или uncaught handler | `error` |
 
-`app_active` проверяется в `MainActivity.onCreate`, а не в фоновом worker'е,
-чтобы фоновая работа не выглядела как активность пользователя.
+`app_install`, `app_update` и `error` не ограничены суточным окном: каждое
+событие ставится в очередь и отправляется при первой возможности. `app_active`
+— отдельный heartbeat, он добавляется **в дополнение** к install/update, а не
+вместо них. Проверка heartbeat выполняется в `MainActivity.onCreate`, а не в
+фоновом worker'е, чтобы фоновая работа не выглядела как активность
+пользователя.
 
 ## Поля строки
 
@@ -88,9 +92,12 @@ _stream_fields=app,version,device,level,event_type,uuid
 - перед отправкой режется на пачки ≤ 60 КБ;
 - не более 5 HTTP-запросов в минуту;
 - `429` — пауза по `Retry-After` (или 60 с);
-- `401/403/415` — длинная пауза, чтобы не долбить endpoint;
+- `401/403/415` — короткая пауза 60 с, затем очередь повторяется;
+- прочие `4xx` — пауза 5 минут;
 - `413` — пачка режется пополам;
-- сеть/5xx — повтор позже.
+- сеть/5xx — повтор позже;
+- суточного блока на все события больше нет. Старый `blocked_until` из
+  состояния 2.5.x сбрасывается при обновлении до 2.6.
 
 ## Что фильтруется
 
@@ -118,4 +125,5 @@ JVM-тесты:
 - `AnalyticsIdentityTest` — UUID переживает чтение и пересоздаётся при порче;
 - `AnalyticsStorageTest` — очередь и состояние;
 - `AnalyticsPayloadTest` — лимит 60 КБ;
-- `AnalyticsReporterTest` — install/update/active, ошибки, 429.
+- `AnalyticsReporterTest` — install/update/heartbeat вместе, ошибки, 429,
+  короткий backoff после `401`.

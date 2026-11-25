@@ -6,7 +6,7 @@ import java.io.File
 /**
  * Очередь событий на диске (JSON Lines).
  *
- * Нужна, чтобы ошибки и дневная активность не терялись при отсутствии сети.
+ * Нужна, чтобы install/update/heartbeat и ошибки не терялись при отсутствии сети.
  * Файл также лежит в noBackupFilesDir и не попадает в backup/перенос.
  */
 class AnalyticsQueue(

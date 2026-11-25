@@ -1,15 +1,19 @@
 package ru.mesh.foss.data.analytics
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 import java.io.File
 
-/** Состояние отправки: версия, дневная активность, rate-limit и backoff. */
+private const val ANALYTICS_STATE_SCHEMA = 2
+
+/** Состояние отправки: версия, heartbeat, rate-limit и backoff. */
 data class AnalyticsState(
     @SerializedName("last_version") val lastVersion: String? = null,
     @SerializedName("last_active_at") val lastActiveAt: Long = 0L,
     @SerializedName("last_request_at") val lastRequestAt: Long = 0L,
     @SerializedName("blocked_until") val blockedUntil: Long = 0L,
+    @SerializedName("schema_version") val schemaVersion: Int = ANALYTICS_STATE_SCHEMA,
 ) {
     fun toJson(): String = gson.toJson(this)
 
@@ -17,12 +21,27 @@ data class AnalyticsState(
         private val gson = Gson()
 
         fun fromJson(raw: String): AnalyticsState = runCatching {
-            val parsed = gson.fromJson(raw, AnalyticsState::class.java)
+            val json = JsonParser.parseString(raw).asJsonObject
+            val parsed = gson.fromJson(json, AnalyticsState::class.java)
+            // Отсутствие поля — это состояние 2.5.x, даже если Kotlin
+            // подставил default при создании объекта через Gson.
+            val schema = if (json.has("schema_version")) {
+                parsed.schemaVersion.coerceAtLeast(0)
+            } else {
+                0
+            }
             AnalyticsState(
                 lastVersion = parsed.lastVersion?.takeIf { it.isNotBlank() },
                 lastActiveAt = parsed.lastActiveAt.coerceAtLeast(0L),
                 lastRequestAt = parsed.lastRequestAt.coerceAtLeast(0L),
-                blockedUntil = parsed.blockedUntil.coerceAtLeast(0L),
+                // В 2.5.x после 401/403/415 лежал суточный блок. В 2.6 это
+                // короткий backoff, поэтому старый блок сбрасываем.
+                blockedUntil = if (schema >= ANALYTICS_STATE_SCHEMA) {
+                    parsed.blockedUntil.coerceAtLeast(0L)
+                } else {
+                    0L
+                },
+                schemaVersion = ANALYTICS_STATE_SCHEMA,
             )
         }.getOrDefault(AnalyticsState())
     }
