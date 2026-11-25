@@ -21,6 +21,13 @@ object MeshLog {
     @Volatile
     var sink: ((String) -> Unit)? = null
 
+    /**
+     * Отдельный канал для ошибок. Вызывается даже при выключенном локальном
+     * журнале: аналитика должна знать об ошибках, но не зависит от файла лога.
+     */
+    @Volatile
+    var errorSink: ((String, Throwable) -> Unit)? = null
+
     private val stamp = object : ThreadLocal<SimpleDateFormat>() {
         override fun initialValue() = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     }
@@ -38,6 +45,8 @@ object MeshLog {
     }
 
     fun error(tag: String, error: Throwable) {
+        // Аналитика ошибок не зависит от локального журнала и его настройки.
+        runCatching { errorSink?.invoke(tag, error) }
         runCatching {
             log(tag, "error: ${error.javaClass.name}: ${error.message}")
             error.stackTrace?.take(8)?.forEach { frame ->

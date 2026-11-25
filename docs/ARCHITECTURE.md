@@ -1,9 +1,19 @@
-# Архитектура MESHFOSS 2.4
+# Архитектура MESHFOSS 2.5
 
 Документ описывает фактическое устройство приложения после перехода на
 package-by-feature. Правило простое: **новая функциональность живёт в своём
 feature-пакете**, а общие вещи поднимаются в `core`, `data` или `ui` только
 тогда, когда их действительно используют несколько экранов.
+
+## Сеть: обязательный стек
+
+Новые REST/JSON-запросы делаются только через Retrofit + Gson: контракт в
+`data/api` (или рядом с фичей), DTO с `@SerializedName`, `GsonConverterFactory`.
+`HttpURLConnection`, `URL.openConnection` и ручной `OkHttp Request.Builder` для
+обычного JSON в новом коде запрещены. Прямой OkHttp допустим только для
+redirect/cookie/OAuth, streaming/Range и скачивания файлов; `HttpURLConnection`
+в существующих CDZ/Москвёнок/cookie-файлах — историческое исключение, его нельзя
+копировать. Полные правила и аудит — [`AGENTS.md`](../AGENTS.md).
 
 ## Слои и пакеты
 
@@ -11,12 +21,14 @@ feature-пакете**, а общие вещи поднимаются в `core`,
 ru.mesh.foss
 ├── app          MainActivity, Application, WorkManager-воркер
 ├── core         Words, UiLanguage, MeshCore (чистые правила и разбор МЭШ)
+│   └── analytics  события, санитайзер, JSON Lines, время
 ├── data         Retrofit-клиент, сессия, cookie, обновления, Москвёнок
 │   ├── api      явный контракт REST API (MeshApiService)
-│   └── model    DTO для Gson (посещаемость, проходы)
+│   ├── model    DTO для Gson (посещаемость, проходы)
+│   └── analytics Retrofit-транспорт, UUID установки, очередь, состояние
 ├── ui           тема, Liquid Glass / Haze, общие карточки и контролы
 ├── feature
-│   ├── login      QR-вход, скрытые WebView-инструменты
+│   ├── login      QR-вход, явный экспериментальный WebView-вход
 │   ├── ranking    рейтинг класса
 │   ├── marks      оценки, итоговые, детали оценки
 │   ├── homeworks  домашние задания
@@ -65,9 +77,12 @@ core       ──►  (ничего из перечисленного)
 Единый журнал приложения разделён на три части:
 
 - `core/MeshLog` — ядро без Android: очередь строк, метка времени, санк-вывод
-  через `sink`; при выключенном журнале вызовы почти бесплатны;
+  через `sink`; при выключенном журнале вызовы почти бесплатны. Отдельный
+  `errorSink` отдаёт ошибки в аналитику даже при выключенном локальном журнале;
 - `core/Sensitive` — общая редакция секретов: `Authorization`/`Auth-Token`,
-  cookie, sessionid, OAuth `code`/`state`, `Profile-Id`, ПИИ и JWT. Regex
+  cookie, sessionid, OAuth `code`/`state`, `Profile-Id`, ПИИ и JWT. Дополнительно
+  маскируются `student_id`/`person_id`/`material_id`/`work_id`/`markId`,
+  `context`/`activity_url`, UUID, длинные числовые id, email и телефоны. Regex
   компилируются поштучно и обёрнуты в `runCatching`, поэтому некорректный
   шаблон не роняет приложение;
 - `data/MeshLogStore` — Android-сторона: переключатель в Настройках, запись в
@@ -75,6 +90,25 @@ core       ──►  (ничего из перечисленного)
 
 `MeshClient` пишет все HTTP-запросы под тегом `HTTP`, продление токена — под
 `AUTH`; экран «Москвёнок» — под тегом `Moskvenok`.
+
+## Аналитика
+
+`data/analytics` — отдельный слой, не влияющий на работу приложения:
+
+- `AnalyticsApiService` + `RetrofitAnalyticsTransport` — Retrofit-контракт и
+  JSON Lines через `RequestBody` (`application/stream+json`);
+- `AnalyticsEvent`/`AnalyticsState` — Gson-модели;
+- `AnalyticsIdentity` — UUID в `noBackupFilesDir`: переживает обновление, не
+  переживает переустановку и не уходит в backup;
+- `AnalyticsQueue` — дисковая очередь (200 событий / 256 КБ), пачки ≤ 60 КБ,
+  не более 5 запросов в минуту;
+- `AnalyticsReporter` — install/update/active, ошибки, дедупликация, backoff;
+- `AnalyticsSanitizer` — дополнительная редакция ПИИ и id перед отправкой.
+
+Событие `app_active` проверяется в `MainActivity.onCreate` раз в 24 часа.
+Ошибки приходят из `MeshLog.error` и uncaught handler. Ключ endpoint'а —
+GitHub secret `ANALYTICS_API_KEY`, в код и логи не попадает. Подробности —
+[`ANALYTICS.md`](ANALYTICS.md).
 
 ## Посещаемость
 
@@ -138,8 +172,13 @@ Bearer); для `family/web` допустимы оба.
 - Иконки не увеличиваются при нажатии/перетаскивании; двигается только стекло.
 - Линза следует за пальцем, замедляется у центров вкладок и выбирает ближайшую
   левую вкладку при движении справа налево.
-- Видимый вход — только QR-код. WebView `school.mos.ru` и ручной токен спрятаны
-  за красной экспериментальной кнопкой.
+- Видимый вход — только QR-код. Дополнительно за красной экспериментальной
+  кнопкой доступны явное окно WebView `school.mos.ru` и ручной токен.
+- WebView — только видимый интерактивный вход/сторонняя HTML-страница. Нельзя
+  использовать WebView, `loadUrl()` или `@JavascriptInterface` как транспорт для
+  JSON/API/аналитики: для данных есть Retrofit + Gson. Скрытых/фоновых WebView
+  нет; старые `MeshLoginActivity` и `CdzActivity` удалены. Правило
+  зафиксировано в [`AGENTS.md`](../AGENTS.md).
 - Поддерживается только МЭШ / `school.mos.ru`; «Моя школа» не является целью.
 
 ## Аккаунты

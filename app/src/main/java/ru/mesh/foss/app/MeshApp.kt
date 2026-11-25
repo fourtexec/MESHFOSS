@@ -3,6 +3,7 @@ package ru.mesh.foss.app
 import ru.mesh.foss.R
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
+import ru.mesh.foss.data.analytics.Analytics
 import ru.mesh.foss.ui.*
 
 import android.app.Application
@@ -26,6 +27,7 @@ class MeshApp : Application() {
         super.onCreate()
         UiLanguage.select(getSharedPreferences("mesh_settings", MODE_PRIVATE).getString("language", "ru"))
         MeshLogStore.init(this)
+        Analytics.init(this)
         MeshLog.log("APP", "запуск MESHFOSS")
         createNotificationChannel()
         scheduleTokenRefresh()

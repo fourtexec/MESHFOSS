@@ -8,6 +8,7 @@ package ru.mesh.foss.app
 import ru.mesh.foss.R
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
+import ru.mesh.foss.data.analytics.Analytics
 import ru.mesh.foss.ui.*
 import ru.mesh.foss.feature.attendance.*
 import ru.mesh.foss.feature.food.*
@@ -65,6 +66,7 @@ import ru.mesh.foss.widget.WidgetUpdater
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Analytics.reportLaunch()
         setContent {
             MeshRankerTheme {
                 val context = LocalContext.current

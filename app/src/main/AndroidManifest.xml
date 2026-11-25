@@ -33,14 +33,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Окно входа в МЭШ: перехватывает токен автоматически -->
-        <activity
-            android:name=".feature.login.MeshLoginActivity"
-            android:exported="false"
-            android:label="@string/login_title"
-            android:theme="@style/Theme.MeshRanker.Login" />
-
-        <!-- Прохождение ЦДЗ: WebView с cookie сессии МЭШ (docs/mesh-cdz-api.md §7.2) -->
+        <!-- Прохождение ЦДЗ: нативное решение, без WebView для API-запросов. -->
         <!-- Нативное решение ЦДЗ (экспериментальная настройка) -->
         <activity
             android:name=".app.CdzNativeActivity"
@@ -54,13 +47,7 @@
             android:exported="false"
             android:theme="@style/Theme.MeshRanker" />
 
-        <activity
-            android:name=".app.CdzActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-            android:exported="false"
-            android:theme="@style/Theme.MeshRanker.Login" />
-
-        <!-- Второй способ: обычный вход на school.mos.ru с перехватом токена -->
+        <!-- Явное экспериментальное окно входа на school.mos.ru; не API-транспорт. -->
         <activity
             android:name=".feature.login.SchoolLoginActivity"
             android:exported="false"
