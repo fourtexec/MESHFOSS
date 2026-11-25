@@ -28,7 +28,7 @@ class AnalyticsReporterTest {
 
     @Test
     fun installUpdateAndHeartbeatAreAllSent() = runBlocking {
-        var now = 1_000_000L
+        var now = 1_700_000_000_000L
         val identity = AnalyticsIdentity(File(temp.root, "id"))
         val stateStore = AnalyticsStateStore(File(temp.root, "state.json"))
         val queue = AnalyticsQueue(File(temp.root, "queue.jsonl"))
@@ -55,7 +55,7 @@ class AnalyticsReporterTest {
 
     @Test
     fun authFailureUsesShortBackoffInsteadOfDailyBlock() = runBlocking {
-        var now = 1_000_000L
+        var now = 1_700_000_000_000L
         val identity = AnalyticsIdentity(File(temp.root, "id"))
         val stateStore = AnalyticsStateStore(File(temp.root, "state.json"))
         val queue = AnalyticsQueue(File(temp.root, "queue.jsonl"))
@@ -80,7 +80,7 @@ class AnalyticsReporterTest {
 
     @Test
     fun errorIsSentTogetherWithInstallAndHeartbeat() = runBlocking {
-        var now = 1_000_000L
+        var now = 1_700_000_000_000L
         val identity = AnalyticsIdentity(File(temp.root, "id"))
         val stateStore = AnalyticsStateStore(File(temp.root, "state.json"))
         val queue = AnalyticsQueue(File(temp.root, "queue.jsonl"))
