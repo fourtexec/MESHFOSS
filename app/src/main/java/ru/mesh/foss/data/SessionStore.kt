@@ -99,6 +99,23 @@ class SessionStore(
             }.apply()
         }
 
+    /** `aupd_token` из cookie jar — может быть свежее сохранённого токена. */
+    fun cookieAupdToken(): String? =
+        CookieJson.parse(authCookies)["aupd_token"]?.takeIf { it.isNotBlank() }
+
+    /**
+     * Полное обновление сессии по cookie (OAuth, как refresh.sh).
+     * Сохраняет ротированные куки и новый токен в аккаунт.
+     */
+    fun refreshTokenWithCookies(): String? {
+        val jar = CookieJson.parse(authCookies)
+        if (jar.isEmpty()) return null
+        val refreshed = CookieRefresh.refresh(jar) ?: return null
+        authCookies = JSONObject(refreshed.jar as Map<*, *>).toString()
+        token = refreshed.token
+        return refreshed.token
+    }
+
     /**
      * Сессия id.mos.ru («Моя ID») для карты «Москвёнок» — sessionid из
      * MoskvenokApi.obtainSession. При выходе стирается вместе с куками.

@@ -41,7 +41,15 @@ class MeshClient(
     var autoRefresh: Boolean = true,
     private val onToken: ((String) -> Unit)? = null,
     val nameCache: MutableMap<String, String> = mutableMapOf(),
-    private val onName: ((String, String) -> Unit)? = null
+    private val onName: ((String, String) -> Unit)? = null,
+    /**
+     * Текущий `aupd_token` из cookie jar аккаунта. ЦДЗ-сессия uchebnik может
+     * обновить его раньше, чем MeshClient: такой токен нельзя терять, иначе
+     * familyweb продолжает работать, а LRS отвечает 401.
+     */
+    private val cookieToken: (() -> String?)? = null,
+    /** Полное обновление по cookie (OAuth), возвращает новый `aupd_token` или null. */
+    private val refreshWithCookies: (() -> String?)? = null
 ) {
 
     /** Счётчик запросов — используется в диагностике. */
@@ -55,6 +63,11 @@ class MeshClient(
     @Volatile
     private var refreshBlockedUntil: Long = 0L
     private val refreshFailureCooldownMs = 30_000L
+
+    /** Не запускаем повторный OAuth по cookie для каждого параллельного 401. */
+    @Volatile
+    private var lastRefreshAt: Long = 0L
+    private val refreshSuccessCooldownMs = 10_000L
 
     private val gson = GsonBuilder().setLenient().create()
 
@@ -133,7 +146,14 @@ class MeshClient(
         retryOn401: Boolean = true
     ): T {
         var attempt = 0
-        val maxAttempts = if (autoRefresh && retryOn401) 2 else 1
+        val maxAttempts = when {
+            !autoRefresh || !retryOn401 -> 1
+            // cookie-токен может быть свежее текущего, а полный OAuth по cookie —
+            // запасной путь, если и он не подошёл.
+            cookieToken != null || refreshWithCookies != null -> 3
+            else -> 2
+        }
+        var refreshed = false
         while (attempt < maxAttempts) {
             attempt++
             requestCount++
@@ -174,7 +194,10 @@ class MeshClient(
             }
             if (code == 401 && attempt < maxAttempts) {
                 MeshLog.log("AUTH", "401 — обновляю токен: ${call.request().url}")
-                if (refreshToken() != null) continue
+                if (refreshToken(force = refreshed) != null) {
+                    refreshed = true
+                    continue
+                }
                 throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
             }
             throw httpError(code, path)
@@ -211,17 +234,53 @@ class MeshClient(
 
     /**
      * Обновление токена. Возвращает новый токен или null, если МЭШ его не выдал.
-     * Запрос идёт с текущим токеном — так же, как это делает веб-страница
-     * /v2/token/refresh?roleId=1&subsystem=2.
+     *
+     * Сначала берём `aupd_token` из cookie jar: ЦДЗ-сессия uchebnik обновляет его
+     * через SSO, и он может быть свежее того, что остался в MeshClient. Если
+     * cookie-токена нет или он не подошёл, проходим полный OAuth по cookie
+     * (как refresh.sh), и только затем пробуем /v2/token/refresh.
      */
     @Synchronized
-    fun refreshToken(): String? {
+    fun refreshToken(force: Boolean = false): String? {
         val current = token?.takeIf { it.isNotBlank() } ?: return null
+
+        // Самый быстрый путь: cookie jar уже содержит более новый aupd_token.
+        val fromCookies = runCatching { cookieToken?.invoke() }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+        val currentExpiry = tokenExpiry(current)
+        val cookieExpiry = tokenExpiry(fromCookies)
+        val cookieNotOlder = cookieExpiry == null || currentExpiry == null || cookieExpiry >= currentExpiry
+        if (fromCookies != null && fromCookies != current && cookieNotOlder) {
+            MeshLog.log("AUTH", "refresh: взят aupd_token из cookie")
+            applyToken(fromCookies)
+            return fromCookies
+        }
+
         val now = System.currentTimeMillis()
         if (now < refreshBlockedUntil) {
             MeshLog.log("AUTH", "refresh: пропуск после недавней ошибки")
             return null
         }
+        if (!force && now - lastRefreshAt < refreshSuccessCooldownMs) {
+            MeshLog.log("AUTH", "refresh: недавно обновлён")
+            return token
+        }
+
+        // Полный OAuth по сохранённым кукам — единственный путь, который
+        // гарантированно выдаёт новый aupd_token, понятный LRS.
+        val viaCookies = try {
+            refreshWithCookies?.invoke()
+        } catch (error: Exception) {
+            MeshLog.error("AUTH", error)
+            null
+        }
+        if (!viaCookies.isNullOrBlank() && viaCookies != current) {
+            MeshLog.log("AUTH", "refresh: cookie ok")
+            applyToken(viaCookies)
+            return viaCookies
+        }
+
+        // Запасной путь для аккаунтов без кук: обычный /v2/token/refresh.
         val fresh = try {
             requestCount++
             MeshLog.log("AUTH", "→ refresh token")
@@ -243,15 +302,24 @@ class MeshClient(
         }
         if (!fresh.isNullOrBlank() && fresh != current) {
             MeshLog.log("AUTH", "refresh: ok")
-            refreshBlockedUntil = 0L
-            token = fresh
-            onToken?.invoke(fresh)
+            applyToken(fresh)
             return fresh
         }
         MeshLog.log("AUTH", "refresh: токен не получен")
         refreshBlockedUntil = System.currentTimeMillis() + refreshFailureCooldownMs
         return null
     }
+
+    private fun applyToken(fresh: String) {
+        refreshBlockedUntil = 0L
+        lastRefreshAt = System.currentTimeMillis()
+        token = fresh
+        onToken?.invoke(fresh)
+    }
+
+    /** `exp` из JWT; для непрозрачных токенов и демо — null. */
+    private fun tokenExpiry(value: String?): Long? =
+        MeshCore.decodeJwt(value)?.optLong("exp", 0L)?.takeIf { it > 0L }
 
     /**
      * «Мягкое» извлечение токена для демо-режима: локальный сервер отдаёт
@@ -524,19 +592,23 @@ class MeshClient(
             throw MeshCore.MeshError(Words.MissingHomeworkMaterial.text, "bad-material")
         }
         val context = MeshCdz.lrsContext(material, person, entry)
-        val variants = listOf(
-            lrsHeaders(),
-            lrsHeaders(profileId = person),
-            lrsHeaders(includeAuthToken = false),
-            lrsHeaders(authTokenOnly = true),
-            headers()
+        // Карты заголовков нельзя собирать заранее: после refresh токен в
+        // MeshClient меняется, и повтор внутри execute должен получить уже
+        // новый Authorization/Auth-Token. Поэтому каждая попытка строит
+        // заголовки заново.
+        val variants: List<() -> Map<String, String>> = listOf(
+            { lrsHeaders() },
+            { lrsHeaders(profileId = person) },
+            { lrsHeaders(includeAuthToken = false) },
+            { lrsHeaders(authTokenOnly = true) },
+            { headers() }
         )
         var lastAuthError: MeshCore.MeshError? = null
         variants.forEachIndexed { index, variant ->
             try {
                 val json = toObject(
                     execute(
-                        { api().materialResult(context, 20, variant) },
+                        { api().materialResult(context, 20, variant()) },
                         MeshCore.Paths.LRS_RESULTS,
                         // Первая попытка может обновить протухший токен.
                         retryOn401 = index == 0

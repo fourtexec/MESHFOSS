@@ -91,6 +91,8 @@ class CdzNativeClient(
                 cookies = jar,
                 onCookiesChanged = { fresh ->
                     store.authCookies = JSONObject(fresh as Map<*, *>).toString()
+                    // SSO uchebnik может обновить aupd_token раньше MeshClient.
+                    fresh["aupd_token"]?.takeIf { it.isNotBlank() }?.let { store.token = it }
                 },
             )
         }

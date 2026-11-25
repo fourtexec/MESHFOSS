@@ -237,6 +237,117 @@ fun parseResultTasks(result: JSONObject): List<CdzResultTask> {
 private fun optionalDouble(json: JSONObject, key: String): Double =
     if (json.has(key) && !json.isNull(key)) json.optDouble(key, -1.0) else -1.0
 
+/**
+ * Задание считается тем же, если совпадают id, тип, условие и структура ответа.
+ *
+ * В результате сервер скрывает правильный ответ (`right_answer`,
+ * `correct_answer`), поэтому эти поля не сравниваем: иначе полностью
+ * одинаковое задание никогда бы не совпало. Порядок вариантов в
+ * `answer.options` может отличаться — сервер вправе перемешать их между
+ * попытками; остальные массивы сравниваются с учётом порядка.
+ */
+fun sameCdzTask(current: CdzTask, previous: CdzResultTask): Boolean {
+    if (current.id != previous.id) return false
+    if (current.type != answerType(previous.answer)) return false
+    if (!jsonEquivalent(current.question, previous.question)) return false
+    return sameCdzAnswer(current.answer, previous.answer)
+}
+
+/** Автоматически проверенный ответ без ожидания учителя. */
+fun isCorrectCdzResult(task: CdzResultTask): Boolean =
+    task.status != "AWAIT_FOR_REVIEW" &&
+        task.feedback?.optString("correctness")?.trim()
+            ?.equals("CORRECT", ignoreCase = true) == true
+
+/**
+ * Локальные ответы, которые можно подставить из прошлых попыток.
+ *
+ * [previous] должен идти от новой попытки к старой: при нескольких верных
+ * ответах на одно задание побеждает самый свежий. Возвращаются только
+ * черновики — вызывающий код не должен добавлять их в `saved`, пока ученик
+ * сам не нажмёт «Сохранить».
+ */
+fun prefillAnswers(
+    tasks: List<CdzTask>,
+    previous: List<CdzResultTask>,
+    draft: Map<Long, JSONObject>,
+    saved: Set<Long>,
+): Map<Long, JSONObject> {
+    val correct = previous.filter { isCorrectCdzResult(it) && hasVisibleAnswer(it.userAnswer) }
+    val result = LinkedHashMap<Long, JSONObject>()
+    tasks.forEach { task ->
+        if (task.serverAnswer != null || task.id in saved) return@forEach
+        if (hasAnswer(draft[task.id] ?: JSONObject())) return@forEach
+        val source = correct.firstOrNull { sameCdzTask(task, it) } ?: return@forEach
+        val answer = source.userAnswer ?: return@forEach
+        result[task.id] = JSONObject(answer.toString())
+    }
+    return result
+}
+
+private val cdzHiddenAnswerKeys = setOf(
+    "right_answer",
+    "correct_answer",
+    "detail_correctness",
+    "hideCorrectAnswer",
+    "answer_feedback",
+)
+
+private fun sameCdzAnswer(first: JSONObject, second: JSONObject): Boolean {
+    val firstKeys = first.keys().asSequence()
+        .filterNot { it in cdzHiddenAnswerKeys }
+        .toSet()
+    val secondKeys = second.keys().asSequence()
+        .filterNot { it in cdzHiddenAnswerKeys }
+        .toSet()
+    if (firstKeys != secondKeys) return false
+    return firstKeys.all { key ->
+        if (key == "options") {
+            jsonEquivalentOptions(first.optJSONArray(key), second.optJSONArray(key))
+        } else {
+            jsonEquivalent(first.opt(key), second.opt(key))
+        }
+    }
+}
+
+/** Варианты ответа сравниваются как множество: их порядок сервер может менять. */
+private fun jsonEquivalentOptions(first: JSONArray?, second: JSONArray?): Boolean {
+    if (first == null || second == null) return first == null && second == null
+    if (first.length() != second.length()) return false
+    val remaining = (0 until second.length()).map { second.opt(it) }.toMutableList()
+    for (index in 0 until first.length()) {
+        val item = first.opt(index)
+        val match = remaining.indexOfFirst { jsonEquivalent(item, it) }
+        if (match < 0) return false
+        remaining.removeAt(match)
+    }
+    return true
+}
+
+private fun jsonEquivalent(first: Any?, second: Any?): Boolean {
+    val firstNull = first == null || first === JSONObject.NULL
+    val secondNull = second == null || second === JSONObject.NULL
+    if (firstNull || secondNull) return firstNull && secondNull
+    if (first is JSONObject && second is JSONObject) {
+        val firstKeys = first.keys().asSequence()
+            .filterNot { it in cdzHiddenAnswerKeys }
+            .toSet()
+        val secondKeys = second.keys().asSequence()
+            .filterNot { it in cdzHiddenAnswerKeys }
+            .toSet()
+        if (firstKeys != secondKeys) return false
+        return firstKeys.all { key -> jsonEquivalent(first.opt(key), second.opt(key)) }
+    }
+    if (first is JSONArray && second is JSONArray) {
+        if (first.length() != second.length()) return false
+        return (0 until first.length()).all { index ->
+            jsonEquivalent(first.opt(index), second.opt(index))
+        }
+    }
+    if (first is Number && second is Number) return first.toDouble() == second.toDouble()
+    return first == second
+}
+
 /** `answer.type`; в старых ответах встречается просто `type`. */
 fun answerType(answer: JSONObject): String =
     answer.optString("answer.type").ifBlank { answer.optString("type") }.trim()

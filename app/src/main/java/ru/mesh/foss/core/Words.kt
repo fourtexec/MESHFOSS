@@ -2902,6 +2902,13 @@ internal enum class Words(
         "Respuesta guardada en el servidor",
         "Réponse enregistrée sur le serveur"
     ),
+    CdzPrefilled(
+        "Ответы из прошлой попытки подставлены. Проверьте и сохраните.",
+        "Answers from the previous attempt are filled in. Check and save them.",
+        "Az előző próbálkozás válaszai be vannak illesztve. Ellenőrizze és mentse el.",
+        "Se han rellenado las respuestas del intento anterior. Compruébalas y guárdalas.",
+        "Les réponses de la tentative précédente sont préremplies. Vérifiez-les et enregistrez-les."
+    ),
     Option(
         "Вариант",
         "Option",

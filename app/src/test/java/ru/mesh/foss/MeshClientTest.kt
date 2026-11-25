@@ -119,6 +119,64 @@ class MeshClientTest {
     }
 
     @Test
+    fun `LRS берёт свежий aupd_token из cookie jar`() {
+        val client = MeshClient(
+            baseUrl = "http://127.0.0.1:$port",
+            token = "stale-token",
+            timeoutMs = 5_000,
+            cookieToken = { DemoMeshServer.DEMO_TOKEN },
+        )
+
+        val result = client.getMaterialResult(
+            "00000000-0000-0000-0000-000000000000",
+            DemoMeshServer.UUID_ME,
+            "1",
+        )
+
+        assertTrue(result.getBoolean("done"))
+        assertEquals(DemoMeshServer.DEMO_TOKEN, client.token)
+    }
+
+    @Test
+    fun `LRS обновляет токен по cookie, если jar не дал aupd`() {
+        val client = MeshClient(
+            baseUrl = "http://127.0.0.1:$port",
+            token = "stale-token",
+            timeoutMs = 5_000,
+            refreshWithCookies = { DemoMeshServer.DEMO_TOKEN },
+        )
+
+        val result = client.getMaterialResult(
+            "00000000-0000-0000-0000-000000000000",
+            DemoMeshServer.UUID_ME,
+            "1",
+        )
+
+        assertTrue(result.getBoolean("done"))
+        assertEquals(DemoMeshServer.DEMO_TOKEN, client.token)
+    }
+
+    @Test
+    fun `LRS повторяет cookie-обновление, если aupd из jar уже протух`() {
+        val client = MeshClient(
+            baseUrl = "http://127.0.0.1:$port",
+            token = "stale-old",
+            timeoutMs = 5_000,
+            cookieToken = { "stale-cookie" },
+            refreshWithCookies = { DemoMeshServer.DEMO_TOKEN },
+        )
+
+        val result = client.getMaterialResult(
+            "00000000-0000-0000-0000-000000000000",
+            DemoMeshServer.UUID_ME,
+            "1",
+        )
+
+        assertTrue(result.getBoolean("done"))
+        assertEquals(DemoMeshServer.DEMO_TOKEN, client.token)
+    }
+
+    @Test
     fun `посещаемость не шлёт оба заголовка авторизации одновременно`() {
         val client = client()
         client.signIn(DemoMeshServer.DEMO_TOKEN)
