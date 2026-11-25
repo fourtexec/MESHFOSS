@@ -50,6 +50,20 @@ class MoskvenokApiTest {
     }
 
     @Test
+    fun barcodePayloadAcceptsOnlyNonEmptyString() {
+        assertEquals(
+            "ABC123",
+            MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":"  ABC123  "}"""))
+        )
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":null}""")))
+        // Android optString() возвращает "null" для JSON null — это не payload.
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":"null"}""")))
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":""}""")))
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":123}""")))
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{}""")))
+    }
+
+    @Test
     fun meshDocIdFallsBackToStudentUuid() {
         val empty = JSONObject("""{"groups": []}""")
         assertEquals(
