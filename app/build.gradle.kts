@@ -14,6 +14,17 @@ val buildVersionName = providers.environmentVariable("VERSION_NAME").orNull
     ?.takeIf { it.isNotBlank() }
     ?: "1.0.0"
 
+// Ключ аналитики: GitHub secret ANALYTICS_API_KEY → переменная окружения.
+// В git и APK-исходники он не попадает. Пустой ключ полностью отключает отправку.
+val analyticsApiKey = providers.gradleProperty("ANALYTICS_API_KEY")
+    .orElse(providers.environmentVariable("ANALYTICS_API_KEY"))
+    .orNull
+    ?.trim()
+    ?: ""
+
+fun String.asBuildConfigLiteral(): String =
+    "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 // Постоянная release-подпись из GitHub Actions secrets.
 val signingStorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
 val signingStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
@@ -42,6 +53,8 @@ android {
         targetSdk = 37
         versionCode = buildVersionCode
         versionName = buildVersionName
+
+        buildConfigField("String", "ANALYTICS_API_KEY", analyticsApiKey.asBuildConfigLiteral())
 
         resourceConfigurations += listOf("ru", "en", "hu", "es", "fr")
     }
@@ -89,6 +102,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {

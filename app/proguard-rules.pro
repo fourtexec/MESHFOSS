@@ -1,10 +1,5 @@
 # Mesh Ranker — правила ProGuard/R8 для релизной сборки
 
-# Классы, к которым обращаются по имени из WebView (@JavascriptInterface)
--keepclassmembers class ru.mesh.foss.feature.login.MeshLoginActivity$LoginBridge {
-    @android.webkit.JavascriptInterface <methods>;
-}
-
 # Ядро и клиент работают с org.json по строковым ключам — сужаем оптимизации
 -keep class ru.mesh.foss.core.MeshCore { *; }
 -keep class ru.mesh.foss.data.MeshClient { *; }
@@ -12,6 +7,9 @@
 
 # DTO Gson/Retrofit и имена полей @SerializedName
 -keep class ru.mesh.foss.data.model.** { *; }
+# Аналитика: Gson-модели событий/состояния.
+-keep class ru.mesh.foss.core.analytics.AnalyticsEvent { *; }
+-keep class ru.mesh.foss.data.analytics.AnalyticsState { *; }
 -keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
 
 # WorkManager создаёт воркер по имени класса
