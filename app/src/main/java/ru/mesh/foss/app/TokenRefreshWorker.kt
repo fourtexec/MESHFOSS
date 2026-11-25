@@ -52,7 +52,9 @@ class TokenRefreshWorker(
                         store.personId,
                         store.parentName
                     )
-                }
+                },
+                cookieToken = { store.cookieAupdToken() },
+                refreshWithCookies = { store.refreshTokenWithCookies() }
             )
             val fresh = client.refreshToken()
             if (fresh != null) {

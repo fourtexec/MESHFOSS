@@ -162,6 +162,19 @@ object MoskvenokApi {
             refresh = refresh, processingBudgetMs = processingBudgetMs
         )
 
+    /**
+     * Непустой `barcode_payload` или null, если сервер ещё не отдал строку.
+     *
+     * Android `JSONObject.optString()` для JSON null возвращает литерал "null",
+     * поэтому одной проверки `isBlank()` мало: иначе в QR уходит текст "null".
+     */
+    fun barcodePayload(document: JSONObject): String? {
+        val raw = document.opt("barcode_payload") ?: return null
+        if (raw == JSONObject.NULL) return null
+        val value = (raw as? String)?.trim() ?: return null
+        return value.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+    }
+
     /** Включена ли карта: items[].type == "mesh" (или title «Москвёнок») в groups. */
     fun isEnabled(objects: JSONObject): Boolean {
         val groups = objects.optJSONArray("groups") ?: return false

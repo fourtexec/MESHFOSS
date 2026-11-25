@@ -17,8 +17,10 @@ Retrofit-контракт — `ru.mesh.foss.data.api.MeshApiService`.
 
 ## Ошибки и токен
 
-- `401` → одна попытка `GET /v2/token/refresh?roleId=1&subsystem=2` с текущим
-  токеном; при успехе исходный запрос повторяется.
+- `401` → обновление сессии: сначала берётся более свежий `aupd_token` из
+  cookie jar (его может обновить нативная ЦДЗ-сессия), затем полный OAuth по
+  cookie (`CookieRefresh`), и только потом `GET /v2/token/refresh?roleId=1&subsystem=2`.
+  При успехе исходный запрос повторяется с новым токеном.
 - Если обновить токен не удалось — `MeshError(code = "unauthorized")`.
 - `403` → `forbidden`, `404` → `not-found`, остальные коды → `http-<code>`.
 - Сетевые ошибки → `network`, таймаут → `timeout`.

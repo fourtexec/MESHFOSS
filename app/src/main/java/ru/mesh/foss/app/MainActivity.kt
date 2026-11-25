@@ -217,7 +217,9 @@ fun AppRoot(
             profileId = store.studentId,
             nameCache = store.loadNameCache(),
             onToken = { newToken -> store.token = newToken },
-            onName = { id, name -> store.saveName(id, name) }
+            onName = { id, name -> store.saveName(id, name) },
+            cookieToken = { store.cookieAupdToken() },
+            refreshWithCookies = { store.refreshTokenWithCookies() }
         )
     }
 

@@ -60,6 +60,12 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.Locale
 
+/** Сколько раз добиваться непустого barcode_payload, прежде чем показать ошибку. */
+private const val QR_PAYLOAD_ATTEMPTS = 6
+
+/** Пауза между повторными запросами QR: сервер успевает закончить генерацию. */
+private const val QR_PAYLOAD_RETRY_MS = 1_200L
+
 /**
  * Экран «Москвёнок»: карта школьных документов с QR-кодом прохода.
  *
@@ -101,7 +107,7 @@ fun MoskvenokScreen(store: SessionStore) {
     var expiresAt by remember { mutableStateOf(0L) }
     var remainingMs by remember { mutableStateOf(0L) }
 
-    val payload = doc?.optString("barcode_payload").orEmpty()
+    val payload = doc?.let { MoskvenokApi.barcodePayload(it) }.orEmpty()
     val expired = expiresAt > 0L && remainingMs <= 0L
     val qr = remember(payload) { if (payload.isBlank()) null else encodeQrBitmap(payload) }
 
@@ -232,12 +238,19 @@ fun MoskvenokScreen(store: SessionStore) {
             }
             processing = false
             // Сразу после включения сервер может отдать документ без barcode_payload
-            // (пустой квадрат на экране) — добиваемся повторами с force-refresh.
+            // (пустой квадрат) или JSON null (Android optString даёт "null").
+            // Добиваемся именно непустой строки, а не просто непустого optString.
             var payloadTry = 1
-            while (document.optString("barcode_payload").isBlank() && payloadTry < 3) {
+            while (
+                MoskvenokApi.barcodePayload(document) == null &&
+                payloadTry < QR_PAYLOAD_ATTEMPTS
+            ) {
                 payloadTry++
-                delay(800)
-                MeshLog.log("Moskvenok", "load: документ без payload, повтор $payloadTry (force-refresh)")
+                delay(QR_PAYLOAD_RETRY_MS)
+                MeshLog.log(
+                    "Moskvenok",
+                    "load: документ без payload, повтор $payloadTry/$QR_PAYLOAD_ATTEMPTS (force-refresh)"
+                )
                 document = withContext(Dispatchers.IO) {
                     MoskvenokApi.document(sid, deviceId, docId, refresh = true)
                 }
@@ -247,7 +260,7 @@ fun MoskvenokScreen(store: SessionStore) {
                     return true
                 }
             }
-            if (document.optString("barcode_payload").isBlank()) {
+            if (MoskvenokApi.barcodePayload(document) == null) {
                 MeshLog.log("Moskvenok", "load: payload так и не пришёл")
                 throw MoskvenokApi.MosError("empty barcode")
             }
@@ -307,37 +320,43 @@ fun MoskvenokScreen(store: SessionStore) {
                 } else {
                     // Пока payload не пришёл — doc не ставим: иначе пустой квадрат.
                     // После POST сервер отвечает 202 «Идет обработка документов»:
-                    // первая попытка ждёт до 45 с, вторая (через 1 с, с
-                    // x-force-refresh,20 с) добивается нового barcode_payload.
+                    // первая попытка ждёт до 45 с, следующие (с x-force-refresh)
+                    // добиваются именно непустой строки barcode_payload.
                     var fetched: JSONObject? = null
-                    for (attempt in 1..2) {
-                        if (attempt == 2) delay(1000)
+                    for (attempt in 1..QR_PAYLOAD_ATTEMPTS) {
+                        if (attempt > 1) delay(QR_PAYLOAD_RETRY_MS)
                         try {
                             val document = withContext(Dispatchers.IO) {
                                 MoskvenokApi.document(
                                     session(), deviceId, docId,
-                                    refresh = attempt == 2,
+                                    refresh = attempt > 1,
                                     processingBudgetMs = if (attempt == 1) 45_000L else 20_000L
                                 )
                             }
                             fetched = document
-                            if (document.optString("barcode_payload").isNotBlank()) {
+                            if (MoskvenokApi.barcodePayload(document) != null) {
                                 MeshLog.log("Moskvenok", "enable: документ получен, попытка $attempt")
                                 break
                             }
-                            MeshLog.log("Moskvenok", 
-                                "enable: документ, попытка $attempt — " +
-                                    if (document.optInt("refresh") != 0) {
-                                        "202 обработка"
-                                    } else {
-                                        "без barcode_payload"
-                                    }
+                            if (document.optInt("refresh") != 0 && document.has("message")) {
+                                processing = true
+                                MeshLog.log(
+                                    "Moskvenok",
+                                    "enable: документ, попытка $attempt — 202 обработка, ждём"
+                                )
+                                break
+                            }
+                            MeshLog.log(
+                                "Moskvenok",
+                                "enable: документ, попытка $attempt — без barcode_payload"
                             )
                         } catch (docError: Exception) {
                             MeshLog.log("Moskvenok", "enable: документ, попытка $attempt: $docError")
                         }
                     }
-                    val document = fetched?.takeIf { it.optString("barcode_payload").isNotBlank() }
+                    val document = fetched?.takeIf {
+                        MoskvenokApi.barcodePayload(it) != null
+                    }
                     if (document != null) {
                         doc = document
                         processing = false

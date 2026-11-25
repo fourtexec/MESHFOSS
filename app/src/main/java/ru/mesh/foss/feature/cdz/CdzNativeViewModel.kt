@@ -16,6 +16,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,6 +90,7 @@ class CdzNativeViewModel(
     private var challenge = ""
     private var attemptStartedAt = ""
     private val prefs = app.getSharedPreferences("cdz_drafts", Context.MODE_PRIVATE)
+    private val maxPrefillAttempts = 10
 
     val total: Int get() = tasks.size
     val currentTask: CdzTask? get() = tasks.getOrNull(current)
@@ -178,6 +180,10 @@ class CdzNativeViewModel(
                 current = 0
                 restoreDraft()
                 phase = CdzPhase.Game
+                // Прошлые попытки подтягиваем фоном: игра уже открыта, а
+                // найденные ответы появятся только в пустых черновиках.
+                val startedAttemptId = attemptId
+                viewModelScope.launch { prefillFromPreviousAttempts(parsed, startedAttemptId) }
                 MeshLog.log(
                     "CDZ",
                     "попытка $attemptId: заданий=${parsed.size} порядок=" +
@@ -331,6 +337,80 @@ class CdzNativeViewModel(
 
     fun consumeMessage() {
         message = null
+    }
+
+    /**
+     * Ищет верные ответы в завершённых попытках и подставляет их только в
+     * пустые черновики. Ничего не отправляет на сервер: каждое «Сохранить»
+     * остаётся ручным действием ученика.
+     */
+    private suspend fun prefillFromPreviousAttempts(parsed: List<CdzTask>, targetAttemptId: Long) {
+        val api = client ?: return
+        if (attemptId != targetAttemptId) return
+        // Продолжение незавершённой попытки не трогаем: подстановка нужна
+        // только при явном старте новой попытки.
+        if (lastAttemptId == targetAttemptId.toString()) return
+        if (attemptCount <= 0 && readLocalAttempts().isEmpty()) return
+
+        val ids = linkedSetOf<Long>()
+        readLocalAttempts().asReversed().forEach { item ->
+            attemptIdOf(item).takeIf { it > 0L }?.let(ids::add)
+        }
+        lastAttemptId?.toLongOrNull()?.takeIf { it > 0L }?.let(ids::add)
+        val history = try {
+            withContext(Dispatchers.IO) { api.attemptHistory(challenge) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            MeshLog.log("CDZ", "prefill: история недоступна: ${failure.message ?: failure.javaClass.simpleName}")
+            null
+        }
+        history?.optJSONArray("attempts")?.let { attempts ->
+            for (index in 0 until attempts.length()) {
+                attempts.optJSONObject(index)?.let { item ->
+                    attemptIdOf(item).takeIf { it > 0L }?.let(ids::add)
+                }
+            }
+        }
+        ids.remove(targetAttemptId)
+        if (ids.isEmpty()) return
+
+        val previous = mutableListOf<CdzResultTask>()
+        for (id in ids.sortedDescending().take(maxPrefillAttempts)) {
+            val raw = try {
+                withContext(Dispatchers.IO) { api.attemptResult(challenge, id) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                MeshLog.log("CDZ", "prefill: попытка $id недоступна: ${failure.message ?: failure.javaClass.simpleName}")
+                continue
+            }
+            previous += parseResultTasks(raw)
+            val pending = parsed.count { task ->
+                task.serverAnswer == null && task.id !in saved &&
+                    !hasAnswer(draft[task.id] ?: JSONObject())
+            }
+            if (pending == 0) break
+            if (prefillAnswers(parsed, previous, draft, saved).size >= pending) break
+        }
+
+        val prefills = prefillAnswers(parsed, previous, draft, saved)
+        if (prefills.isEmpty()) return
+        // Пока ходили за результатами, могли начать другую попытку.
+        if (attemptId != targetAttemptId) return
+        val updated = draft.toMutableMap()
+        var applied = 0
+        prefills.forEach { (taskId, answer) ->
+            if (taskId !in saved && !hasAnswer(updated[taskId] ?: JSONObject())) {
+                updated[taskId] = answer
+                applied++
+            }
+        }
+        if (applied == 0) return
+        draft = updated
+        persistDraft()
+        message = Words.CdzPrefilled.text
+        MeshLog.log("CDZ", "prefill: применено=$applied из прошлых попыток")
     }
 
     private fun createClient(): CdzNativeClient =
