@@ -632,12 +632,18 @@ fun MainScaffold(
 
     val design = LocalDesign.current
     val liquid = design == Design.LIQUID
+    // На планшете/в альбомной ориентации нижняя панель переезжает влево:
+    // так контент получает всю высоту экрана, а навигация остаётся под рукой.
+    val sideNav = NavigationMode.useSideRail(LocalConfiguration.current.orientation)
     // Состав панели редактируется в «Ещё». По умолчанию — четыре частых раздела;
     // панель всегда содержит не больше четырёх вкладок + «Ещё». Благодаря
     // weight(1f) в таб-барах меньшее число вкладок распределяется поровну.
     val navItems = navLayout.bottom.map { key ->
         Triple(key, NavTabs.label(key), NavTabs.icon(key))
     } + Triple("more", Words.More.text, R.drawable.ic_nav_more)
+    val barItems = navItems.map { (key, label, iconRes) ->
+        BarNavItem(key, label, painterResource(iconRes))
+    }
     val bottomSelected = when {
         showMore -> "more"
         navLayout.bottom.contains(currentTab) -> currentTab
@@ -673,9 +679,23 @@ fun MainScaffold(
             )
         }
     }
+    Row(Modifier.fillMaxSize()) {
+        if (sideNav) {
+            AppSideNavigation(
+                items = barItems,
+                selected = bottomSelected,
+                liquid = liquid,
+                onSelect = { key ->
+                    hapticTap()
+                    onBottomSelect(key)
+                }
+            )
+        }
     Scaffold(
-        containerColor = if (liquid) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
-        modifier = Modifier.pointerInput(Unit) {
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
                     val downEvent = awaitPointerEvent(PointerEventPass.Final)
@@ -705,6 +725,7 @@ fun MainScaffold(
                 }
             }
         },
+        containerColor = if (liquid) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             if (liquid) {
                 LiquidTopBar(screenTitle, topActions)
@@ -718,33 +739,33 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            if (liquid) {
-                LiquidTabBar(
-                    items = navItems.map { (key, label, iconRes) ->
-                        BarNavItem(key, label, painterResource(iconRes))
-                    },
-                    selected = bottomSelected,
-                    onSelect = ::onBottomSelect
-                )
-                return@Scaffold
-            }
-            // M3E — обычная нижняя панель Material 3 без размытия и стекла.
-            ShortNavigationBar(
-                windowInsets = ShortNavigationBarDefaults.windowInsets,
-                containerColor = ShortNavigationBarDefaults.containerColor
-            ) {
-                navItems.forEach { (key, label, iconRes) ->
-                    ShortNavigationBarItem(
-                        selected = bottomSelected == key,
-                        onClick = { onBottomSelect(key) },
-                        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        icon = {
-                            Icon(
-                                painter = painterResource(iconRes),
-                                contentDescription = label
+            if (!sideNav) {
+                if (liquid) {
+                    LiquidTabBar(
+                        items = barItems,
+                        selected = bottomSelected,
+                        onSelect = ::onBottomSelect
+                    )
+                } else {
+                    // M3E — обычная нижняя панель Material 3 без размытия и стекла.
+                    ShortNavigationBar(
+                        windowInsets = ShortNavigationBarDefaults.windowInsets,
+                        containerColor = ShortNavigationBarDefaults.containerColor
+                    ) {
+                        navItems.forEach { (key, label, iconRes) ->
+                            ShortNavigationBarItem(
+                                selected = bottomSelected == key,
+                                onClick = { onBottomSelect(key) },
+                                label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(iconRes),
+                                        contentDescription = label
+                                    )
+                                }
                             )
                         }
-                    )
+                    }
                 }
             }
         },
@@ -776,9 +797,11 @@ fun MainScaffold(
     ) { padding ->
         val layoutDir = LocalLayoutDirection.current
         val bottomInset = padding.calculateBottomPadding()
-        // Liquid рисует контент под плавающей панелью; обычный M3E оставляет
-        // штатный нижний отступ Scaffold, иначе панель перекрывает список.
-        val bodyPadding = if (liquid) {
+        // Liquid рисует контент под плавающей нижней панелью; обычный M3E
+        // оставляет штатный нижний отступ Scaffold, иначе панель перекрывает
+        // список. В боковом режиме нижней панели нет — отступы обычные.
+        val floatingBottomBar = liquid && !sideNav
+        val bodyPadding = if (floatingBottomBar) {
             PaddingValues(
                 start = padding.calculateStartPadding(layoutDir),
                 top = padding.calculateTopPadding(),
@@ -788,7 +811,9 @@ fun MainScaffold(
         } else {
             padding
         }
-        CompositionLocalProvider(LocalLiquidBottomPadding provides if (liquid) bottomInset else 0.dp) {
+        CompositionLocalProvider(
+            LocalLiquidBottomPadding provides if (floatingBottomBar) bottomInset else 0.dp
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -873,6 +898,7 @@ fun MainScaffold(
             }
         }
         }
+    }
     }
 
     if (showMore) {
@@ -1046,6 +1072,48 @@ fun MainScaffold(
                 TextButton(onClick = { showAccounts = false }) { Text(Words.Close.text) }
             }
         )
+    }
+}
+
+/**
+ * Боковая навигация для альбомной ориентации. M3E использует стандартный
+ * `NavigationRail`, Liquid — стеклянный рельс без blur-подложки M3E.
+ */
+@Composable
+private fun AppSideNavigation(
+    items: List<BarNavItem>,
+    selected: String,
+    liquid: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    if (liquid) {
+        LiquidNavRail(items = items, selected = selected, onSelect = onSelect)
+        return
+    }
+    NavigationRail(
+        modifier = Modifier.fillMaxHeight(),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        items.forEach { item ->
+            NavigationRailItem(
+                selected = item.key == selected,
+                onClick = { onSelect(item.key) },
+                icon = {
+                    Icon(
+                        painter = item.icon,
+                        contentDescription = item.label
+                    )
+                },
+                label = {
+                    Text(
+                        item.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                alwaysShowLabel = true
+            )
+        }
     }
 }
 

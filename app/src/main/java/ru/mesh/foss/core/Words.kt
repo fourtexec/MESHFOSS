@@ -131,11 +131,11 @@ internal enum class Words(
         "M3E (standard)"
     ),
     DesignPlainHint(
-        "Material 3 Expressive с плавающей размытой нижней панелью",
-        "Material 3 Expressive with a floating blurred bottom bar",
-        "Material 3 Expressive lebegő, elmosott alsó sávval",
-        "Material 3 Expressive con barra inferior flotante desenfocada",
-        "Material 3 Expressive avec barre inférieure flottante floutée"
+        "Material 3 Expressive; в альбомной ориентации панель переезжает влево",
+        "Material 3 Expressive; the navigation bar moves to the left in landscape",
+        "Material 3 Expressive; fekvő tájolásban a navigációs sáv balra kerül",
+        "Material 3 Expressive; en horizontal, la barra de navegación pasa a la izquierda",
+        "Material 3 Expressive ; en mode paysage, la barre de navigation passe à gauche"
     ),
     DesignLiquid(
         "Жидкое стекло",
@@ -145,18 +145,18 @@ internal enum class Words(
         "Verre liquide"
     ),
     DesignLiquidHint(
-        "Оптическое стекло и живая линза на нижней панели (может подтормаживать)",
-        "Optical glass panels with a live lens bottom bar (may lag on some devices)",
-        "Optikai üveg és élő lencse az alsó sávon (lassulást okozhat)",
-        "Cristal óptico con barra inferior de lente en vivo (puede ir lento)",
-        "Verre optique avec barre inférieure à lentille (peut ralentir l’appareil)"
+        "Оптическое стекло и живая линза в панели навигации (может подтормаживать)",
+        "Optical glass panels with a live lens navigation bar (may lag on some devices)",
+        "Optikai üveg és élő lencse a navigációs sávon (lassulást okozhat)",
+        "Cristal óptico con barra de navegación de lente en vivo (puede ir lento)",
+        "Verre optique avec barre de navigation à lentille (peut ralentir l’appareil)"
     ),
     DesignLiquidLagWarning(
-        "Жидкое стекло использует живой рендеринг преломления на нижней панели и анимациях и может подтормаживать на некоторых устройствах.",
-        "Liquid glass uses live refraction on the bottom panel and animations and may lag on some devices.",
-        "A folyékony üveg élő fénytörést használ az alsó sávon és az animációknál, ezért egyes eszközökön szaggathat.",
-        "El vidrio líquido usa refracción en vivo en la barra inferior y animaciones, por lo que puede ir lento en algunos dispositivos.",
-        "Le verre liquide utilise une réfraction en direct sur la barre inférieure et les animations, ce qui peut ralentir certains appareils."
+        "Жидкое стекло использует живой рендеринг преломления в панели навигации и анимациях и может подтормаживать на некоторых устройствах.",
+        "Liquid glass uses live refraction in the navigation bar and animations and may lag on some devices.",
+        "A folyékony üveg élő fénytörést használ a navigációs sávon és az animációknál, ezért egyes eszközökön szaggathat.",
+        "El vidrio líquido usa refracción en vivo en la barra de navegación y animaciones, por lo que puede ir lento en algunos dispositivos.",
+        "Le verre liquide utilise une réfraction en direct dans la barre de navigation et les animations, ce qui peut ralentir certains appareils."
     ),
     ThemeName(
         "Название своей темы",

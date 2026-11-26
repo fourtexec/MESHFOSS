@@ -1571,6 +1571,96 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
 }
 
 /**
+ * Вертикальная панель навигации для планшета/альбомной ориентации.
+ *
+ * Это тот же Liquid Glass, что и у нижней панели, но без горизонтальной линзы:
+ * в узком боковом рельсе важнее крупные зоны нажатия и читаемые подписи.
+ * Панель остаётся плавающей стеклянной капсулой и не использует blur из M3E.
+ */
+@Composable
+fun LiquidNavRail(
+    items: List<BarNavItem>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val chromeBackdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(92.dp)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .liquidGlass(
+                shape = RoundedCornerShape(Liquid.BarRadius),
+                elevation = 16.dp,
+                refract = true,
+                backdrop = chromeBackdrop,
+                blurRadius = if (dark) 3.dp else 2.5.dp,
+                refractionHeight = 14.dp,
+                refractionAmount = 22.dp,
+                surfaceAlpha = if (dark) 0.20f else 0.32f,
+                highQuality = false
+            )
+            .padding(6.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            items.forEach { item ->
+                val on = item.key == selected
+                val ink by animateColorAsState(
+                    if (on) scheme.primary else scheme.onSurfaceVariant,
+                    tween(180),
+                    label = "liquidRailInk"
+                )
+                val fill by animateColorAsState(
+                    if (on) {
+                        scheme.primary.copy(alpha = if (dark) 0.24f else 0.16f)
+                    } else {
+                        Color.Transparent
+                    },
+                    tween(180),
+                    label = "liquidRailFill"
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(fill)
+                        .clickable { onSelect(item.key) }
+                        .padding(horizontal = 2.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        painter = item.icon,
+                        contentDescription = item.label,
+                        tint = ink,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = item.label,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = ink
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * Лёгкое магнитное притяжение к центрам вкладок. В середине пункта линза
  * движется примерно на 30% медленнее пальца, между пунктами — один в один.
  * Так перетаскивание остаётся плавным, но ощущается «щелчками».
