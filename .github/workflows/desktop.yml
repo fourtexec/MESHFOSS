@@ -144,13 +144,28 @@ jobs:
 
       - name: Package native desktop installers
         working-directory: desktop
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: npm run ${{ matrix.npm_script }} -- --publish never
+          SECRET_MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          SECRET_MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          SECRET_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          SECRET_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          set -eu
+          if [ -n "${SECRET_MAC_CSC_LINK:-}" ]; then
+            export CSC_LINK="$SECRET_MAC_CSC_LINK"
+          fi
+          if [ -n "${SECRET_MAC_CSC_KEY_PASSWORD:-}" ]; then
+            export CSC_KEY_PASSWORD="$SECRET_MAC_CSC_KEY_PASSWORD"
+          fi
+          if [ -n "${SECRET_WIN_CSC_LINK:-}" ]; then
+            export WIN_CSC_LINK="$SECRET_WIN_CSC_LINK"
+          fi
+          if [ -n "${SECRET_WIN_CSC_KEY_PASSWORD:-}" ]; then
+            export WIN_CSC_KEY_PASSWORD="$SECRET_WIN_CSC_KEY_PASSWORD"
+          fi
+          npm run ${{ matrix.npm_script }} -- --publish never
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
