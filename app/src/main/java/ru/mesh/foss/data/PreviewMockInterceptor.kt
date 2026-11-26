@@ -220,20 +220,20 @@ internal class PreviewMockInterceptor : Interceptor {
             )
 
             path == MeshCore.Paths.FINAL_MARKS -> {
-                val payload = SUBJECTS.map { (id, name) ->
+                val subjects = SUBJECTS.map { (id, name) ->
                     val avg = AVERAGES[PREVIEW_PERSON_ID]?.get(id) ?: 4.7
                     val mark = Math.round(avg).toInt()
                     mapOf(
-                        "subject_id" to id,
-                        "subject_name" to name,
+                        "id" to id,
+                        "name" to name,
                         "year_mark" to mark,
                         "periods" to listOf(
-                            mapOf("ordinal" to "I", "name" to "Первая", "value" to mark),
-                            mapOf("ordinal" to "II", "name" to "Вторая", "value" to avg)
+                            mapOf("id" to 1, "ordinal" to "I", "name" to "Первая", "value" to mark),
+                            mapOf("id" to 2, "ordinal" to "II", "name" to "Вторая", "value" to avg)
                         )
                     )
                 }
-                200 to mapOf("payload" to payload)
+                200 to mapOf("subjects" to subjects)
             }
 
             path == MeshCore.Paths.HOMEWORKS -> {
