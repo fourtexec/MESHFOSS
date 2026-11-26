@@ -1,0 +1,123 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --mesh-primary: #38bdf8;
+    --mesh-bg: #0b101b;
+    --mesh-surface: #161f31;
+    --mesh-secondary: #818cf8;
+    --mesh-tertiary: #2dd4bf;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    font-family: var(--font-sans);
+    background-color: var(--mesh-bg);
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Authentic iOS 26 Liquid Glass specular edge & optical depth primitives */
+.liquid-rim-dark {
+  box-shadow:
+    0 18px 46px -14px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.44),
+    inset 0 -1px 0.5px rgba(255, 255, 255, 0.16),
+    inset 1px 0 0.5px rgba(255, 255, 255, 0.18),
+    inset -1px 0 0.5px rgba(255, 255, 255, 0.12),
+    inset 0 0 22px rgba(255, 255, 255, 0.05);
+}
+
+.liquid-rim-light {
+  box-shadow:
+    0 14px 36px -12px rgba(15, 23, 42, 0.16),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.96),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.65),
+    inset 1px 0 1px rgba(255, 255, 255, 0.7),
+    inset -1px 0 1px rgba(255, 255, 255, 0.55),
+    inset 0 0 24px rgba(255, 255, 255, 0.32);
+}
+
+.liquid-lens-dark {
+  box-shadow:
+    0 8px 24px -6px rgba(0, 0, 0, 0.48),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.62),
+    inset 0 -1.5px 1px rgba(255, 255, 255, 0.28),
+    inset 0 0 14px rgba(255, 255, 255, 0.14);
+}
+
+.liquid-lens-light {
+  box-shadow:
+    0 6px 20px -6px rgba(15, 23, 42, 0.18),
+    inset 0 1.5px 1px rgba(255, 255, 255, 1),
+    inset 0 -1px 1px rgba(15, 23, 42, 0.06),
+    inset 0 0 14px rgba(255, 255, 255, 0.55);
+}
+
+/* Chromatic dispersion edge fringe (matches Kyant0 & iOS 26 corner prism refraction) */
+.liquid-chromatic-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.25px;
+  background: conic-gradient(
+    from 215deg at 50% 50%,
+    rgba(255, 255, 255, 0.65) 0deg,
+    rgba(255, 138, 101, 0.34) 48deg,
+    rgba(255, 255, 255, 0.12) 115deg,
+    rgba(96, 165, 250, 0.42) 200deg,
+    rgba(192, 132, 252, 0.28) 265deg,
+    rgba(255, 255, 255, 0.58) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Subtle custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.46);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

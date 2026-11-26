@@ -1,5 +1,7 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.data.MoskvenokApi
+
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,6 +47,20 @@ class MoskvenokApiTest {
             "combined/mesh/11111111-2222-4333-8444-555555555555_mesh_bal",
             MoskvenokApi.meshDocId(objectsJson, "someone-else")
         )
+    }
+
+    @Test
+    fun barcodePayloadAcceptsOnlyNonEmptyString() {
+        assertEquals(
+            "ABC123",
+            MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":"  ABC123  "}"""))
+        )
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":null}""")))
+        // Android optString() возвращает "null" для JSON null — это не payload.
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":"null"}""")))
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":""}""")))
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{"barcode_payload":123}""")))
+        assertNull(MoskvenokApi.barcodePayload(JSONObject("""{}""")))
     }
 
     @Test

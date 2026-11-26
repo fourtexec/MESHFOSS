@@ -1,8 +1,8 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -13,6 +13,17 @@ val buildVersionCode = providers.environmentVariable("VERSION_CODE").orNull
 val buildVersionName = providers.environmentVariable("VERSION_NAME").orNull
     ?.takeIf { it.isNotBlank() }
     ?: "1.0.0"
+
+// Ключ аналитики: GitHub secret ANALYTICS_API_KEY → переменная окружения.
+// В git и APK-исходники он не попадает. Пустой ключ полностью отключает отправку.
+val analyticsApiKey = providers.gradleProperty("ANALYTICS_API_KEY")
+    .orElse(providers.environmentVariable("ANALYTICS_API_KEY"))
+    .orNull
+    ?.trim()
+    ?: ""
+
+fun String.asBuildConfigLiteral(): String =
+    "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 // Постоянная release-подпись из GitHub Actions secrets.
 val signingStorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
@@ -28,14 +39,22 @@ val hasEnvironmentSigning = listOf(
 
 android {
     namespace = "ru.mesh.foss"
-    compileSdk = 35
+    // Compose 1.13 требует compileSdk 37.1 (minor API), поэтому используем
+    // block-форму: она разрешается в platforms;android-37.1, а не android-37.0.
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "ru.mesh.foss"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 37
         versionCode = buildVersionCode
         versionName = buildVersionName
+
+        buildConfigField("String", "ANALYTICS_API_KEY", analyticsApiKey.asBuildConfigLiteral())
 
         resourceConfigurations += listOf("ru", "en", "hu", "es", "fr")
     }
@@ -76,24 +95,14 @@ android {
         }
     }
 
-    lint {
-        // AGP 8.7: детектор NonNullableMutableLiveDataDetector (issue NullSafeMutableLiveData)
-        // несовместим с Kotlin 2.1 Analysis API и роняет lintVitalRelease
-        // (IncompatibleClassChangeError: KaCallableMemberCall). К проекту не относится.
-        disable += "NullSafeMutableLiveData"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
@@ -105,15 +114,31 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.work)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.coroutines.android)
     implementation(libs.zxing)
     implementation(libs.haze)
+    implementation(libs.haze.blur)
+    implementation(libs.kyant.backdrop)
+    implementation(libs.kyant.shapes)
+
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+    implementation(libs.gson)
+    implementation(libs.okhttp.logging)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -121,7 +146,14 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.navigation.compose)
+
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.hls)
+    implementation(libs.androidx.media3.ui)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

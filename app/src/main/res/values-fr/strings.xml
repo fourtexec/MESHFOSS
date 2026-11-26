@@ -7,4 +7,14 @@
     <string name="notif_token_text">Session prolongée automatiquement</string>
     <string name="notif_error_title">Reconnectez-vous à MESH</string>
     <string name="notif_error_text">Impossible de renouveler le jeton. Ouvrez l’application et reconnectez-vous.</string>
+    <string name="widget_description">Cours, emploi du temps et devoirs MESH</string>
+    <string name="widget_status_name">MESHFOSS - cours en cours</string>
+    <string name="widget_schedule_name">MESHFOSS - emploi du temps</string>
+    <string name="widget_homework_name">MESHFOSS - devoirs</string>
+    <string name="cdz_native_status">Résolu et enregistré : %1$d sur %2$d</string>
+    <string name="cdz_native_save">Enregistrer</string>
+    <string name="cdz_native_finish">Terminer</string>
+    <string name="cdz_continue_attempt">Continuer la tentative</string>
+    <string name="cdz_start_attempt">Démarrer la tentative</string>
+    <string name="cdz_attempt_history">Historique des tentatives</string>
 </resources>

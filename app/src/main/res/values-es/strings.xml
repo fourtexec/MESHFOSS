@@ -7,4 +7,14 @@
     <string name="notif_token_text">Sesión renovada automáticamente</string>
     <string name="notif_error_title">Vuelve a acceder a MESH</string>
     <string name="notif_error_text">No se pudo renovar el token. Abre la aplicación y vuelve a acceder.</string>
+    <string name="widget_description">Clases, horario y tareas de MESH</string>
+    <string name="widget_status_name">MESHFOSS - clase ahora</string>
+    <string name="widget_schedule_name">MESHFOSS - horario</string>
+    <string name="widget_homework_name">MESHFOSS - tareas</string>
+    <string name="cdz_native_status">Resuelto y guardado: %1$d de %2$d</string>
+    <string name="cdz_native_save">Guardar</string>
+    <string name="cdz_native_finish">Finalizar</string>
+    <string name="cdz_continue_attempt">Continuar intento</string>
+    <string name="cdz_start_attempt">Iniciar intento</string>
+    <string name="cdz_attempt_history">Historial de intentos</string>
 </resources>

@@ -1,5 +1,7 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.data.CookieRefresh
+
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

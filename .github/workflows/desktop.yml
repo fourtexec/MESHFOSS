@@ -1,0 +1,170 @@
+name: Desktop (Windows, Linux, macOS)
+
+# Cross-platform Electron desktop builds for MESHFOSS:
+#   - tag v*      -> stable GitHub Release with Win / macOS / Linux installers
+#   - push main   -> rolling `desktop-nightly` prerelease
+#   - PR / branch -> compile, test, package & upload workflow artifacts
+
+on:
+  push:
+    branches: [main, 'desktop/**']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install web dependencies
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: TypeScript lint
+        run: npm run lint
+      - name: Run core & liquid glass math unit tests
+        run: npm test
+      - name: Build production renderer bundle
+        run: npm run build
+
+  build:
+    name: Build (${{ matrix.label }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows (x64 & arm64)
+            os: windows-latest
+            platform: win
+            npm_script: dist:win
+            artifact_glob: desktop/release/*.exe
+          - label: Linux (AppImage, DEB, RPM)
+            os: ubuntu-latest
+            platform: linux
+            npm_script: dist:linux
+            artifact_glob: |
+              desktop/release/*.AppImage
+              desktop/release/*.deb
+              desktop/release/*.rpm
+          - label: macOS (Apple Silicon & Intel)
+            os: macos-latest
+            platform: mac
+            npm_script: dist:mac
+            artifact_glob: |
+              desktop/release/*.dmg
+              desktop/release/*.zip
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Linux packaging tools (rpmbuild)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Resolve package version
+        id: version
+        shell: bash
+        run: |
+          set -eu
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            BASE="$(node -p "require('./package.json').version")"
+            VER="${BASE}-nightly.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          npm --prefix desktop version "${VER}" --no-git-tag-version --allow-same-version
+
+      - name: Install renderer dependencies & build web bundle
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+          npm run build
+
+      - name: Stage renderer bundle into desktop/renderer
+        shell: bash
+        run: |
+          rm -rf desktop/renderer
+          cp -r dist desktop/renderer
+
+      - name: Install Electron desktop dependencies
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Package native desktop installers
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npm run ${{ matrix.npm_script }}
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: meshfoss-desktop-${{ matrix.platform }}-${{ steps.version.outputs.version }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish Desktop Release
+    needs: build
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Publish tagged stable release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: MESHFOSS ${{ github.ref_name }}
+          prerelease: false
+          files: release-artifacts/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish rolling desktop-nightly prerelease
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-nightly
+          name: MESHFOSS Desktop Nightly (${{ github.run_number }})
+          prerelease: true
+          files: release-artifacts/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,8 +2,8 @@ name: Android
 
 # Сборка APK: JVM-тесты ядра и подписанная release-сборка.
 # Публикация:
-#   - тег v*      → новый релиз (alpha/beta/rc — prerelease-флаг);
-#   - push в main → скользящий prerelease `nightly`, в приложении не предлагается;
+#   - тег v*      → стабильный релиз (бета-теги больше не используем);
+#   - push в main → одна сборка, скользящий prerelease `nightly`;
 #   - ветки и PR  → только сборка, без публикации.
 
 on:
@@ -24,14 +24,43 @@ concurrency:
 
 env:
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-  ANDROID_PACKAGES: 'platforms;android-35 build-tools;35.0.0'
-  BUILD_TOOLS_VERSION: '35.0.0'
+  # Compose 1.13 требует compileSdk 37.1, поэтому ставим android-37.1
+  # (у AGP block-форма compileSdk { release(37) { minorApiLevel = 1 } }).
+  ANDROID_PACKAGES: 'platforms;android-37.1 build-tools;36.0.0 build-tools;37.0.0'
+  BUILD_TOOLS_VERSION: '37.0.0'
   # Человекочитаемое представление списка пакетов для ключа кеша SDK.
-  ANDROID_SDK_CACHE_KEY: android-35-build-tools-35.0.0
+  ANDROID_SDK_CACHE_KEY: android-37.1-build-tools-36.0.0-37.0.0
 
 jobs:
+  release-guard:
+    name: Проверка релизного тега
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.guard.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Теги нужны, чтобы отличить обычный push в main от публикации релиза.
+          fetch-depth: 0
+
+      - name: Не собирать nightly для коммита с релизным тегом
+        id: guard
+        run: |
+          set -eu
+          SKIP="false"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            TAG="$(git tag --points-at HEAD --list 'v*' | head -n 1 || true)"
+            if [ -n "${TAG}" ]; then
+              echo "HEAD уже помечен тегом ${TAG}: nightly не публикуем, релиз соберёт запуск по тегу."
+              SKIP="true"
+            fi
+          fi
+          echo "skip=${SKIP}" >> "$GITHUB_OUTPUT"
+
   build:
     name: APK (Kotlin)
+    needs: release-guard
+    if: needs.release-guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -95,7 +124,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-35
+            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-37.1
+            ${{ env.ANDROID_SDK_ROOT }}/build-tools/36.0.0
             ${{ env.ANDROID_SDK_ROOT }}/build-tools/${{ env.BUILD_TOOLS_VERSION }}
           key: android-sdk-${{ runner.os }}-${{ env.ANDROID_SDK_CACHE_KEY }}-${{ hashFiles('.github/workflows/android.yml') }}
           restore-keys: |
@@ -113,6 +143,7 @@ jobs:
 
       - name: Тесты и release APK
         env:
+          ANALYTICS_API_KEY: ${{ secrets.ANALYTICS_API_KEY }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -133,7 +164,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: MESHFOSS ${{ steps.version.outputs.version_name }}
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          prerelease: false
           body: |
             Автоматическая подписанная release-сборка.
 

@@ -1,56 +1,42 @@
-# MESHFOSS
+# MESHFOSS — Liquid Glass Desktop (Windows / Linux / macOS) & Android Client for МЭШ
 
-Свободный (GPLv3) Android-клиент для **МЭШ** (Московская электронная школа):
-дневник, расписание, оценки, домашние задания, питание и баланс, рейтинг и профиль ученика.
+Free (GPLv3) client for **МЭШ** (`school.mos.ru`): schedule with live countdown, weighted grades & target GPA calculator, homework with native **ЦДЗ** solver, class ranking, attendance & turnstile passes, cafeteria meals & balance, digital **Москвёнок** QR pass, multi-account support, 11 themes, and 5 languages (`ru / en / es / fr / hu`).
 
-Ветка `design/material-3-expressive` — экспериментальная переработка интерфейса
-на **Material 3 Expressive (M3E)**: новые компоненты, выразительная типографика,
-динамическая цветовая схема, spring-анимации, расширенная библиотека форм.
+## Authentic iOS 26 Liquid Glass
 
-- Платформа: Android (minSdk 24, targetSdk 35)
-- Язык: Kotlin, UI — Jetpack Compose (Material 3)
-- Лицензия: **GPLv3**
+- **Android (`app/`)**: Upgraded `MESHFOSS` to integrate [`Kyant0/AndroidLiquidGlass`](https://github.com/Kyant0/AndroidLiquidGlass) (`io.github.kyant0:backdrop:2.0.1` & `io.github.kyant0:shapes:1.0.0`), using real live `LayerBackdrop`, AGSL rounded-rect SDF refraction, 7-band spectral chromatic dispersion, Apple vibrancy, directional/ambient specular highlights, and `Design.LIQUID` enabled by default.
+- **Desktop & Web (`src/` + `desktop/`)**: Implements the exact RoundedRect SDF + `circleMap` optical refraction math from `Kyant0/AndroidLiquidGlass` and dynamic `<feDisplacementMap>` RGB chromatic dispersion from [`rdev/liquid-glass-react`](https://github.com/rdev/liquid-glass-react), paired with an interactive floating iOS 26 optical lens dock and real-time optical tuning sliders in Settings.
 
-## Возможности
+## Desktop App (Windows, Linux, macOS)
 
-- **Вход** в МЭШ — QR-код, школьный логин или вход через `school.mos.ru`.
-- **Расписание**, **ДЗ** с отметкой «выполнено», **Оценки** и графики.
-- **Итоговые** оценки с выбором учебного года.
-- **Предметы** и статистика.
-- **Еда и баланс** — меню, предзаказы, платное/льготное.
-- **Рейтинг** учеников.
-- **Профиль** и **настройки** — темы, язык.
-- Автообновление токена МЭШ в фоне.
+Native Electron shell in `desktop/` with:
+- **macOS**: Tahoe `under-window` vibrancy + `hiddenInset` titlebar + `.dmg` & `.zip` (`arm64` + `x64`)
+- **Windows**: Windows 11 Acrylic backdrop + NSIS installer & Portable `.exe` (`x64` + `arm64`)
+- **Linux**: Translucent compositor + `.AppImage`, `.deb`, and `.rpm` (`x64` + `arm64`)
+- CORS-free МЭШ HTTP proxy in Electron main process, OS-encrypted session storage (`safeStorage`), native `mos_cookies.json` file import, and system tray.
 
-## M3 Expressive
-
-В этой ветке применяются:
-- Выразительные формы (shape-morph, 35+ форм).
-- Emphasized typography для заголовков и ключевых действий.
-- Spring-физика для переходов и взаимодействий.
-- Расширенная цветовая палитра и динамические цвета.
-- Компоненты M3E: connected `ButtonGroup` с `ToggleButton`, `LoadingIndicator`,
-  волосяные индикаторы прогресса, pull-to-refresh, `MaterialShapes`-радиусы.
-- Контейнеры и визуальная иерархия (surface container levels) в стиле M3E.
-
-## Сборка
-
-Сборка через GitHub Actions, публикация APK:
-
-- **тег `v*`** — новый релиз, версия берётся из тэга (суффиксы alpha/beta/rc
-  помечаются на GitHub как prerelease);
-- **push в main** — скользящий prerelease `nightly`: это канал «Пререлизы»
-  в приложении, предлагается только при ручной проверке (без авто-предупреждений);
-- **ветки и PR** — только сборка, без публикации.
-
-Канал обновлений (релизы/пререлизы) переключается в Настройках → Приложение.
-
-### Локально
+### Local Commands
 
 ```bash
-./gradlew assembleDebug
+# Run web preview / dev server (http://localhost:3000)
+npm install
+npm run dev
+
+# Run core & optical refraction unit tests
+npm test
+
+# Build & package Desktop app for current OS
+npm run desktop:build
+
+# Build Android APK (JDK 17 + Android SDK 37.1)
+./gradlew assembleRelease
 ```
 
-## Лицензия
+## GitHub Actions CI/CD
 
-GPLv3. См. файл `LICENSE`.
+- `.github/workflows/desktop.yml` — Matrix build for **Windows**, **Linux**, and **macOS** installers, publishing to GitHub Releases on `v*` tags and rolling `desktop-nightly` prereleases on `main`.
+- `.github/workflows/android.yml` — Runs Kotlin JVM tests and builds signed Android release APKs.
+
+## License
+
+GPLv3 — see `LICENSE`.

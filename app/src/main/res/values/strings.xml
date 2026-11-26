@@ -9,4 +9,14 @@
     <string name="notif_token_text">Сессия продлена автоматически</string>
     <string name="notif_error_title">Нужен повторный вход в МЭШ</string>
     <string name="notif_error_text">Токен не удалось обновить — откройте приложение и войдите заново.</string>
+    <string name="widget_description">Уроки, расписание и домашние задания МЭШ</string>
+    <string name="widget_status_name">MESHFOSS — урок сейчас</string>
+    <string name="widget_schedule_name">MESHFOSS — расписание</string>
+    <string name="widget_homework_name">MESHFOSS — домашние задания</string>
+    <string name="cdz_native_status">Решено и сохранено: %1$d из %2$d</string>
+    <string name="cdz_native_save">Сохранить</string>
+    <string name="cdz_native_finish">Завершить</string>
+    <string name="cdz_continue_attempt">Продолжить попытку</string>
+    <string name="cdz_start_attempt">Начать попытку</string>
+    <string name="cdz_attempt_history">История попыток</string>
 </resources>

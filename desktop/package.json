@@ -1,0 +1,24 @@
+{
+  "name": "meshfoss-desktop-shell",
+  "productName": "MESHFOSS",
+  "version": "2.5.0",
+  "description": "Free GPLv3 МЭШ (school.mos.ru) desktop client for Windows, macOS, and Linux with authentic iOS 26 Liquid Glass.",
+  "license": "GPL-3.0-only",
+  "author": "MESHFOSS Contributors",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis portable --x64 --arm64",
+    "dist:mac": "electron-builder --mac dmg zip --arm64 --x64",
+    "dist:linux": "electron-builder --linux AppImage deb rpm --x64 --arm64"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}

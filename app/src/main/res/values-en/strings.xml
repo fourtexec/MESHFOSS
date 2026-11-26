@@ -7,4 +7,14 @@
     <string name="notif_token_text">Session renewed automatically</string>
     <string name="notif_error_title">Sign in to MESH again</string>
     <string name="notif_error_text">Could not renew your token. Open the app and sign in again.</string>
+    <string name="widget_description">MESH lessons, schedule and homework</string>
+    <string name="widget_status_name">MESHFOSS - lesson now</string>
+    <string name="widget_schedule_name">MESHFOSS - schedule</string>
+    <string name="widget_homework_name">MESHFOSS - homework</string>
+    <string name="cdz_native_status">Solved and saved: %1$d of %2$d</string>
+    <string name="cdz_native_save">Save</string>
+    <string name="cdz_native_finish">Finish</string>
+    <string name="cdz_continue_attempt">Continue attempt</string>
+    <string name="cdz_start_attempt">Start attempt</string>
+    <string name="cdz_attempt_history">Attempt history</string>
 </resources>
