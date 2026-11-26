@@ -779,23 +779,26 @@ private fun CdzMaterialRow(
     Surface(
         shape = itemShape,
         color = when {
-            isLiquid -> androidx.compose.ui.graphics.Color.Transparent
+            isLiquid && done -> scheme.tertiaryContainer.copy(alpha = 0.24f)
+            isLiquid -> androidx.compose.ui.graphics.Color.White.copy(
+                alpha = if (Liquid.isDark(scheme.background)) 0.06f else 0.34f
+            )
             done -> scheme.tertiaryContainer.copy(alpha = 0.35f)
             else -> scheme.surfaceContainerHigh.copy(alpha = 0.6f)
+        },
+        border = if (isLiquid) {
+            BorderStroke(
+                1.dp,
+                androidx.compose.ui.graphics.Color.White.copy(
+                    alpha = if (Liquid.isDark(scheme.background)) 0.14f else 0.45f
+                )
+            )
+        } else {
+            null
         },
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
-            .then(
-                if (isLiquid) {
-                    Modifier.glassPane(
-                        shape = itemShape,
-                        tint = if (done) scheme.tertiary else androidx.compose.ui.graphics.Color.Unspecified
-                    )
-                } else {
-                    Modifier
-                }
-            )
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
