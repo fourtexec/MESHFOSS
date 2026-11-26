@@ -162,7 +162,10 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                     onRefresh = { refreshing = true; load() },
                     modifier = Modifier.weight(1f)
                 ) {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+                    ) {
                     item { BalanceCard(balances) }
                     item { StateCard(state) }
 

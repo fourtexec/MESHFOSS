@@ -3132,6 +3132,20 @@ internal enum class Words(
         "Frissítve: %s",
         "Actualizado %s",
         "Actualisé %s"
+    ),
+    PreviewWithoutSignIn(
+        "Предпросмотр без входа",
+        "Preview without sign-in",
+        "Előnézet bejelentkezés nélkül",
+        "Vista previa sin iniciar sesión",
+        "Aperçu sans connexion"
+    ),
+    PreviewMode(
+        "Предпросмотр",
+        "Preview",
+        "Előnézet",
+        "Vista previa",
+        "Aperçu"
     );
 
     val text: String

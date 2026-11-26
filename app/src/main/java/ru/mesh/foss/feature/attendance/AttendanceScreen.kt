@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import ru.mesh.foss.ui.GlassCard
+import ru.mesh.foss.ui.LocalLiquidBottomPadding
 import ru.mesh.foss.data.MeshClient
 import ru.mesh.foss.core.MeshCore
 import ru.mesh.foss.R
@@ -144,7 +145,7 @@ private fun AttendanceBody(snapshot: AttendanceSnapshot?) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp + LocalLiquidBottomPadding.current),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {

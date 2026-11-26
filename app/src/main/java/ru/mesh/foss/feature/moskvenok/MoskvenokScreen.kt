@@ -600,6 +600,7 @@ fun MoskvenokScreen(store: SessionStore) {
                 }
             }
         }
+        Spacer(Modifier.height(LocalLiquidBottomPadding.current))
     }
 }
 

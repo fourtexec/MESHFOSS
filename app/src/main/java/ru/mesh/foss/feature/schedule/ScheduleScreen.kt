@@ -119,7 +119,10 @@ fun ScheduleScreen(
                 onRefresh = { refreshing = true; load() },
                 modifier = Modifier.weight(1f)
             ) {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+                ) {
                 items(lessons.filter { it.optString("subject").let { s -> s.isNotBlank() && s != "—" } }) { lesson ->
                     val begin = lesson.optString("begin").takeIf { it.isNotBlank() && it != "null" }
                     val end = lesson.optString("end").takeIf { it.isNotBlank() && it != "null" }

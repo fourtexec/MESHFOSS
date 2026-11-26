@@ -388,7 +388,11 @@ fun HomeworksScreen(
                     onRefresh = { refreshing = true; load() },
                     modifier = Modifier.weight(1f)
                 ) {
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+                ) {
                     itemsIndexed(filtered) { index, h ->
                         val entryId = h.optString("entryStudentId").ifBlank { h.optString("id") }
                         val homeworkEntryId = h.optString("homeworkEntryId")

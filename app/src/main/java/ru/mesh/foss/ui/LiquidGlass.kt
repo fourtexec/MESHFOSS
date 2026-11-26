@@ -100,7 +100,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -136,16 +138,53 @@ object Liquid {
     /** Радиус линзы: концентричен панели (радиус панели минус отступ). */
     val LensRadius = BarRadius - BarInset
 
-    /** Панель вкладок — квадрат со скруглёнными углами, а не капсула. */
-    val BarShape = RoundedCornerShape(BarRadius)
+    /** Панель вкладок — плавающая капсула iOS 26 (Kyant0/Shapes). */
+    val BarShape: Shape = Capsule()
 
-    /** Линза под выбранной вкладкой. */
-    val LensShape = RoundedCornerShape(LensRadius)
+    /** Линза под выбранной вкладкой — капсула с G2-скруглением. */
+    val LensShape: Shape = Capsule()
 
     /** Стеклянные кнопки: действия в шапке, «Питание». */
-    val ButtonShape = RoundedCornerShape(16.dp)
+    val ButtonShape: Shape = Capsule()
 
     fun isDark(background: Color) = background.luminance() < 0.45f
+}
+
+/**
+ * Чистые правила выбора движка Kyant0/AndroidLiquidGlass по версии Android и флагам
+ * (тестируются на JVM без эмулятора).
+ */
+internal object LiquidGlassEngine {
+    const val MIN_BACKDROP_SDK = 31 // Android 12 (RenderEffect blur)
+    const val MIN_LENS_SDK = 33     // Android 13 (AGSL RuntimeShader lens)
+
+    fun supportsBackdrop(sdkInt: Int): Boolean = sdkInt >= MIN_BACKDROP_SDK
+
+    fun supportsLens(sdkInt: Int): Boolean = sdkInt >= MIN_LENS_SDK
+
+    fun useKyant(sdkInt: Int, previewEnabled: Boolean, hasBackdrop: Boolean): Boolean =
+        supportsBackdrop(sdkInt) && !previewEnabled && hasBackdrop
+
+    fun isAchromatic(color: Color): Boolean {
+        val maxC = maxOf(color.red, color.green, color.blue)
+        val minC = minOf(color.red, color.green, color.blue)
+        return (maxC - minC) < 0.14f
+    }
+
+    /**
+     * Для нейтральных тем вроде `midnight` и `graphite` (где primary — серый)
+     * добавляем мягкие сапфирово-индиго акценты в подложку, чтобы у преломления
+     * и хроматической дисперсии был живой свет и цвет.
+     */
+    fun backdropGlows(primary: Color, tertiary: Color): Triple<Color, Color, Color> {
+        if (!isAchromatic(primary)) {
+            return Triple(primary, lerp(primary, tertiary, 0.5f), tertiary)
+        }
+        val sapphire = Color(0xFF4F8CFF)
+        val indigo = Color(0xFF7C6BFF)
+        val cyan = Color(0xFF22D3EE)
+        return Triple(sapphire, indigo, lerp(tertiary, cyan, 0.55f))
+    }
 }
 
 private class GlassLight {
@@ -155,11 +194,24 @@ private class GlassLight {
 private val LocalGlassLight = staticCompositionLocalOf<GlassLight?> { null }
 
 /**
- * Настоящий живой слой преломления из Kyant0/AndroidLiquidGlass (`io.github.kyant0:backdrop`).
- * Записывает фон и живой контент под стеклянными панелями, чтобы каждая панель и линза
- * выполняла реальное AGSL-преломление с 7-полосной хроматической дисперсией и vibrancy как в iOS 26.
+ * Базовый слой подложки из Kyant0/AndroidLiquidGlass (`io.github.kyant0:backdrop`) для
+ * карточек внутри скроллируемого контента (преломляет фон без рекурсии).
  */
 internal val LocalKyantBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+
+/**
+ * Слой прокручиваемого контента экрана для плавающих панелей (таб-бар, шапка, FAB).
+ */
+internal val LocalKyantContentBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
+
+/**
+ * Объединённый фон + живой контент экрана (`rememberCombinedBackdrop`), чтобы верхняя капсула,
+ * нижний таб-бар, скользящая линза и FAB по-настоящему преломляли карточки при прокрутке.
+ */
+internal val LocalKyantChromeBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+
+/** Нижний отступ под плавающий таб-бар, чтобы списки прокручивались сквозь стекло. */
+val LocalLiquidBottomPadding = staticCompositionLocalOf { 0.dp }
 
 private class LiquidBackdropSource {
     var origin by mutableStateOf(Offset.Zero)
@@ -172,24 +224,24 @@ private val LocalLiquidBackdrop = staticCompositionLocalOf<LiquidBackdropSource?
 
 /**
  * Подложка «жидкого стекла» на базе Kyant0/AndroidLiquidGlass:
- * захватывает живой фон в [LayerBackdrop], чтобы верхняя панель, нижний таббар,
- * плавающие кнопки и карточки по-настоящему преломляли всё, что находится под ними.
+ * захватывает фон в [bgBackdrop] (для карточек) и объединяет его со слоем
+ * скроллируемого контента [contentBackdrop] в [chromeBackdrop] (для плавающих панелей и линзы).
  */
 @Composable
 fun LiquidBackdrop(content: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
     val lightSource = remember { GlassLight() }
-    val base = if (dark) lerp(scheme.background, Color.Black, 0.35f) else scheme.background
-    val primary = scheme.primary
-    val tertiary = scheme.tertiary
-    val mid = lerp(primary, tertiary, 0.5f)
-    val k = if (dark) 1f else 0.6f
+    val base = if (dark) lerp(scheme.background, Color.Black, 0.42f) else scheme.background
+    val (glowA, glowB, glowC) = LiquidGlassEngine.backdropGlows(scheme.primary, scheme.tertiary)
+    val k = if (dark) 1f else 0.72f
     val source = remember { LiquidBackdropSource() }
-    val kyantBackdrop = rememberLayerBackdrop {
+    val bgBackdrop = rememberLayerBackdrop {
         drawRect(base)
         drawContent()
     }
+    val contentBackdrop = rememberLayerBackdrop()
+    val chromeBackdrop = rememberCombinedBackdrop(bgBackdrop, contentBackdrop)
     Box(
         Modifier
             .fillMaxSize()
@@ -209,7 +261,7 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
         Box(
             Modifier
                 .fillMaxSize()
-                .layerBackdrop(kyantBackdrop)
+                .layerBackdrop(bgBackdrop)
                 .onGloballyPositioned { source.origin = it.positionInRoot() }
                 .drawWithCache {
                     val w = size.width
@@ -217,14 +269,15 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                     val r = size.maxDimension
                     fun blob(color: Color, alpha: Float, cx: Float, cy: Float, radius: Float) = Brush.radialGradient(
                         0f to color.copy(alpha = alpha * k),
-                        0.45f to color.copy(alpha = alpha * k * 0.45f),
+                        0.42f to color.copy(alpha = alpha * k * 0.48f),
                         1f to Color.Transparent,
                         center = Offset(cx, cy),
                         radius = radius
                     )
-                    val a = blob(primary, 0.45f, w * 0.08f, h * 0.10f, r * 0.62f)
-                    val b = blob(mid, 0.30f, w * 1.0f, h * 0.42f, r * 0.52f)
-                    val c = blob(tertiary, 0.34f, w * 0.18f, h * 0.92f, r * 0.58f)
+                    val a = blob(glowA, 0.52f, w * 0.12f, h * 0.12f, r * 0.62f)
+                    val b = blob(glowB, 0.36f, w * 0.96f, h * 0.44f, r * 0.54f)
+                    val c = blob(glowC, 0.40f, w * 0.22f, h * 0.88f, r * 0.58f)
+                    val d = blob(glowA, 0.24f, w * 0.82f, h * 0.92f, r * 0.44f)
                     val iw = (w / BackdropScale).toInt().coerceAtLeast(1)
                     val ih = (h / BackdropScale).toInt().coerceAtLeast(1)
                     val image = ImageBitmap(iw, ih)
@@ -234,16 +287,23 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                             drawRect(a, size = Size(w, h))
                             drawRect(b, size = Size(w, h))
                             drawRect(c, size = Size(w, h))
+                            drawRect(d, size = Size(w, h))
                         }
                     }
                     source.image = image
                     onDrawBehind {
-                        drawImage(image, dstSize = IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.Low)
+                        drawRect(base)
+                        drawRect(a)
+                        drawRect(b)
+                        drawRect(c)
+                        drawRect(d)
                     }
                 }
         )
         CompositionLocalProvider(
-            LocalKyantBackdrop provides kyantBackdrop,
+            LocalKyantBackdrop provides bgBackdrop,
+            LocalKyantContentBackdrop provides contentBackdrop,
+            LocalKyantChromeBackdrop provides chromeBackdrop,
             LocalLiquidBackdrop provides source,
             LocalGlassLight provides lightSource,
             LocalContentColor provides scheme.onBackground,
@@ -335,47 +395,84 @@ private fun DrawScope.fringeBrush(): Brush = Brush.sweepGradient(*FringeStops, c
  * 7-полосной хроматической дисперсией, vibrancy, направленным бликом [Highlight]
  * и мягкими внутренними/внешними тенями.
  */
+/** Помечает скроллируемое содержимое экрана как источник преломления для плавающих панелей. */
+@Composable
+fun Modifier.liquidContentLayer(): Modifier {
+    val contentBackdrop = LocalKyantContentBackdrop.current
+    return if (LocalDesign.current == Design.LIQUID && contentBackdrop != null && !LiquidPreview.enabled) {
+        this.layerBackdrop(contentBackdrop)
+    } else {
+        this
+    }
+}
+
+/** Вариант [liquidGlass] для плавающих элементов (FAB, кнопки), преломляющий фон и контент под ними. */
+@Composable
+fun Modifier.liquidChromeGlass(
+    shape: Shape = Liquid.ButtonShape,
+    tint: Color = Color.Unspecified,
+    elevation: Dp = 14.dp
+): Modifier = liquidGlass(
+    shape = shape,
+    tint = tint,
+    elevation = elevation,
+    backdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
+)
+
 @Composable
 fun Modifier.liquidGlass(
     shape: Shape = MaterialTheme.shapes.large,
     tint: Color = Color.Unspecified,
     elevation: Dp = 6.dp,
-    refract: Boolean = true
+    refract: Boolean = true,
+    backdrop: Backdrop? = null,
+    blurRadius: Dp = Dp.Unspecified,
+    refractionHeight: Dp = 16.dp,
+    refractionAmount: Dp = 32.dp,
+    surfaceAlpha: Float? = null
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
-    val kyantBackdrop = LocalKyantBackdrop.current
-    val surfaceTint = if (dark) Color(0xFF141824).copy(alpha = 0.34f) else Color(0xFFFAFAFA).copy(alpha = 0.46f)
+    val kyantBackdrop = backdrop ?: LocalKyantBackdrop.current
+    val resolvedAlpha = surfaceAlpha ?: if (dark) 0.20f else 0.30f
+    val surfaceTint = if (dark) Color(0xFF141926).copy(alpha = resolvedAlpha) else Color.White.copy(alpha = resolvedAlpha)
     val accentTint = if (tint != Color.Unspecified) tint else Color.Unspecified
 
-    if (refract && kyantBackdrop != null && !LiquidPreview.enabled) {
+    if (refract && LiquidGlassEngine.useKyant(Build.VERSION.SDK_INT, LiquidPreview.enabled, kyantBackdrop != null) && kyantBackdrop != null) {
+        val resolvedBlur = when {
+            blurRadius != Dp.Unspecified -> blurRadius
+            dark -> 4.dp
+            else -> 3.dp
+        }
         return this.drawBackdrop(
             backdrop = kyantBackdrop,
             shape = { shape },
             effects = {
                 vibrancy()
-                blur(if (dark) 5f.dp.toPx() else 3.5f.dp.toPx())
-                lens(
-                    refractionHeight = 14f.dp.toPx(),
-                    refractionAmount = 28f.dp.toPx(),
-                    depthEffect = true,
-                    chromaticAberration = true
-                )
+                blur(resolvedBlur.toPx())
+                if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
+                    lens(
+                        refractionHeight = refractionHeight.toPx(),
+                        refractionAmount = refractionAmount.toPx(),
+                        depthEffect = true,
+                        chromaticAberration = true
+                    )
+                }
             },
             highlight = {
-                if (dark) Highlight.Ambient else Highlight.Default
+                Highlight.Default
             },
             innerShadow = {
                 InnerShadow(
                     radius = 8.dp,
-                    alpha = if (dark) 0.16f else 0.08f
+                    alpha = if (dark) 0.18f else 0.08f
                 )
             },
             shadow = {
                 if (elevation > 0.dp) {
                     Shadow(
                         radius = elevation * 1.4f,
-                        color = Color.Black.copy(alpha = if (dark) 0.32f else 0.12f)
+                        color = Color.Black.copy(alpha = if (dark) 0.34f else 0.14f)
                     )
                 } else {
                     null
@@ -383,9 +480,16 @@ fun Modifier.liquidGlass(
             },
             onDrawSurface = {
                 drawRect(surfaceTint)
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = if (dark) 0.07f else 0.22f),
+                            Color.Transparent
+                        )
+                    )
+                )
                 if (accentTint != Color.Unspecified) {
-                    drawRect(accentTint, blendMode = BlendMode.Hue)
-                    drawRect(accentTint.copy(alpha = 0.24f))
+                    drawRect(accentTint.copy(alpha = if (dark) 0.24f else 0.20f))
                 }
             }
         )
@@ -400,8 +504,8 @@ fun Modifier.liquidGlass(
     val specular = if (dark) 1f else 1.6f
     val lightSource = LocalGlassLight.current
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val backdrop = LocalLiquidBackdrop.current
-    val refractive = refract && backdrop != null && LiquidShader.available
+    val legacyBackdrop = LocalLiquidBackdrop.current
+    val refractive = refract && legacyBackdrop != null && LiquidShader.available
     val glassTint = tintFill.compositeOver(clear)
     val base = if (elevation > 0.dp) outerShadow(shape, shadow, elevation * 1.6f, elevation * 0.45f) else this
     return base
@@ -432,7 +536,7 @@ fun Modifier.liquidGlass(
             val fringe = Brush.sweepGradient(*FringeStops, center = Offset(size.width / 2, size.height / 2))
             val radiusPx = (shape as? CornerBasedShape)?.topStart?.toPx(size, this) ?: (minOf(size.width, size.height) / 2)
             onDrawWithContent {
-                val image = backdrop?.image
+                val image = legacyBackdrop?.image
                 if (refractive && image != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val under = android.graphics.BitmapShader(
                         image.asAndroidBitmap(),
@@ -441,7 +545,7 @@ fun Modifier.liquidGlass(
                     ).apply {
                         setLocalMatrix(android.graphics.Matrix().apply {
                             setScale(BackdropScale.toFloat(), BackdropScale.toFloat())
-                            postTranslate(backdrop.origin.x - origin.x, backdrop.origin.y - origin.y)
+                            postTranslate(legacyBackdrop.origin.x - origin.x, legacyBackdrop.origin.y - origin.y)
                         })
                     }
                     drawRect(LiquidShader.brush(under, Offset.Zero, size, radiusPx, density, glassTint, PanelParams))
@@ -496,11 +600,12 @@ fun LiquidTopBar(title: String, actions: @Composable RowScope.() -> Unit) {
         )
         Spacer(Modifier.width(10.dp))
         CompositionLocalProvider(LocalContentColor provides ink) {
+            val chromeBackdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
             Row(
                 modifier = Modifier
                     .height(48.dp)
-                    .liquidGlass(Liquid.ButtonShape, elevation = 8.dp)
-                    .padding(horizontal = 2.dp),
+                    .liquidGlass(Liquid.ButtonShape, elevation = 10.dp, backdrop = chromeBackdrop, refractionHeight = 14.dp, refractionAmount = 28.dp)
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions
             )
@@ -529,13 +634,26 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
     val index = items.indexOfFirst { it.key == selected }
     val sources = remember(items.size) { List(items.size) { MutableInteractionSource() } }
     val icons = rememberGraphicsLayer()
+    val chromeBackdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
+    val kyantBarActive = LiquidGlassEngine.useKyant(Build.VERSION.SDK_INT, LiquidPreview.enabled, chromeBackdrop != null)
+    val kyantLensActive = kyantBarActive && LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)
+    val tabsBackdrop = rememberLayerBackdrop()
+    val lensBackdrop = rememberCombinedBackdrop(*listOfNotNull(chromeBackdrop, tabsBackdrop).toTypedArray())
     Box(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .height(66.dp)
-            .liquidGlass(Liquid.BarShape, elevation = 16.dp)
+            .liquidGlass(
+                shape = Liquid.BarShape,
+                elevation = 16.dp,
+                backdrop = chromeBackdrop,
+                blurRadius = if (dark) 6.dp else 4.dp,
+                refractionHeight = 18.dp,
+                refractionAmount = 36.dp,
+                surfaceAlpha = if (dark) 0.18f else 0.30f
+            )
             .padding(Liquid.BarInset)
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -572,13 +690,14 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
             val bend = 0.3f
             val lensAlpha by animateFloatAsState(if (items.isEmpty()) 0f else 1f, tween(180), label = "liquidLensAlpha")
             val showLens = items.isNotEmpty()
-            // Android 13+: линза — шейдер Liquid Glass Studio прямо по слою иконок.
-            val shaderLens = LiquidShader.effectAvailable
+            // Android 13+: приоритет — нативная линза Kyant0/AndroidLiquidGlass поверх tabsBackdrop.
+            val shaderLens = !kyantLensActive && LiquidShader.effectAvailable
             val lensTint = if (dark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)
             var rowOrigin by remember { mutableStateOf(Offset.Zero) }
             Row(
                 Modifier
                     .fillMaxSize()
+                    .then(if (kyantLensActive) Modifier.layerBackdrop(tabsBackdrop) else Modifier)
                     .onGloballyPositioned { rowOrigin = it.positionInWindow() }
                     .pointerInput(items.size, itemWidthPx) {
                         if (items.isEmpty()) return@pointerInput
@@ -657,7 +776,7 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                         }
                     }
                     .drawWithContent {
-                        if (shaderLens || LiquidPreview.enabled) {
+                        if (kyantLensActive || shaderLens || LiquidPreview.enabled) {
                             drawContent()
                             return@drawWithContent
                         }
@@ -715,15 +834,48 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                     }
                 }
             }
-            if (!shaderLens && !LiquidPreview.enabled) Box(
-                Modifier
-                    .offset { IntOffset(lensX.roundToInt(), 0) }
-                    .width(itemWidth)
-                    .fillMaxHeight()
-                    .graphicsLayer { alpha = lensAlpha }
-                    .clip(Liquid.LensShape)
-                    .drawBehind { drawLens(icons, lensX, zoom, bend, dark, Liquid.LensShape) }
-            )
+            if (kyantLensActive && showLens) {
+                Box(
+                    Modifier
+                        .offset { IntOffset(lensX.roundToInt(), 0) }
+                        .width(itemWidth)
+                        .fillMaxHeight()
+                        .graphicsLayer { alpha = lensAlpha }
+                        .drawBackdrop(
+                            backdrop = lensBackdrop,
+                            shape = { Liquid.LensShape },
+                            effects = {
+                                vibrancy()
+                                lens(
+                                    refractionHeight = 12f.dp.toPx(),
+                                    refractionAmount = 24f.dp.toPx(),
+                                    depthEffect = true,
+                                    chromaticAberration = true
+                                )
+                            },
+                            highlight = { Highlight.Default },
+                            innerShadow = {
+                                InnerShadow(
+                                    radius = 6.dp,
+                                    alpha = if (dark) 0.22f else 0.12f
+                                )
+                            },
+                            onDrawSurface = {
+                                drawRect(if (dark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.34f))
+                            }
+                        )
+                )
+            } else if (!shaderLens && !LiquidPreview.enabled) {
+                Box(
+                    Modifier
+                        .offset { IntOffset(lensX.roundToInt(), 0) }
+                        .width(itemWidth)
+                        .fillMaxHeight()
+                        .graphicsLayer { alpha = lensAlpha }
+                        .clip(Liquid.LensShape)
+                        .drawBehind { drawLens(icons, lensX, zoom, bend, dark, Liquid.LensShape) }
+                )
+            }
         }
     }
 }

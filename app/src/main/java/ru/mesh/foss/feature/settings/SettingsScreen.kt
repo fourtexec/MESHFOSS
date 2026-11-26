@@ -444,6 +444,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                         }
                     }
                 }
+                Spacer(Modifier.height(LocalLiquidBottomPadding.current))
             }
         }
     }

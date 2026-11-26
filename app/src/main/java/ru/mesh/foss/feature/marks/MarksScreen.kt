@@ -323,7 +323,10 @@ fun MarksScreen(
                         Text(Words.NoGradedSubjects.text)
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+                    ) {
                         items(subjects) { subject ->
                             SubjectMarksCard(subject) {
                                 val id = subject.optString("subjectId")
@@ -399,7 +402,11 @@ private fun DateMarksList(
         }
     }
 
-    LazyColumn(state = listState, modifier = modifier) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+    ) {
         item {
             Text(
                 MeshCore.dateRangeText(from, to),
@@ -753,7 +760,10 @@ private fun FinalMarksTable(
     periodColumns: Map<String, String>,
     hasYear: Boolean
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+    ) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -863,7 +873,10 @@ private fun SubjectMarksDetail(subject: JSONObject?, onMarkClick: (String) -> Un
                 Text(Words.NoGradesForThisSubject.text)
             }
         } else {
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+            ) {
                 item {
                     MarksCharts(subjectMarks)
                     Spacer(Modifier.height(6.dp))

@@ -49,7 +49,9 @@ class MeshClient(
      */
     private val cookieToken: (() -> String?)? = null,
     /** Полное обновление по cookie (OAuth), возвращает новый `aupd_token` или null. */
-    private val refreshWithCookies: (() -> String?)? = null
+    private val refreshWithCookies: (() -> String?)? = null,
+    /** Автономный предпросмотр интерфейса с демо-данными без сети и токена МЭШ. */
+    val previewMode: Boolean = false
 ) {
 
     /** Счётчик запросов — используется в диагностике. */
@@ -76,6 +78,7 @@ class MeshClient(
         .readTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
         .writeTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
         .followRedirects(true)
+        .apply { if (previewMode) addInterceptor(PreviewMockInterceptor()) }
         .build()
 
     /** Для ссылки запуска цифрового ДЗ нужен ручной разбор 3xx Location/body. */
@@ -247,6 +250,7 @@ class MeshClient(
      */
     @Synchronized
     fun refreshToken(force: Boolean = false): String? {
+        if (previewMode) return token
         val current = token?.takeIf { it.isNotBlank() } ?: return null
 
         // Самый быстрый путь: cookie jar уже содержит более новый aupd_token.

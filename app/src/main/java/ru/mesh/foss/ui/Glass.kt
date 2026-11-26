@@ -66,9 +66,14 @@ object Design {
     /** Старый ключ переключателя стеклянного стиля (PR #4) — только для миграции. */
     const val LEGACY_GLASS_KEY = "glass_enabled"
 
+    fun resolve(savedDesign: String?, legacyGlassEnabled: Boolean?): String =
+        savedDesign ?: if (legacyGlassEnabled == true) GLASS else DEFAULT
+
     fun migrate(prefs: android.content.SharedPreferences): String =
-        prefs.getString(PREF_KEY, null)
-            ?: if (prefs.contains(LEGACY_GLASS_KEY) && prefs.getBoolean(LEGACY_GLASS_KEY, false)) GLASS else PLAIN
+        resolve(
+            savedDesign = prefs.getString(PREF_KEY, null),
+            legacyGlassEnabled = if (prefs.contains(LEGACY_GLASS_KEY)) prefs.getBoolean(LEGACY_GLASS_KEY, false) else null
+        )
 }
 
 /** Текущий дизайн интерфейса. */
@@ -319,8 +324,16 @@ fun Modifier.glassPane(
 ): Modifier {
     if (LocalDesign.current == Design.FROSTED) return frostedCard(shape)
     if (LocalDesign.current != Design.LIQUID) return this
-    // Обычная поверхность — нейтральное стекло; любой другой цвет — оттенок стекла.
-    return liquidGlass(shape, if (tint == MaterialTheme.colorScheme.surface) Color.Unspecified else tint)
+    val scheme = MaterialTheme.colorScheme
+    // Обычные нейтральные поверхности темы не перекрывают стекло — оставляем чистое преломление.
+    val isNeutralSurface = tint == Color.Unspecified ||
+        tint == scheme.surface ||
+        tint == scheme.surfaceContainerLowest ||
+        tint == scheme.surfaceContainerLow ||
+        tint == scheme.surfaceContainer ||
+        tint == scheme.surfaceContainerHigh ||
+        tint == scheme.surfaceContainerHighest
+    return liquidGlass(shape, if (isNeutralSurface) Color.Unspecified else tint)
 }
 
 /**

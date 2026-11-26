@@ -48,6 +48,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.clickable
@@ -208,6 +209,8 @@ fun AppRoot(
     var loginLoading by remember { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var addingAccount by remember { mutableStateOf(false) }
+    var previewSession by remember { mutableStateOf(false) }
+    var previewProfile by remember { mutableStateOf<JSONObject?>(null) }
     var screen by remember { mutableStateOf(if (store.token != null) "main" else "login") }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     val scope = rememberCoroutineScope()
@@ -222,6 +225,14 @@ fun AppRoot(
             onName = { id, name -> store.saveName(id, name) },
             cookieToken = { store.cookieAupdToken() },
             refreshWithCookies = { store.refreshTokenWithCookies() }
+        )
+    }
+    val previewClient = remember {
+        MeshClient(
+            baseUrl = MeshCore.HOST,
+            token = PreviewMockInterceptor.PREVIEW_TOKEN,
+            profileId = PreviewMockInterceptor.PREVIEW_STUDENT_ID,
+            previewMode = true
         )
     }
 
@@ -256,6 +267,12 @@ fun AppRoot(
     }
 
     fun logout() {
+        if (previewSession) {
+            previewSession = false
+            previewProfile = null
+            screen = "login"
+            return
+        }
         store.clear()
         token = ""
         profile = null
@@ -267,6 +284,21 @@ fun AppRoot(
         bootError = null
         booting = false
         loginError = null
+    }
+
+    /** Вход в автономный предпросмотр интерфейса (включая Liquid Glass) без аккаунта. */
+    fun enterPreview() {
+        previewSession = true
+        addingAccount = false
+        bootError = null
+        booting = false
+        loginError = null
+        screen = "main"
+        scope.launch {
+            previewProfile = withContext(Dispatchers.IO) {
+                runCatching { previewClient.fetchProfile() }.getOrNull()
+            }
+        }
     }
 
     /** Экран входа без очистки текущего аккаунта — для добавления ещё одного. */
@@ -389,8 +421,8 @@ fun AppRoot(
         }
     }
 
-    LaunchedEffect(token, activeStudentId, activePersonId) {
-        if (token.isNotBlank() && activeStudentId != null && activePersonId != null) {
+    LaunchedEffect(token, activeStudentId, activePersonId, previewSession) {
+        if (!previewSession && token.isNotBlank() && activeStudentId != null && activePersonId != null) {
             WidgetUpdater.refresh(
                 context = context,
                 client = client,
@@ -467,12 +499,13 @@ fun AppRoot(
             loading = loginLoading,
             error = loginError,
             onLoginCookies = { raw -> loginWithCookies(raw) },
+            onPreview = { enterPreview() },
             restoreSession = !addingAccount
         )
 
-        booting -> BootScreen()
+        !previewSession && booting -> BootScreen()
 
-        bootError != null && (activePersonId == null || activeStudentId == null) -> BootErrorScreen(
+        !previewSession && bootError != null && (activePersonId == null || activeStudentId == null) -> BootErrorScreen(
             message = bootError ?: Words.CouldNotLoadProfile.text,
             onRetry = { retryKey++ },
             onLogout = { logout() }
@@ -480,11 +513,12 @@ fun AppRoot(
 
         else -> MainScaffold(
             store = store,
-            client = client,
-            profile = profile,
-            personId = activePersonId,
-            studentId = activeStudentId,
+            client = if (previewSession) previewClient else client,
+            profile = if (previewSession) previewProfile else profile,
+            personId = if (previewSession) PreviewMockInterceptor.PREVIEW_PERSON_ID else activePersonId,
+            studentId = if (previewSession) PreviewMockInterceptor.PREVIEW_STUDENT_ID else activeStudentId,
             registry = registry,
+            isPreview = previewSession,
             onLogout = { logout() },
             onAddAccount = { showLogin(addAccount = true) },
             onSwitchAccount = onSwitchAccount
@@ -540,6 +574,7 @@ fun MainScaffold(
     personId: String?,
     studentId: String?,
     registry: AccountRegistry,
+    isPreview: Boolean = false,
     onLogout: () -> Unit,
     onAddAccount: () -> Unit,
     onSwitchAccount: () -> Unit,
@@ -650,6 +685,11 @@ fun MainScaffold(
         }
     }
     val topActions: @Composable RowScope.() -> Unit = {
+        if (isPreview) {
+            TextButton(onClick = onLogout) {
+                Text("✕ ${Words.PreviewMode.text}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
         if (currentTab == "marks" && marksSubjectId != null) {
             TextButton(
                 onClick = {
@@ -778,7 +818,7 @@ fun MainScaffold(
                 ExtendedFloatingActionButton(
                     // В «матовом стекле» — «чернильная» кнопка (цвет текста на фоне) со скруглением 16dp;
                     // в «жидком стекле» — капсула из стекла, окрашенного акцентом, как prominent-кнопки iOS.
-                    modifier = if (liquid) Modifier.liquidGlass(Liquid.ButtonShape, tint = MaterialTheme.colorScheme.primary, elevation = 14.dp) else Modifier,
+                    modifier = if (liquid) Modifier.liquidChromeGlass(Liquid.ButtonShape, tint = MaterialTheme.colorScheme.primary, elevation = 14.dp) else Modifier,
                     containerColor = when {
                         frosted -> MaterialTheme.colorScheme.onBackground
                         liquid -> Color.Transparent
@@ -807,7 +847,25 @@ fun MainScaffold(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
+        val layoutDir = LocalLayoutDirection.current
+        val bottomInset = padding.calculateBottomPadding()
+        val bodyPadding = if (liquid) {
+            PaddingValues(
+                start = padding.calculateStartPadding(layoutDir),
+                top = padding.calculateTopPadding(),
+                end = padding.calculateEndPadding(layoutDir),
+                bottom = 0.dp
+            )
+        } else {
+            padding
+        }
+        CompositionLocalProvider(LocalLiquidBottomPadding provides if (liquid) bottomInset else 0.dp) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .liquidContentLayer()
+                    .padding(bodyPadding)
+            ) {
             val motion = MaterialTheme.motionScheme
             // Порядок анимации должен совпадать с реальной панелью, а не с
             // исходным списком: вкладки можно переставлять в «Ещё».
@@ -884,6 +942,7 @@ fun MainScaffold(
                     "settings" -> SettingsScreen(store, client, profile, onLogout)
                 }
             }
+        }
         }
     }
 
@@ -1036,6 +1095,7 @@ fun LoginScreen(
     loading: Boolean,
     error: String?,
     onLoginCookies: (String) -> Unit,
+    onPreview: () -> Unit = {},
     restoreSession: Boolean = true,
 ) {
     var tokenInput by remember { mutableStateOf("") }
@@ -1076,7 +1136,21 @@ fun LoginScreen(
         restoreSession = restoreSession,
     )
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onPreview,
+            enabled = !loading,
+            shape = MaterialTheme.shapes.extraLarge,
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .glassPane(MaterialTheme.shapes.extraLarge)
+        ) {
+            Text(Words.PreviewWithoutSignIn.text, style = MaterialTheme.typography.titleSmall)
+        }
+
+        Spacer(Modifier.height(12.dp))
         // Остальные способы спрятаны за красной кнопкой инструментов.
         Button(
             onClick = { experimental = true },

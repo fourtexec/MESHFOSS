@@ -238,7 +238,10 @@ fun RankingScreen(
                         onRefresh = { refreshing = true; load(monthlyMode, force = true) },
                         modifier = Modifier.weight(1f)
                     ) {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+                    ) {
                         items((0 until rows.length()).map { rows.getJSONObject(it) }) { row ->
                             val average = if (row.isNull("average")) null else row.optDouble("average")
                             val isMe = row.optBoolean("isMe")
