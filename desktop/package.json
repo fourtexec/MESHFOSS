@@ -5,6 +5,11 @@
   "description": "Free GPLv3 МЭШ (school.mos.ru) desktop client for Windows, macOS, and Linux with authentic iOS 26 Liquid Glass.",
   "license": "GPL-3.0-only",
   "author": "MESHFOSS Contributors",
+  "homepage": "https://github.com/fourtexec/meshfoss",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fourtexec/meshfoss.git"
+  },
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
