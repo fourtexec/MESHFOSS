@@ -130,8 +130,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.coroutines.android)
     implementation(libs.zxing)
-    implementation(libs.haze)
-    implementation(libs.haze.blur)
     implementation(libs.kyant.backdrop)
     implementation(libs.kyant.shapes)
 

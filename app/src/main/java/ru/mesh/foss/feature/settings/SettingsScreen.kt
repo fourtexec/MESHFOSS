@@ -62,6 +62,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
     }
     var moskvenokLog by remember { mutableStateOf(MeshLog.enabled) }
     var showMoskvenokLog by remember { mutableStateOf(false) }
+    var showLiquidLagWarning by remember { mutableStateOf(false) }
     var updateChannel by remember {
         mutableStateOf(
             prefs.getString("update_channel", UpdateChecker.CHANNEL_RELEASES) ?: UpdateChecker.CHANNEL_RELEASES
@@ -114,16 +115,19 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                 val setDesign = LocalDesignSetter.current
                                 listOf(
                                     Triple(Design.PLAIN, Words.DesignPlain.text, Words.DesignPlainHint.text),
-                                    Triple(Design.GLASS, Words.DesignGlass.text, Words.DesignGlassHint.text),
-                                    Triple(Design.LIQUID, Words.DesignLiquid.text, Words.DesignLiquidHint.text),
-                                    Triple(Design.FROSTED, Words.DesignFrosted.text, Words.DesignFrostedHint.text)
+                                    Triple(Design.LIQUID, Words.DesignLiquid.text, Words.DesignLiquidHint.text)
                                 ).forEach { (id, title, hint) ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth()
                                             .selectable(
                                                 selected = design == id,
                                                 role = Role.RadioButton
-                                            ) { setDesign(id) }
+                                            ) {
+                                                if (id == Design.LIQUID && design != Design.LIQUID) {
+                                                    showLiquidLagWarning = true
+                                                }
+                                                setDesign(id)
+                                            }
                                             .padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -497,6 +501,21 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
             dismissButton = {
                 TextButton(onClick = { updateInfo = null }) {
                     Text(Words.Later.text)
+                }
+            }
+        )
+    }
+
+    if (showLiquidLagWarning) {
+        AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = Color.Transparent,
+            onDismissRequest = { showLiquidLagWarning = false },
+            title = { Text(Words.DesignLiquid.text) },
+            text = { Text(Words.DesignLiquidLagWarning.text) },
+            confirmButton = {
+                TextButton(onClick = { showLiquidLagWarning = false }) {
+                    Text("OK")
                 }
             }
         )

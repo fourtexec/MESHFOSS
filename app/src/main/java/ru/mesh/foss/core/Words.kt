@@ -124,32 +124,18 @@ internal enum class Words(
         "Design"
     ),
     DesignPlain(
-        "Обычный",
-        "Plain",
-        "Hagyományos",
-        "Normal",
-        "Classique"
+        "M3E (стандартный)",
+        "M3E (standard)",
+        "M3E (szabványos)",
+        "M3E (estándar)",
+        "M3E (standard)"
     ),
     DesignPlainHint(
-        "Классический интерфейс Material",
-        "Classic Material interface",
-        "Hagyományos Material felület",
-        "Interfaz Material clásica",
-        "Interface Material classique"
-    ),
-    DesignGlass(
-        "Стекло",
-        "Glass",
-        "Üveg",
-        "Cristal",
-        "Verre"
-    ),
-    DesignGlassHint(
-        "Полупрозрачные карточки на фоне со свечением",
-        "Translucent cards over a glowing background",
-        "Átlátszó kártyák izzó háttér előtt",
-        "Tarjetas translúcidas sobre un fondo brillant",
-        "Cartes translucides sur un fond lumineux"
+        "Material 3 Expressive с плавающей размытой нижней панелью",
+        "Material 3 Expressive with a floating blurred bottom bar",
+        "Material 3 Expressive lebegő, elmosott alsó sávval",
+        "Material 3 Expressive con barra inferior flotante desenfocada",
+        "Material 3 Expressive avec barre inférieure flottante floutée"
     ),
     DesignLiquid(
         "Жидкое стекло",
@@ -159,25 +145,18 @@ internal enum class Words(
         "Verre liquide"
     ),
     DesignLiquidHint(
-        "Прозрачное стекло в стиле iOS: крупные заголовки и капсула вкладок с линзой",
-        "Clear iOS-style glass: large titles and a tab capsule with a lens",
-        "Átlátszó, iOS-stílusú üveg: nagy címek és lencsés fülsáv",
-        "Cristal transparente al estilo iOS: títulos grandes y barra de pestañas con lente",
-        "Verre transparent façon iOS : grands titres et barre d’onglets avec lentille"
+        "Оптическое стекло и живая линза на нижней панели (может подтормаживать)",
+        "Optical glass panels with a live lens bottom bar (may lag on some devices)",
+        "Optikai üveg és élő lencse az alsó sávon (lassulást okozhat)",
+        "Cristal óptico con barra inferior de lente en vivo (puede ir lento)",
+        "Verre optique avec barre inférieure à lentille (peut ralentir l’appareil)"
     ),
-    DesignFrosted(
-        "Матовое стекло",
-        "Frosted glass",
-        "Matt üveg",
-        "Cristal esmerilado",
-        "Verre dépoli"
-    ),
-    DesignFrostedHint(
-        "Настоящее размытие фона: матовые панели и карточки на мягком свечении",
-        "Real backdrop blur: frosted bars and cards over a softly drifting glow",
-        "Valódi háttérelmosás: matt sávok és kártyák lágyan áramló fényben",
-        "Desenfoque real del fondo: barras y tarjetas esmeriladas sobre un suave resplandor",
-        "Vrai flou d’arrière-plan : barres et cartes dépolles sur une lueur douce"
+    DesignLiquidLagWarning(
+        "Жидкое стекло использует живой рендеринг преломления на нижней панели и анимациях и может подтормаживать на некоторых устройствах.",
+        "Liquid glass uses live refraction on the bottom panel and animations and may lag on some devices.",
+        "A folyékony üveg élő fénytörést használ az alsó sávon és az animációknál, ezért egyes eszközökön szaggathat.",
+        "El vidrio líquido usa refracción en vivo en la barra inferior y animaciones, por lo que puede ir lento en algunos dispositivos.",
+        "Le verre liquide utilise une réfraction en direct sur la barre inférieure et les animations, ce qui peut ralentir certains appareils."
     ),
     ThemeName(
         "Название своей темы",

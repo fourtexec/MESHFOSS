@@ -15,6 +15,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -131,17 +132,13 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberBackdrop
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import kotlinx.coroutines.CoroutineScope
@@ -564,11 +561,7 @@ fun Modifier.liquidChromeGlass(
     shape = shape,
     tint = tint,
     elevation = elevation,
-    backdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current,
-    blurRadius = 2.dp,
-    refractionHeight = 14.dp,
-    refractionAmount = 24.dp,
-    highQuality = false
+    refract = false
 )
 
 @Composable
@@ -576,17 +569,17 @@ fun Modifier.liquidGlass(
     shape: Shape = MaterialTheme.shapes.large,
     tint: Color = Color.Unspecified,
     elevation: Dp = 6.dp,
-    refract: Boolean = true,
+    refract: Boolean = false,
     backdrop: Backdrop? = null,
     blurRadius: Dp = Dp.Unspecified,
-    refractionHeight: Dp = 16.dp,
-    refractionAmount: Dp = 30.dp,
+    refractionHeight: Dp = 14.dp,
+    refractionAmount: Dp = 24.dp,
     surfaceAlpha: Float? = null,
     highQuality: Boolean = false
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
-    val kyantBackdrop = backdrop ?: LocalKyantBackdrop.current
+    val kyantBackdrop = if (refract) (backdrop ?: LocalKyantBackdrop.current) else null
     val resolvedAlpha = surfaceAlpha ?: if (dark) 0.14f else 0.24f
     val surfaceTint = if (dark) Color(0xFF141926).copy(alpha = resolvedAlpha) else Color.White.copy(alpha = resolvedAlpha)
     val accentTint = if (tint != Color.Unspecified) tint else Color.Unspecified
@@ -597,9 +590,6 @@ fun Modifier.liquidGlass(
             highQuality -> if (dark) 3.dp else 2.5.dp
             else -> 0.dp
         }
-        // По образцу LazyScrollContainerContent.kt из каталога Kyant0:
-        // на скроллируемых карточках оставляем только vibrancy() + лёгкую lens() + Highlight.Plain
-        // без размытия, 7-полосной дисперсии и двойных теней, чтобы не перегревать GPU при скролле.
         return this.drawBackdrop(
             backdrop = kyantBackdrop,
             shape = { shape },
@@ -620,26 +610,8 @@ fun Modifier.liquidGlass(
             highlight = {
                 if (highQuality) Highlight.Default else Highlight.Plain
             },
-            innerShadow = if (highQuality) {
-                {
-                    InnerShadow(
-                        radius = 6.dp,
-                        alpha = if (dark) 0.16f else 0.08f
-                    )
-                }
-            } else {
-                null
-            },
-            shadow = if (highQuality && elevation > 0.dp) {
-                {
-                    Shadow(
-                        radius = elevation,
-                        color = Color.Black.copy(alpha = if (dark) 0.28f else 0.12f)
-                    )
-                }
-            } else {
-                null
-            },
+            innerShadow = null,
+            shadow = null,
             onDrawSurface = {
                 drawRect(surfaceTint)
                 drawRect(
@@ -662,16 +634,16 @@ fun Modifier.liquidGlass(
     val rimTop = Color.White.copy(alpha = if (dark) 0.50f else 0.95f)
     val rimMid = Color.White.copy(alpha = if (dark) 0.10f else 0.45f)
     val rimBottom = Color.White.copy(alpha = if (dark) 0.34f else 0.85f)
-    val shadow = Color.Black.copy(alpha = if (dark) 0.40f else 0.10f)
+    val shadow = Color.Black.copy(alpha = if (dark) 0.36f else 0.10f)
     val specular = if (dark) 1f else 1.6f
-    val lightSource = LocalGlassLight.current
+    val lightSource = if (refract) LocalGlassLight.current else null
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val legacyBackdrop = LocalLiquidBackdrop.current
+    val legacyBackdrop = if (refract) LocalLiquidBackdrop.current else null
     val refractive = refract && legacyBackdrop != null && LiquidShader.available
     val glassTint = tintFill.compositeOver(clear)
-    val base = if (elevation > 0.dp) outerShadow(shape, shadow, elevation * 1.6f, elevation * 0.45f) else this
+    val base = if (elevation > 0.dp) outerShadow(shape, shadow, elevation * 1.4f, elevation * 0.40f) else this
     return base
-        .onGloballyPositioned { origin = it.positionInRoot() }
+        .then(if (refract) Modifier.onGloballyPositioned { origin = it.positionInRoot() } else Modifier)
         .clip(shape)
         .drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
@@ -736,74 +708,19 @@ private val PanelParams = LiquidShader.Params(thickness = 14f, offsetDp = 10f, d
 private val LensParams = LiquidShader.Params(roundness = 2f, thickness = 18f, offsetDp = 14f, dispersion = 5f, fresnelFactor = 0.25f)
 
 /**
- * Настоящее Kyant0/AndroidLiquidGlass для диалогов и шторки «Ещё» (по мотивам `DialogContent.kt`
- * из каталога Kyant0): `colorControls`, адаптивный `blur`, `lens(..., depthEffect = true)`,
- * мягкий `Highlight.Plain` и внешняя/внутренняя тени.
+ * Подложка диалога/шторки «Ещё» в стиле лёгкого жидкого стекла: плотная основа,
+ * чтобы текст не просвечивал, плюс зеркальная кромка и радужный ободок без тяжёлых шейдеров.
  */
 @Composable
 internal fun Modifier.liquidDialogGlass(shape: Shape = MaterialTheme.shapes.extraLarge): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
-    val (glowA, _, glowC) = LiquidGlassEngine.backdropGlows(scheme.primary, scheme.tertiary)
     val surfaceColor = if (dark) {
-        lerp(scheme.surface, Color.Black, 0.20f).copy(alpha = 0.88f)
+        lerp(scheme.surface, Color.Black, 0.20f).copy(alpha = 0.94f)
     } else {
-        Color(0xFFFAFAFA).copy(alpha = 0.90f)
+        Color(0xFFFAFAFA).copy(alpha = 0.96f)
     }
-    if (!LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) || LiquidPreview.enabled) {
-        return this.background(surfaceColor, shape).liquidGlass(shape, elevation = 20.dp, refract = false)
-    }
-    val canvasBackdrop = rememberCanvasBackdrop {
-        drawRect(surfaceColor)
-        drawRect(
-            Brush.linearGradient(
-                listOf(
-                    glowA.copy(alpha = if (dark) 0.20f else 0.12f),
-                    Color.Transparent,
-                    glowC.copy(alpha = if (dark) 0.16f else 0.10f)
-                )
-            )
-        )
-    }
-    return this.drawBackdrop(
-        backdrop = canvasBackdrop,
-        shape = { shape },
-        effects = {
-            colorControls(
-                brightness = if (dark) 0f else 0.14f,
-                contrast = 1f,
-                saturation = 1.45f
-            )
-            blur(if (dark) 6f.dp.toPx() else 10f.dp.toPx())
-            if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
-                lens(
-                    refractionHeight = 18f.dp.toPx(),
-                    refractionAmount = 34f.dp.toPx(),
-                    depthEffect = true,
-                    chromaticAberration = false
-                )
-            }
-        },
-        highlight = { Highlight.Plain },
-        innerShadow = null,
-        shadow = {
-            Shadow(
-                radius = 18.dp,
-                color = Color.Black.copy(alpha = if (dark) 0.42f else 0.16f)
-            )
-        },
-        onDrawSurface = {
-            drawRect(surfaceColor.copy(alpha = if (dark) 0.68f else 0.58f))
-            drawRect(
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = if (dark) 0.07f else 0.24f),
-                        Color.Transparent
-                    )
-                )
-            )
-        }
-    )
+    return this.background(surfaceColor, shape).liquidGlass(shape, elevation = 18.dp, refract = false)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1037,9 +954,8 @@ internal class LiquidDragAnimation(
 }
 
 /**
- * Стеклянная кнопка из `catalog/components/LiquidButton.kt` (`Kyant0/AndroidLiquidGlass`):
- * капсула (или произвольная форма) с `drawBackdrop`, `vibrancy()`, `blur`, `lens`,
- * [Highlight.Default], тонированием через [BlendMode.Hue] и живым бликом под пальцем.
+ * Оптимизированная стеклянная кнопка: лёгкое оптическое стекло ([liquidGlass])
+ * и живая пружинная анимация нажатия + радиальный блик под пальцем без тяжёлых шейдеров.
  */
 @Composable
 fun LiquidButton(
@@ -1057,8 +973,6 @@ fun LiquidButton(
 ) {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
-    val resolvedBackdrop = rememberResolvedLiquidBackdrop(backdrop)
-    val kyantActive = LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) && !LiquidPreview.enabled
     val animationScope = rememberCoroutineScope()
     val interactiveHighlight = remember(animationScope) { LiquidInteractiveHighlight(animationScope) }
     val resolvedContentColor = when {
@@ -1066,72 +980,40 @@ fun LiquidButton(
         tint.isSpecified -> if (tint.luminance() > 0.62f) Color(0xFF0E1420) else Color.White
         else -> scheme.onSurface
     }
-    val defaultSurface = if (surfaceColor.isSpecified) {
-        surfaceColor
-    } else if (!tint.isSpecified) {
-        if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.34f)
-    } else {
-        Color.Unspecified
-    }
-
-    val backdropModifier = if (kyantActive) {
-        Modifier.drawBackdrop(
-            backdrop = resolvedBackdrop,
-            shape = { shape },
-            effects = {
-                vibrancy()
-                if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
-                    lens(
-                        refractionHeight = 10f.dp.toPx(),
-                        refractionAmount = 20f.dp.toPx(),
-                        depthEffect = false,
-                        chromaticAberration = false
-                    )
-                }
-            },
-            highlight = { Highlight.Plain },
-            innerShadow = null,
-            shadow = null,
-            layerBlock = if (enabled) {
-                {
-                    val progress = interactiveHighlight.pressProgress
-                    if (progress > 0.002f) {
-                        val w = size.width
-                        val h = size.height.coerceAtLeast(1f)
-                        val scale = lerpFloat(1f, 1f + 3f.dp.toPx() / h, progress)
-                        val maxOffset = size.minDimension.coerceAtLeast(1f)
-                        val offset = interactiveHighlight.offset
-                        translationX = maxOffset * tanh(0.05f * offset.x / maxOffset)
-                        translationY = maxOffset * tanh(0.05f * offset.y / maxOffset)
-                        val maxDragScale = 3f.dp.toPx() / h
-                        val offsetAngle = atan2(offset.y, offset.x)
-                        val maxDim = size.maxDimension.coerceAtLeast(1f)
-                        scaleX = scale + maxDragScale * abs(cos(offsetAngle) * offset.x / maxDim) * (w / h).coerceAtMost(1f)
-                        scaleY = scale + maxDragScale * abs(sin(offsetAngle) * offset.y / maxDim) * (h / w).coerceAtMost(1f)
-                    }
-                }
-            } else {
-                null
-            },
-            onDrawSurface = {
-                if (tint.isSpecified) {
-                    drawRect(tint, blendMode = BlendMode.Hue)
-                    drawRect(tint.copy(alpha = if (enabled) 0.72f else 0.38f))
-                }
-                if (defaultSurface.isSpecified) {
-                    drawRect(defaultSurface)
-                }
-            }
-        )
-    } else {
-        Modifier.liquidGlass(shape = shape, tint = tint, elevation = 6.dp)
+    val resolvedTint = when {
+        tint.isSpecified -> tint.copy(alpha = if (enabled) 0.85f else 0.42f)
+        surfaceColor.isSpecified -> surfaceColor
+        else -> Color.Unspecified
     }
 
     CompositionLocalProvider(LocalContentColor provides resolvedContentColor.copy(alpha = if (enabled) 1f else 0.48f)) {
         Row(
             modifier = modifier
                 .alpha(if (enabled) 1f else 0.62f)
-                .then(backdropModifier)
+                .then(
+                    if (enabled) {
+                        Modifier.graphicsLayer {
+                            val progress = interactiveHighlight.pressProgress
+                            if (progress > 0.002f) {
+                                val w = size.width
+                                val h = size.height.coerceAtLeast(1f)
+                                val scale = lerpFloat(1f, 1f + 3f.dp.toPx() / h, progress)
+                                val maxOffset = size.minDimension.coerceAtLeast(1f)
+                                val offset = interactiveHighlight.offset
+                                translationX = maxOffset * tanh(0.05f * offset.x / maxOffset)
+                                translationY = maxOffset * tanh(0.05f * offset.y / maxOffset)
+                                val maxDragScale = 3f.dp.toPx() / h
+                                val offsetAngle = atan2(offset.y, offset.x)
+                                val maxDim = size.maxDimension.coerceAtLeast(1f)
+                                scaleX = scale + maxDragScale * abs(cos(offsetAngle) * offset.x / maxDim) * (w / h).coerceAtMost(1f)
+                                scaleY = scale + maxDragScale * abs(sin(offsetAngle) * offset.y / maxDim) * (h / w).coerceAtMost(1f)
+                            }
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
+                .liquidGlass(shape = shape, tint = resolvedTint, elevation = if (dark) 6.dp else 4.dp, refract = false)
                 .then(
                     if (enabled) {
                         Modifier
@@ -1196,8 +1078,6 @@ fun LiquidToggle(
 ) {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
-    val resolvedBackdrop = rememberResolvedLiquidBackdrop(backdrop)
-    val kyantActive = LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) && !LiquidPreview.enabled
     val accentColor = scheme.primary
     val trackColor = if (dark) Color(0xFF787880).copy(alpha = 0.36f) else Color(0xFF787878).copy(alpha = 0.22f)
 
@@ -1216,7 +1096,7 @@ fun LiquidToggle(
             valueRange = 0f..1f,
             visibilityThreshold = 0.001f,
             initialScale = 1f,
-            pressedScale = 1.42f,
+            pressedScale = 1.38f,
             onDragStarted = {},
             onDragStopped = {
                 if (didDrag) {
@@ -1246,17 +1126,6 @@ fun LiquidToggle(
         }
     }
 
-    val trackBackdrop = rememberLayerBackdrop()
-    val thumbBackdrop = rememberCombinedBackdrop(
-        resolvedBackdrop,
-        rememberBackdrop(trackBackdrop) { drawBackdrop ->
-            val progress = dampedDragAnimation.pressProgress
-            val sx = lerpFloat(2f / 3f, 0.78f, progress)
-            val sy = lerpFloat(0f, 0.78f, progress)
-            scale(sx, sy) { drawBackdrop() }
-        }
-    )
-
     Box(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.5f),
@@ -1264,7 +1133,6 @@ fun LiquidToggle(
     ) {
         Box(
             Modifier
-                .then(if (kyantActive) Modifier.layerBackdrop(trackBackdrop) else Modifier)
                 .clip(Capsule())
                 .drawBehind {
                     drawRect(lerp(trackColor, accentColor, dampedDragAnimation.value))
@@ -1272,92 +1140,38 @@ fun LiquidToggle(
                 .size(64f.dp, 28f.dp)
         )
 
-        val thumbBaseModifier = Modifier
-            .graphicsLayer {
-                val f = dampedDragAnimation.value
-                val pad = 2f.dp.toPx()
-                translationX = if (isLtr) lerpFloat(pad, pad + dragWidth, f) else lerpFloat(-pad, -(pad + dragWidth), f)
-            }
-            .semantics { role = Role.Switch }
-            .then(if (enabled) dampedDragAnimation.modifier else Modifier)
-
-        if (kyantActive) {
-            Box(
-                thumbBaseModifier
-                    .drawBackdrop(
-                        backdrop = thumbBackdrop,
-                        shape = { Capsule() },
-                        effects = {
-                            val progress = dampedDragAnimation.pressProgress
-                            if (progress > 0.01f) {
-                                blur(6f.dp.toPx() * (1f - progress))
-                                if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
-                                    lens(
-                                        refractionHeight = 5f.dp.toPx() * progress,
-                                        refractionAmount = 10f.dp.toPx() * progress,
-                                        depthEffect = false,
-                                        chromaticAberration = false
-                                    )
-                                }
-                            }
-                        },
-                        highlight = {
-                            val progress = dampedDragAnimation.pressProgress
-                            if (progress > 0.01f) {
-                                Highlight.Ambient.copy(
-                                    width = Highlight.Ambient.width / 1.5f,
-                                    blurRadius = Highlight.Ambient.blurRadius / 1.5f,
-                                    alpha = progress
-                                )
-                            } else {
-                                null
-                            }
-                        },
-                        shadow = {
-                            Shadow(
-                                radius = 4f.dp,
-                                color = Color.Black.copy(alpha = 0.08f)
-                            )
-                        },
-                        innerShadow = {
-                            val progress = dampedDragAnimation.pressProgress
-                            if (progress > 0.01f) {
-                                InnerShadow(
-                                    radius = 4f.dp * progress,
-                                    alpha = progress
-                                )
-                            } else {
-                                null
-                            }
-                        },
-                        layerBlock = {
-                            scaleX = dampedDragAnimation.scaleX
-                            scaleY = dampedDragAnimation.scaleY
-                            val velocity = dampedDragAnimation.velocity / 50f
-                            scaleX /= 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
-                            scaleY *= 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
-                        },
-                        onDrawSurface = {
-                            val progress = dampedDragAnimation.pressProgress
-                            drawRect(Color.White.copy(alpha = (1f - progress).coerceAtLeast(0.18f)))
-                        }
-                    )
-                    .size(40f.dp, 24f.dp)
-            )
-        } else {
-            Box(
-                thumbBaseModifier
-                    .size(40f.dp, 24f.dp)
-                    .clip(Capsule())
-                    .background(Color.White)
-            )
-        }
+        Box(
+            Modifier
+                .graphicsLayer {
+                    val f = dampedDragAnimation.value
+                    val pad = 2f.dp.toPx()
+                    translationX = if (isLtr) lerpFloat(pad, pad + dragWidth, f) else lerpFloat(-pad, -(pad + dragWidth), f)
+                    scaleX = dampedDragAnimation.scaleX
+                    scaleY = dampedDragAnimation.scaleY
+                    val velocity = dampedDragAnimation.velocity / 50f
+                    scaleX /= 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
+                    scaleY *= 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
+                }
+                .semantics { role = Role.Switch }
+                .then(if (enabled) dampedDragAnimation.modifier else Modifier)
+                .size(40f.dp, 24f.dp)
+                .outerShadow(Capsule(), Color.Black.copy(alpha = 0.16f), 4.dp, 1.5.dp)
+                .clip(Capsule())
+                .drawBehind {
+                    val progress = dampedDragAnimation.pressProgress
+                    drawRect(Color.White.copy(alpha = (1f - progress * 0.65f)))
+                    if (progress > 0.01f) {
+                        drawSpecular(1.2f * progress, spark = true)
+                    }
+                }
+                .border(1.dp, Color.White.copy(alpha = 0.85f), Capsule())
+        )
     }
 }
 
 /**
- * Сегментированный переключатель в стиле iOS 26 Liquid Glass (`Kyant0/AndroidLiquidGlass`):
- * стеклянная капсула с переезжающей линзой под выбранным пунктом.
+ * Сегментированный переключатель: плавная пружинная анимация капсулы и лёгкое
+ * оптическое стекло без тяжёлого per-view рендеринга.
  */
 @Composable
 fun LiquidSegmentedTabs(
@@ -1368,41 +1182,41 @@ fun LiquidSegmentedTabs(
 ) {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
-    val backdrop = LocalKyantBackdrop.current
     val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
-    val kyantActive = LiquidGlassEngine.useKyant(Build.VERSION.SDK_INT, LiquidPreview.enabled, backdrop != null) && backdrop != null
-    val kyantLensActive = kyantActive && LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)
-    val rowBackdrop = rememberLayerBackdrop()
-    val lensBackdrop = rememberCombinedBackdrop(*listOfNotNull(backdrop, rowBackdrop).toTypedArray())
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(44.dp)
-            .liquidGlass(
-                shape = Liquid.BarShape,
-                elevation = 8.dp,
-                blurRadius = if (dark) 3.dp else 2.dp,
-                refractionHeight = 12.dp,
-                refractionAmount = 24.dp,
-                surfaceAlpha = if (dark) 0.14f else 0.24f
-            )
+            .liquidGlass(shape = Liquid.BarShape, elevation = 6.dp, refract = false)
             .padding(3.dp)
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val count = options.size.coerceAtLeast(1)
             val itemWidth = maxWidth / count
-            val localDensity = androidx.compose.ui.platform.LocalDensity.current
+            val localDensity = LocalDensity.current
             val itemWidthPx = with(localDensity) { itemWidth.toPx() }
             val lensOffsetPx by animateFloatAsState(
                 targetValue = selectedIndex * itemWidthPx,
                 animationSpec = spring(dampingRatio = 0.72f, stiffness = 260f),
                 label = "liquidSegmentOffset"
             )
+            if (options.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .offset { IntOffset(lensOffsetPx.roundToInt(), 0) }
+                        .width(itemWidth)
+                        .fillMaxHeight()
+                        .liquidGlass(
+                            shape = Liquid.LensShape,
+                            tint = scheme.primary.copy(alpha = if (dark) 0.24f else 0.16f),
+                            elevation = 3.dp,
+                            refract = false
+                        )
+                )
+            }
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (kyantLensActive) Modifier.layerBackdrop(rowBackdrop) else Modifier),
+                modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 options.forEach { (key, label) ->
@@ -1435,48 +1249,12 @@ fun LiquidSegmentedTabs(
                     }
                 }
             }
-            if (options.isNotEmpty()) {
-                val pillModifier = Modifier
-                    .offset { IntOffset(lensOffsetPx.roundToInt(), 0) }
-                    .width(itemWidth)
-                    .fillMaxHeight()
-                if (kyantLensActive) {
-                    Box(
-                        pillModifier.drawBackdrop(
-                            backdrop = lensBackdrop,
-                            shape = { Liquid.LensShape },
-                            effects = {
-                                vibrancy()
-                                lens(
-                                    refractionHeight = 10f.dp.toPx(),
-                                    refractionAmount = 18f.dp.toPx(),
-                                    depthEffect = false,
-                                    chromaticAberration = false
-                                )
-                            },
-                            highlight = { Highlight.Plain },
-                            innerShadow = null,
-                            shadow = null,
-                            onDrawSurface = {
-                                drawRect(if (dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.36f))
-                            }
-                        )
-                    )
-                } else {
-                    Box(
-                        pillModifier
-                            .clip(Liquid.LensShape)
-                            .background(if (dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.55f))
-                    )
-                }
-            }
         }
     }
 }
 
 /**
- * Шапка в стиле iOS 26 Liquid Glass: плавающая стеклянная капсула с крупным заголовком
- * и действиями, использующая живой [chromeBackdrop] из Kyant0/AndroidLiquidGlass.
+ * Шапка в стиле iOS 26: плавающая капсула из лёгкого жидкого стекла без нагрузки на GPU.
  */
 @Composable
 fun LiquidTopBar(
@@ -1485,8 +1263,6 @@ fun LiquidTopBar(
     navigationIcon: (@Composable () -> Unit)? = null
 ) {
     val ink = MaterialTheme.colorScheme.onBackground
-    val dark = Liquid.isDark(MaterialTheme.colorScheme.background)
-    val chromeBackdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1495,13 +1271,8 @@ fun LiquidTopBar(
             .heightIn(min = 56.dp)
             .liquidGlass(
                 shape = Liquid.BarShape,
-                elevation = 12.dp,
-                backdrop = chromeBackdrop,
-                blurRadius = if (dark) 3.dp else 2.5.dp,
-                refractionHeight = 14.dp,
-                refractionAmount = 24.dp,
-                surfaceAlpha = if (dark) 0.18f else 0.30f,
-                highQuality = false
+                elevation = 10.dp,
+                refract = false
             )
             .padding(start = if (navigationIcon != null) 6.dp else 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1536,6 +1307,179 @@ fun LiquidTopBar(
 /** Пункт нижней панели. */
 data class BarNavItem(val key: String, val label: String, val icon: androidx.compose.ui.graphics.painter.Painter)
 
+/** Источник размытия для плавающей нижней панели M3E (на Android 12+). */
+@Composable
+fun rememberM3eBlurBackdrop(): LayerBackdrop? =
+    if (LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT)) rememberLayerBackdrop() else null
+
+/** Захватывает контент экрана под плавающую размытую панель M3E. */
+fun Modifier.m3eBlurSource(backdrop: LayerBackdrop?): Modifier =
+    if (backdrop != null) this.layerBackdrop(backdrop) else this
+
+/**
+ * Плавающая нижняя панель для стандартного M3E ([Design.PLAIN]):
+ * повторяет форму капсулы и плавный бегунок из [LiquidTabBar], но без «жидкого стекла»
+ * (линз, бликов и преломления) — только чистое аппаратное размытие фона с M3E-поверхностью.
+ */
+@Composable
+fun M3eBlurredTabBar(
+    items: List<BarNavItem>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    backdrop: LayerBackdrop? = null
+) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val selectedIndex = items.indexOfFirst { it.key == selected }.coerceAtLeast(0)
+    val barModifier = if (backdrop != null && LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) && !LiquidPreview.enabled) {
+        Modifier
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { Liquid.BarShape },
+                effects = {
+                    blur(20f.dp.toPx())
+                },
+                highlight = null,
+                innerShadow = null,
+                shadow = {
+                    Shadow(
+                        radius = 12.dp,
+                        color = Color.Black.copy(alpha = if (dark) 0.34f else 0.14f)
+                    )
+                },
+                onDrawSurface = {
+                    drawRect(scheme.surfaceContainer.copy(alpha = if (dark) 0.72f else 0.78f))
+                }
+            )
+            .border(1.dp, scheme.outlineVariant.copy(alpha = if (dark) 0.32f else 0.45f), Liquid.BarShape)
+    } else {
+        Modifier
+            .outerShadow(Liquid.BarShape, Color.Black.copy(alpha = if (dark) 0.34f else 0.14f), 12.dp, 4.dp)
+            .clip(Liquid.BarShape)
+            .background(scheme.surfaceContainer.copy(alpha = 0.94f))
+            .border(1.dp, scheme.outlineVariant.copy(alpha = 0.45f), Liquid.BarShape)
+    }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .height(66.dp)
+            .then(barModifier)
+            .padding(Liquid.BarInset)
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val count = items.size.coerceAtLeast(1)
+            val itemWidth = maxWidth / count
+            val localDensity = LocalDensity.current
+            val itemWidthPx = with(localDensity) { itemWidth.toPx() }
+            var pillX by remember(itemWidthPx) { mutableFloatStateOf(selectedIndex * itemWidthPx) }
+            var dragging by remember { mutableStateOf(false) }
+            var activeIndex by remember { mutableStateOf<Int?>(null) }
+            val targetIndex = activeIndex ?: selectedIndex
+            LaunchedEffect(selectedIndex) { activeIndex = null }
+            LaunchedEffect(targetIndex, itemWidthPx, dragging) {
+                if (!dragging) {
+                    animate(
+                        initialValue = pillX,
+                        targetValue = targetIndex * itemWidthPx,
+                        animationSpec = spring(dampingRatio = 0.72f, stiffness = 240f)
+                    ) { value, _ -> pillX = value }
+                }
+            }
+
+            if (items.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .offset { IntOffset(pillX.roundToInt(), 0) }
+                        .width(itemWidth)
+                        .fillMaxHeight()
+                        .clip(Liquid.LensShape)
+                        .background(scheme.secondaryContainer.copy(alpha = if (dark) 0.90f else 0.94f))
+                )
+            }
+
+            val sources = remember(items.size) { List(items.size) { MutableInteractionSource() } }
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(items.size, itemWidthPx) {
+                        if (items.isEmpty()) return@pointerInput
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val startX = down.position.x
+                            val pointerId = down.id
+                            var dragged = false
+                            var grabOffset = 0f
+                            val maxX = (size.width - itemWidthPx).coerceAtLeast(0f)
+                            val downIndex = (down.position.x / itemWidthPx).toInt().coerceIn(0, items.lastIndex)
+                            activeIndex = downIndex
+                            try {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                                    if (!dragged && abs(change.position.x - startX) > viewConfiguration.touchSlop) {
+                                        dragged = true
+                                        dragging = true
+                                        grabOffset = downIndex * itemWidthPx - startX
+                                    }
+                                    if (dragged) {
+                                        val raw = (change.position.x + grabOffset).coerceIn(0f, maxX)
+                                        pillX = magnetizeLens(raw, itemWidthPx)
+                                        if (change.pressed) change.consume()
+                                    }
+                                    if (!change.pressed) {
+                                        if (dragged) {
+                                            val chosen = (pillX / itemWidthPx).roundToInt().coerceIn(0, items.lastIndex)
+                                            activeIndex = chosen
+                                            onSelect(items[chosen].key)
+                                        }
+                                        break
+                                    }
+                                }
+                            } finally {
+                                dragging = false
+                            }
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                items.forEachIndexed { i, item ->
+                    val on = item.key == selected
+                    val ink by animateColorAsState(
+                        if (on) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
+                        tween(180),
+                        label = "m3eBarInk"
+                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(Liquid.LensShape)
+                            .clickable(interactionSource = sources[i], indication = null) { onSelect(item.key) }
+                            .padding(horizontal = 1.dp)
+                    ) {
+                        Icon(item.icon, contentDescription = item.label, tint = ink, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            item.label,
+                            fontSize = 9.sp,
+                            lineHeight = 11.sp,
+                            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = ink
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * Плавающая панель вкладок (квадрат со скруглёнными углами) с оптической
  * «линзой» под выбранной вкладкой.
@@ -1568,6 +1512,7 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
             .liquidGlass(
                 shape = Liquid.BarShape,
                 elevation = 16.dp,
+                refract = true,
                 backdrop = chromeBackdrop,
                 blurRadius = if (dark) 3.dp else 2.5.dp,
                 refractionHeight = 14.dp,

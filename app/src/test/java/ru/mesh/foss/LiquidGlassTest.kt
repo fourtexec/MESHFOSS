@@ -15,17 +15,18 @@ import ru.mesh.foss.ui.LiquidGlassEngine
 class LiquidGlassTest {
 
     @Test
-    fun defaultDesignIsLiquid() {
-        assertEquals(Design.LIQUID, Design.DEFAULT)
-        assertEquals(Design.LIQUID, Design.resolve(savedDesign = null, legacyGlassEnabled = null))
-        assertEquals(Design.LIQUID, Design.resolve(savedDesign = null, legacyGlassEnabled = false))
+    fun defaultDesignIsPlainM3e() {
+        assertEquals(Design.PLAIN, Design.DEFAULT)
+        assertEquals(Design.PLAIN, Design.resolve(savedDesign = null, legacyGlassEnabled = null))
+        assertEquals(Design.PLAIN, Design.resolve(savedDesign = null, legacyGlassEnabled = false))
     }
 
     @Test
-    fun legacyAndExplicitDesignPreferencesArePreserved() {
-        assertEquals(Design.GLASS, Design.resolve(savedDesign = null, legacyGlassEnabled = true))
+    fun legacyRemovedDesignsFallbackToPlainAndLiquidIsPreserved() {
+        assertEquals(Design.PLAIN, Design.resolve(savedDesign = null, legacyGlassEnabled = true))
         assertEquals(Design.PLAIN, Design.resolve(savedDesign = Design.PLAIN, legacyGlassEnabled = null))
-        assertEquals(Design.FROSTED, Design.resolve(savedDesign = Design.FROSTED, legacyGlassEnabled = true))
+        assertEquals(Design.PLAIN, Design.resolve(savedDesign = "glass", legacyGlassEnabled = true))
+        assertEquals(Design.PLAIN, Design.resolve(savedDesign = "frosted", legacyGlassEnabled = true))
         assertEquals(Design.LIQUID, Design.resolve(savedDesign = Design.LIQUID, legacyGlassEnabled = null))
     }
 

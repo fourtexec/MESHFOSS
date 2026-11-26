@@ -97,14 +97,12 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
     var themeId by remember { mutableStateOf(prefs.getString("theme_id", AppTheme.DEFAULT_ID) ?: AppTheme.DEFAULT_ID) }
     var themeColors by remember { mutableStateOf(prefs.getString("theme_colors", null)) }
     var design by remember { mutableStateOf(Design.migrate(prefs)) }
-    val glass = design == Design.GLASS
     val liquid = design == Design.LIQUID
-    val frosted = design == Design.FROSTED
     val language = UiLanguage.code
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val localized = remember(context, configuration, language) { UiLanguage.context(context) }
     val dark = isSystemInDarkTheme()
-    val baseColors = remember(themeId, themeColors, dark) {
+    val colors = remember(themeId, themeColors, dark) {
         if (themeId == "dynamic") {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -116,37 +114,14 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
             AppTheme.colors(themeId, themeColors)
         }
     }
-    val colors = remember(baseColors, design) {
-        when (design) {
-            Design.GLASS -> Glass.glassify(baseColors)
-            Design.FROSTED -> Frosted.scheme(baseColors)
-            else -> baseColors
-        }
-    }
-    val glassStyle = remember(themeId, baseColors) { Glass.style(themeId, baseColors) }
-    // В стекле карточки скруглены сильнее (20dp) — крупные мягкие углы, как у пластины.
-    // В «матовом стекле» — ровные 16dp у карточек, как в Uxaoro; в «жидком стекле» —
-    // крупные концентричные скругления, как в iOS 26.
-    val shapes = remember(glass, frosted, liquid) {
+    // В «жидком стекле» — крупные концентричные скругления в духе iOS 26; в M3E — стандартные.
+    val shapes = remember(liquid) {
         Shapes(
             extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
             small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            medium = androidx.compose.foundation.shape.RoundedCornerShape(if (glass || liquid) 20.dp else 16.dp),
-            large = androidx.compose.foundation.shape.RoundedCornerShape(
-                when {
-                    glass -> 28.dp
-                    frosted -> 16.dp
-                    liquid -> 26.dp
-                    else -> 24.dp
-                }
-            ),
-            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(
-                when {
-                    frosted -> 24.dp
-                    liquid -> 34.dp
-                    else -> 32.dp
-                }
-            )
+            medium = androidx.compose.foundation.shape.RoundedCornerShape(if (liquid) 20.dp else 16.dp),
+            large = androidx.compose.foundation.shape.RoundedCornerShape(if (liquid) 26.dp else 24.dp),
+            extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(if (liquid) 34.dp else 32.dp)
         )
     }
 
@@ -172,26 +147,17 @@ fun MeshRankerTheme(content: @Composable () -> Unit) {
         LocalAppTheme provides applyTheme,
         LocalAppLanguageSetter provides applyLanguage,
         LocalDesign provides design,
-        LocalDesignSetter provides applyDesign,
-        LocalGlass provides glass,
-        LocalGlassStyle provides glassStyle
+        LocalDesignSetter provides applyDesign
     ) {
         MaterialTheme(
             colorScheme = colors,
             motionScheme = MotionScheme.expressive(),
             shapes = shapes
         ) {
-            when {
-                liquid -> LiquidBackdrop(content)
-                frosted -> FrostedBackdrop {
-                    // Фон рисует FrostedBackdrop: прозрачная Surface задаёт только цвет текста.
-                    Surface(color = androidx.compose.ui.graphics.Color.Transparent, content = content)
-                }
-                glass -> GlassBackdrop {
-                    // Фон рисует GlassBackdrop: прозрачная Surface задаёт только цвет текста.
-                    Surface(color = androidx.compose.ui.graphics.Color.Transparent, content = content)
-                }
-                else -> Surface(color = MaterialTheme.colorScheme.background, content = content)
+            if (liquid) {
+                LiquidBackdrop(content)
+            } else {
+                Surface(color = MaterialTheme.colorScheme.background, content = content)
             }
         }
     }
@@ -665,10 +631,8 @@ fun MainScaffold(
     }
 
     val design = LocalDesign.current
-    val glass = design == Design.GLASS
     val liquid = design == Design.LIQUID
-    val frosted = design == Design.FROSTED
-    val glassStyle = LocalGlassStyle.current
+    val m3eBlurBackdrop = if (!liquid) rememberM3eBlurBackdrop() else null
     // Состав панели редактируется в «Ещё». По умолчанию — четыре частых раздела;
     // панель всегда содержит не больше четырёх вкладок + «Ещё». Благодаря
     // weight(1f) в таб-барах меньшее число вкладок распределяется поровну.
@@ -711,7 +675,7 @@ fun MainScaffold(
         }
     }
     Scaffold(
-        containerColor = if (glass || liquid || frosted) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
+        containerColor = if (liquid) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         modifier = Modifier.pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
@@ -743,24 +707,11 @@ fun MainScaffold(
             }
         },
         topBar = {
-            if (frosted) {
-                FrostedTopBar(screenTitle, topActions)
-                return@Scaffold
-            }
             if (liquid) {
                 LiquidTopBar(screenTitle, topActions)
                 return@Scaffold
             }
             TopAppBar(
-                // В стекле и liquid-дизайне шапка прозрачная: под ней виден фон со свечениями.
-                colors = if (glass || liquid) {
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
-                    )
-                } else {
-                    TopAppBarDefaults.topAppBarColors()
-                },
                 title = {
                     Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
@@ -768,47 +719,20 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            if (frosted) {
-                FrostedNavBar(
-                    items = navItems.map { (key, label, iconRes) -> BarNavItem(key, label, painterResource(iconRes)) },
-                    selected = bottomSelected,
-                    onSelect = ::onBottomSelect
-                )
-                return@Scaffold
-            }
+            val barItems = navItems.map { (key, label, iconRes) -> BarNavItem(key, label, painterResource(iconRes)) }
             if (liquid) {
                 LiquidTabBar(
-                    items = navItems.map { (key, label, iconRes) -> BarNavItem(key, label, painterResource(iconRes)) },
+                    items = barItems,
                     selected = bottomSelected,
                     onSelect = ::onBottomSelect
                 )
-                return@Scaffold
-            }
-            ShortNavigationBar(
-                modifier = when {
-                    // Нижняя панель в стекле — стеклянная пластина с тонкой светлой кромкой сверху.
-                    glass -> Modifier.glassBar(glassStyle.dark)
-                    else -> Modifier
-                },
-                windowInsets = ShortNavigationBarDefaults.windowInsets,
-                containerColor = when {
-                    glass -> androidx.compose.ui.graphics.Color.White.copy(alpha = if (glassStyle.dark) 0.06f else 0.55f)
-                    else -> ShortNavigationBarDefaults.containerColor
-                }
-            ) {
-                navItems.forEach { (key, label, iconRes) ->
-                    ShortNavigationBarItem(
-                        selected = bottomSelected == key,
-                        onClick = { onBottomSelect(key) },
-                        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        icon = {
-                            Icon(
-                                painter = painterResource(iconRes),
-                                contentDescription = label
-                            )
-                        }
-                    )
-                }
+            } else {
+                M3eBlurredTabBar(
+                    items = barItems,
+                    selected = bottomSelected,
+                    onSelect = ::onBottomSelect,
+                    backdrop = m3eBlurBackdrop
+                )
             }
         },
         floatingActionButton = {
@@ -820,25 +744,11 @@ fun MainScaffold(
                     fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
             ) {
                 ExtendedFloatingActionButton(
-                    // В «матовом стекле» — «чернильная» кнопка (цвет текста на фоне) со скруглением 16dp;
-                    // в «жидком стекле» — капсула из стекла, окрашенного акцентом, как prominent-кнопки iOS.
                     modifier = if (liquid) Modifier.liquidChromeGlass(Liquid.ButtonShape, tint = MaterialTheme.colorScheme.primary, elevation = 14.dp) else Modifier,
-                    containerColor = when {
-                        frosted -> MaterialTheme.colorScheme.onBackground
-                        liquid -> Color.Transparent
-                        else -> FloatingActionButtonDefaults.containerColor
-                    },
-                    contentColor = when {
-                        frosted -> MaterialTheme.colorScheme.background
-                        liquid -> MaterialTheme.colorScheme.onBackground
-                        else -> contentColorFor(FloatingActionButtonDefaults.containerColor)
-                    },
+                    containerColor = if (liquid) Color.Transparent else FloatingActionButtonDefaults.containerColor,
+                    contentColor = if (liquid) MaterialTheme.colorScheme.onBackground else contentColorFor(FloatingActionButtonDefaults.containerColor),
                     elevation = if (liquid) FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp) else FloatingActionButtonDefaults.elevation(),
-                    shape = when {
-                        frosted -> Frosted.CardShape
-                        liquid -> Liquid.ButtonShape
-                        else -> FloatingActionButtonDefaults.extendedFabShape
-                    },
+                    shape = if (liquid) Liquid.ButtonShape else FloatingActionButtonDefaults.extendedFabShape,
                     text = { Text(Words.Meals.text) },
                     icon = {
                         Icon(
@@ -853,21 +763,17 @@ fun MainScaffold(
     ) { padding ->
         val layoutDir = LocalLayoutDirection.current
         val bottomInset = padding.calculateBottomPadding()
-        val bodyPadding = if (liquid) {
-            PaddingValues(
-                start = padding.calculateStartPadding(layoutDir),
-                top = padding.calculateTopPadding(),
-                end = padding.calculateEndPadding(layoutDir),
-                bottom = 0.dp
-            )
-        } else {
-            padding
-        }
-        CompositionLocalProvider(LocalLiquidBottomPadding provides if (liquid) bottomInset else 0.dp) {
+        val bodyPadding = PaddingValues(
+            start = padding.calculateStartPadding(layoutDir),
+            top = padding.calculateTopPadding(),
+            end = padding.calculateEndPadding(layoutDir),
+            bottom = 0.dp
+        )
+        CompositionLocalProvider(LocalLiquidBottomPadding provides bottomInset) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .liquidContentLayer()
+                    .then(if (liquid) Modifier.liquidContentLayer() else Modifier.m3eBlurSource(m3eBlurBackdrop))
                     .padding(bodyPadding)
             ) {
             val motion = MaterialTheme.motionScheme
