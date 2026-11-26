@@ -142,11 +142,21 @@ export const GradesView: React.FC<GradesViewProps> = ({
               onChange={(e) => setTargetGpa(Number(e.target.value))}
               className="w-full accent-sky-400"
             />
-            <div className={`flex justify-between font-mono text-[11px] tabular-nums ${textMuted}`}>
-              <span>3.50</span>
-              <span>4.25</span>
-              <span>4.65</span>
-              <span>4.95</span>
+            <div className={`relative h-4 font-mono text-[11px] tabular-nums ${textMuted}`}>
+              <span className="absolute left-0">3.50</span>
+              <span
+                className="absolute -translate-x-1/2"
+                style={{ left: `${((4.25 - 3.5) / (4.95 - 3.5)) * 100}%` }}
+              >
+                4.25
+              </span>
+              <span
+                className="absolute -translate-x-1/2"
+                style={{ left: `${((4.65 - 3.5) / (4.95 - 3.5)) * 100}%` }}
+              >
+                4.65
+              </span>
+              <span className="absolute right-0">4.95</span>
             </div>
           </div>
         </LiquidGlassSurface>

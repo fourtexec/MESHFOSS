@@ -30,7 +30,7 @@
 
 - **Новый движок преломления**: интегрирована библиотека
   [`Kyant0/AndroidLiquidGlass`](https://github.com/Kyant0/AndroidLiquidGlass)
-  (`io.github.kyant0:backdrop:2.0.1` и `io.github.kyant0:shapes:1.0.0`), стиль
+  (`io.github.kyant0:backdrop:2.0.1` и `io.github.kyant0:shapes:1.2.1`), стиль
   `Design.LIQUID` включён по умолчанию.
 - **Двухслойный `LayerBackdrop`**: базовый слой фона (`bgBackdrop`) питает
   карточки внутри списков, а комбинированный слой

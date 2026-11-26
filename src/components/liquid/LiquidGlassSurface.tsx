@@ -325,7 +325,7 @@ export const LiquidGlassDock: React.FC<LiquidGlassDockProps> = ({
               type="button"
               onClick={() => onSelect(item.key)}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-[24px] px-1.5 py-1.5 text-[10px] font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 sm:min-h-[46px] sm:flex-row sm:gap-2 sm:px-3.5 sm:text-xs whitespace-nowrap shrink-0 ${
+              className={`relative flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[24px] px-1.5 py-1.5 text-[10px] font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 sm:min-h-[46px] sm:flex-row sm:gap-1.5 sm:px-2.5 sm:text-xs whitespace-nowrap ${
                 active
                   ? isLight
                     ? 'text-slate-950'

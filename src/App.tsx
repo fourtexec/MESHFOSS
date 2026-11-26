@@ -379,7 +379,7 @@ export default function App() {
           </header>
 
           {/* Active Feature Screen */}
-          <main className="flex-1 pb-6 lg:pb-8">
+          <main className="flex-1 pb-24 lg:pb-8">
             {activeTab === 'schedule' && (
               <ScheduleView
                 lessons={SEED_SCHEDULE}
@@ -495,7 +495,7 @@ export default function App() {
 
       {/* Floating iOS 26 Liquid Glass Optical Lens Dock (Mobile & Tablet) */}
       <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:hidden">
-        <div className="pointer-events-auto w-full max-w-lg">
+        <div className="pointer-events-auto w-full max-w-xl">
           <LiquidGlassDock
             items={dockItems}
             activeKey={dockActiveKey}
