@@ -347,9 +347,9 @@ class CdzNativeViewModel(
     private suspend fun prefillFromPreviousAttempts(parsed: List<CdzTask>, targetAttemptId: Long) {
         val api = client ?: return
         if (attemptId != targetAttemptId) return
-        // Продолжение незавершённой попытки не трогаем: подстановка нужна
-        // только при явном старте новой попытки.
-        if (lastAttemptId == targetAttemptId.toString()) return
+        // Подстановка работает и при старте новой, и при продолжении уже
+        // начатой попытки: пустые задания заполняются из предыдущих верных
+        // ответов, а сохранённые/серверные ответы остаются как есть.
         if (attemptCount <= 0 && readLocalAttempts().isEmpty()) return
 
         val ids = linkedSetOf<Long>()

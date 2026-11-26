@@ -175,6 +175,21 @@ class CdzPrefillTest {
     }
 
     @Test
+    fun `при продолжении попытки заполняет только пустые задания`() {
+        val answered = task(1).copy(serverAnswer = answer(1))
+        val empty = task(2)
+
+        val prefilled = prefillAnswers(
+            tasks = listOf(answered, empty),
+            previous = listOf(result(task(1)), result(task(2))),
+            draft = mapOf(1L to answer(1)),
+            saved = setOf(1L),
+        )
+
+        assertEquals(setOf(2L), prefilled.keys)
+    }
+
+    @Test
     fun `не подставляет задание с изменённым вариантом ответа`() {
         val source = task(1)
         val previous = result(source)
