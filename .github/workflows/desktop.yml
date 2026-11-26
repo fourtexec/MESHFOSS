@@ -21,8 +21,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-guard:
+    name: Check release tag
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.guard.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Skip nightly when HEAD has a release tag
+        id: guard
+        run: |
+          set -eu
+          SKIP="false"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            TAG="$(git tag --points-at HEAD --list 'v*' | head -n 1 || true)"
+            if [ -n "${TAG}" ]; then
+              echo "HEAD is already tagged ${TAG}; skipping nightly build."
+              SKIP="true"
+            fi
+          fi
+          echo "skip=${SKIP}" >> "$GITHUB_OUTPUT"
+
   verify:
     name: Typecheck & Unit Tests
+    needs: release-guard
+    if: needs.release-guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,7 +150,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: npm run ${{ matrix.npm_script }}
+        run: npm run ${{ matrix.npm_script }} -- --publish never
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
@@ -157,11 +183,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Reset rolling desktop-nightly prerelease
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete desktop-nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+
       - name: Publish rolling desktop-nightly prerelease
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-nightly
+          target_commitish: ${{ github.sha }}
           name: MESHFOSS Desktop Nightly (${{ github.run_number }})
           prerelease: true
           files: release-artifacts/*
