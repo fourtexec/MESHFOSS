@@ -8,6 +8,15 @@ on:
       - 'refactor/**'
       - 'feature/**'
       - 'design/**'
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/prerelease.yml'
   workflow_dispatch:
 
 permissions:

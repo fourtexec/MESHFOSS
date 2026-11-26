@@ -1,42 +1,111 @@
-# MESHFOSS — Liquid Glass Desktop (Windows / Linux / macOS) & Android Client for МЭШ
+# MESHFOSS
 
-Free (GPLv3) client for **МЭШ** (`school.mos.ru`): schedule with live countdown, weighted grades & target GPA calculator, homework with native **ЦДЗ** solver, class ranking, attendance & turnstile passes, cafeteria meals & balance, digital **Москвёнок** QR pass, multi-account support, 11 themes, and 5 languages (`ru / en / es / fr / hu`).
+Свободный (GPLv3) Android-клиент для **МЭШ** (`school.mos.ru`): дневник,
+расписание, оценки, домашние задания, посещаемость, питание, рейтинг,
+«Москвёнок» и профиль ученика.
 
-## Authentic iOS 26 Liquid Glass
+- Платформа: Android, minSdk 24, targetSdk 37
+- Язык: Kotlin, UI — Jetpack Compose / Material 3 Expressive
+- Сеть: Retrofit + Gson, OkHttp
+- Лицензия: **GPLv3**
 
-- **Android (`app/`)**: Upgraded `MESHFOSS` to integrate [`Kyant0/AndroidLiquidGlass`](https://github.com/Kyant0/AndroidLiquidGlass) (`io.github.kyant0:backdrop:2.0.1` & `io.github.kyant0:shapes:1.0.0`), using real live `LayerBackdrop`, AGSL rounded-rect SDF refraction, 7-band spectral chromatic dispersion, Apple vibrancy, directional/ambient specular highlights, and `Design.LIQUID` enabled by default.
-- **Desktop & Web (`src/` + `desktop/`)**: Implements the exact RoundedRect SDF + `circleMap` optical refraction math from `Kyant0/AndroidLiquidGlass` and dynamic `<feDisplacementMap>` RGB chromatic dispersion from [`rdev/liquid-glass-react`](https://github.com/rdev/liquid-glass-react), paired with an interactive floating iOS 26 optical lens dock and real-time optical tuning sliders in Settings.
+## Что нового в 2.5–2.6
 
-## Desktop App (Windows, Linux, macOS)
+- Пакеты по фичам: `core`, `data`, `ui`, `feature/*`, `app`, `widget`.
+- Явный REST-контракт `MeshApiService` и DTO для Gson.
+- **Посещаемость**: пропуски по урокам и фактические входы/выходы за неделю.
+- **Три Glance-виджета**: статус урока с отсчётом, расписание и невыполненное ДЗ.
+- **Мультиаккаунтность**: у каждого аккаунта свой токен, куки и кэш; переключение в «Ещё» → «Аккаунты».
+- Экспериментальный вход по cookie JSON (например `mos_cookies.json`) — выбор файла или вставка JSON.
+- **Автономный предпросмотр**: кнопка «Предпросмотр без входа» на экране входа открывает приложение с демо-данными без сети и токена.
+- **Нативное решение ЦДЗ** — стабильная функция, включена по умолчанию: компактные inline-поля, M3E-анимации и жесты, ручное сохранение, подстановка верных ответов из прошлых попыток только в полностью совпавшие задания и предупреждение перед завершением; документация — [`docs/cdz_api.md`](docs/cdz_api.md).
+- **Анонимная аналитика 2.6**: id установки без ПИИ, все события install/update/error, отдельный heartbeat «client alive» раз в 24 часа и отфильтрованные ошибки через Retrofit + Gson; документация — [`docs/ANALYTICS.md`](docs/ANALYTICS.md).
+- Нижняя навигация: четыре частых вкладки + **«Ещё»** (посещаемость,
+  «Москвёнок», питание, настройки); состав панели редактируется в «Ещё»
+  (не больше четырёх вкладок, при меньшем числе — поровну).
+- Обновлены зависимости и сборочный стек (AGP 9.5.1, Gradle 9.9.2,
+  Kotlin 2.4.21, Compose BOM 2026.11.01).
 
-Native Electron shell in `desktop/` with:
-- **macOS**: Tahoe `under-window` vibrancy + `hiddenInset` titlebar + `.dmg` & `.zip` (`arm64` + `x64`)
-- **Windows**: Windows 11 Acrylic backdrop + NSIS installer & Portable `.exe` (`x64` + `arm64`)
-- **Linux**: Translucent compositor + `.AppImage`, `.deb`, and `.rpm` (`x64` + `arm64`)
-- CORS-free МЭШ HTTP proxy in Electron main process, OS-encrypted session storage (`safeStorage`), native `mos_cookies.json` file import, and system tray.
+### Liquid Glass (`Kyant0/AndroidLiquidGlass`)
 
-### Local Commands
+- **Новый движок преломления**: интегрирована библиотека
+  [`Kyant0/AndroidLiquidGlass`](https://github.com/Kyant0/AndroidLiquidGlass)
+  (`io.github.kyant0:backdrop:2.0.1` и `io.github.kyant0:shapes:1.0.0`), стиль
+  `Design.LIQUID` включён по умолчанию.
+- **Двухслойный `LayerBackdrop`**: базовый слой фона (`bgBackdrop`) питает
+  карточки внутри списков, а комбинированный слой
+  (`rememberCombinedBackdrop(bgBackdrop, contentBackdrop)`) передаёт живой
+  прокручиваемый контент под плавающий таб-бар, капсулу действий в шапке и FAB.
+- **Нативная линза и оптика iOS 26**: таб-бар и скользящая линза используют
+  `Capsule()` и `drawBackdrop` с `vibrancy()`, `blur()`, AGSL-преломлением
+  `lens` с хроматической дисперсией (Android 13+, с безопасным fallback на
+  ранних версиях), направленным бликом `Highlight.Default` и внутренними тенями.
+- **Инварианты сохранены**: иконки не увеличиваются при нажатии и
+  перетаскивании — двигается только стекло; линза следует за пальцем,
+  замедляется у центров вкладок и выбирает ближайшую левую вкладку при
+  движении справа налево.
 
-```bash
-# Run web preview / dev server (http://localhost:3000)
-npm install
-npm run dev
+## Вход
 
-# Run core & optical refraction unit tests
-npm test
+Видимый способ входа — **QR-код** (а также кнопка автономного предпросмотра без
+аккаунта). Дополнительно за красной экспериментальной кнопкой доступны
+**явное окно WebView** `school.mos.ru` и ручной ввод токена. Это видимый
+пользователю интерактивный вход, а не фоновый WebView и не способ делать
+API-запросы. Поддерживается только МЭШ / `school.mos.ru`.
 
-# Build & package Desktop app for current OS
-npm run desktop:build
+## Возможности
 
-# Build Android APK (JDK 17 + Android SDK 37.1)
-./gradlew assembleRelease
-```
+- Расписание, ДЗ с отметкой «выполнено», оценки и итоговые за учебный год.
+- **ЦДЗ** (цифровые домашние задания): статус и баллы из LRS, описание и
+  издатель материала, запуск одноразовой ссылкой в нативном решателе
+  (по умолчанию) или в браузере, кнопка «Результат», предупреждение о таймере
+  «Облака Знаний». Протокол — [`docs/cdz_api.md`](docs/cdz_api.md).
+- Рейтинг класса, профиль ученика и родителя.
+- Питание: меню, баланс, предзаказы.
+- Посещаемость: пропуски и проходы.
+- «Москвёнок»: карта и QR.
+- Темы, язык (ru/en/hu/es/fr), проверка обновлений.
+- Автообновление токена МЭШ в фоне.
 
-## GitHub Actions CI/CD
+## Документация
 
-- `.github/workflows/desktop.yml` — Matrix build for **Windows**, **Linux**, and **macOS** installers, publishing to GitHub Releases on `v*` tags and rolling `desktop-nightly` prereleases on `main`.
-- `.github/workflows/android.yml` — Runs Kotlin JVM tests and builds signed Android release APKs.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — пакеты, слои, поток данных.
+- [`docs/API.md`](docs/API.md) — endpoint'ы, заголовки, ошибки, DTO посещаемости.
+- [`docs/ANALYTICS.md`](docs/ANALYTICS.md) — события, поля, фильтрация, очередь и UUID.
+- [`AGENTS.md`](AGENTS.md) — обязательные правила: Retrofit + Gson, приватность, релизы.
+- [`docs/P0_FOLLOWUP.md`](docs/P0_FOLLOWUP.md) — что осталось на отдельную
+  ветку `refactor/p0-followup`.
 
-## License
+## Веб-версия и Desktop
 
-GPLv3 — see `LICENSE`.
+**MESHFOSS Web** — [meshfoss.fourtexec.site](https://meshfoss.fourtexec.site),
+исходники в репозитории [`photonest444/meshfossweb`](https://github.com/photonest444/meshfossweb).
+Desktop-оболочка (Electron для Windows, Linux и macOS с тем же Liquid Glass)
+находится в `src/` и `desktop/`.
+
+## Сборка
+
+Сборка и публикация идут через GitHub Actions (Android и Desktop запускаются
+только при изменении своих файлов или при теге `v*`):
+
+- **тег `v*`** — релиз; суффиксы `alpha`/`beta`/`rc` помечаются как prerelease;
+- **push в main** — скользящие prerelease `nightly` и `desktop-nightly`;
+- **ветки и PR** — только сборка, без публикации.
+- Если коммит в `main` уже имеет релизный тег `v*`, nightly для него не
+  собирается: остаётся только запуск стабильного релиза по тегу.
+
+Текущая сборка: `2.6.0`.
+
+Локально: `./gradlew assembleDebug` (нужны Android SDK 37 и JDK 17).
+
+## Лицензия
+
+GPLv3. См. файл `LICENSE`.
+
+## Использовано из OctoDiary-kt
+
+Идея виджета-статуса подсмотрена в `~/octodiary-kt` (`widget/StatusWidget.kt`):
+показывать текущее/следующее событие и обратный отсчёт до него, а не просто
+счётчики. Оттуда же взят приём с нативным `Chronometer` через `AndroidRemoteViews`,
+чтобы отсчёт тикал без опроса сети. Код, API и модели данных MESHFOSS свои;
+ничего из OctoDiary в проект не скопировано.

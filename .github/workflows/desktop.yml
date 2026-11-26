@@ -9,8 +9,28 @@ on:
   push:
     branches: [main, 'desktop/**']
     tags: ['v*']
+    paths:
+      - 'desktop/**'
+      - 'src/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'server.ts'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - '.github/workflows/desktop.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'src/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'server.ts'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
 permissions:
