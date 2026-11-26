@@ -132,6 +132,8 @@ dependencies {
     implementation(libs.zxing)
     implementation(libs.haze)
     implementation(libs.haze.blur)
+    implementation(libs.kyant.backdrop)
+    implementation(libs.kyant.shapes)
 
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)

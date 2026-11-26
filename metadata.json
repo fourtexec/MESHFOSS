@@ -1,0 +1,6 @@
+{
+  "name": "MESHFOSS — Liquid Glass Desktop & Android Client for MЭШ",
+  "description": "Free GPLv3 MЭШ (school.mos.ru) client featuring authentic iOS 26 Liquid Glass refraction, full schedule, grades, homework, native CDZ solver, Moskvenok pass, and cross-platform Windows/Linux/macOS desktop builds.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

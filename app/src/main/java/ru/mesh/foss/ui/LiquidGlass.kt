@@ -99,6 +99,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
 
 /**
  * «Жидкое стекло» ([Design.LIQUID]) в духе iOS 26 Liquid Glass.
@@ -144,26 +155,25 @@ private class GlassLight {
 private val LocalGlassLight = staticCompositionLocalOf<GlassLight?> { null }
 
 /**
- * Фон «жидкого стекла», записанный в слой. Стеклянные панели рисуют свой кусок
- * этого слоя через шейдер преломления ([LiquidShader]) — так стекло по-настоящему
- * искажает то, что под ним.
+ * Настоящий живой слой преломления из Kyant0/AndroidLiquidGlass (`io.github.kyant0:backdrop`).
+ * Записывает фон и живой контент под стеклянными панелями, чтобы каждая панель и линза
+ * выполняла реальное AGSL-преломление с 7-полосной хроматической дисперсией и vibrancy как в iOS 26.
  */
-private class LiquidBackdropSource {
-    /** Положение фона в окне. */
-    var origin by mutableStateOf(Offset.Zero)
+internal val LocalKyantBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 
-    /** Фон в половинном разрешении (пятна и так размыты) — то, что преломляют панели. */
+private class LiquidBackdropSource {
+    var origin by mutableStateOf(Offset.Zero)
     var image by mutableStateOf<ImageBitmap?>(null)
 }
 
-/** Во сколько раз фон для преломления меньше экрана. */
 private const val BackdropScale = 2
 
 private val LocalLiquidBackdrop = staticCompositionLocalOf<LiquidBackdropSource?> { null }
 
 /**
- * Подложка «жидкого стекла»: насыщенные, сильно размытые пятна цветов темы —
- * стеклу нужно, что преломлять, — и свет, следящий за касанием.
+ * Подложка «жидкого стекла» на базе Kyant0/AndroidLiquidGlass:
+ * захватывает живой фон в [LayerBackdrop], чтобы верхняя панель, нижний таббар,
+ * плавающие кнопки и карточки по-настоящему преломляли всё, что находится под ними.
  */
 @Composable
 fun LiquidBackdrop(content: @Composable () -> Unit) {
@@ -176,6 +186,10 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
     val mid = lerp(primary, tertiary, 0.5f)
     val k = if (dark) 1f else 0.6f
     val source = remember { LiquidBackdropSource() }
+    val kyantBackdrop = rememberLayerBackdrop {
+        drawRect(base)
+        drawContent()
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -194,41 +208,42 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
     ) {
         Box(
             Modifier
-            .fillMaxSize()
-            .onGloballyPositioned { source.origin = it.positionInRoot() }
-            .drawWithCache {
-                val w = size.width
-                val h = size.height
-                val r = size.maxDimension
-                fun blob(color: Color, alpha: Float, cx: Float, cy: Float, radius: Float) = Brush.radialGradient(
-                    0f to color.copy(alpha = alpha * k),
-                    0.45f to color.copy(alpha = alpha * k * 0.45f),
-                    1f to Color.Transparent,
-                    center = Offset(cx, cy),
-                    radius = radius
-                )
-                val a = blob(primary, 0.42f, w * 0.08f, h * 0.10f, r * 0.62f)
-                val b = blob(mid, 0.26f, w * 1.0f, h * 0.42f, r * 0.50f)
-                val c = blob(tertiary, 0.30f, w * 0.18f, h * 0.92f, r * 0.58f)
-                // Фон рисуется в картинку: его же, преломлённым, рисуют стеклянные панели.
-                val iw = (w / BackdropScale).toInt().coerceAtLeast(1)
-                val ih = (h / BackdropScale).toInt().coerceAtLeast(1)
-                val image = ImageBitmap(iw, ih)
-                CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(image), Size(iw.toFloat(), ih.toFloat())) {
-                    scale(1f / BackdropScale, 1f / BackdropScale, pivot = Offset.Zero) {
-                        drawRect(base, size = Size(w, h))
-                        drawRect(a, size = Size(w, h))
-                        drawRect(b, size = Size(w, h))
-                        drawRect(c, size = Size(w, h))
+                .fillMaxSize()
+                .layerBackdrop(kyantBackdrop)
+                .onGloballyPositioned { source.origin = it.positionInRoot() }
+                .drawWithCache {
+                    val w = size.width
+                    val h = size.height
+                    val r = size.maxDimension
+                    fun blob(color: Color, alpha: Float, cx: Float, cy: Float, radius: Float) = Brush.radialGradient(
+                        0f to color.copy(alpha = alpha * k),
+                        0.45f to color.copy(alpha = alpha * k * 0.45f),
+                        1f to Color.Transparent,
+                        center = Offset(cx, cy),
+                        radius = radius
+                    )
+                    val a = blob(primary, 0.45f, w * 0.08f, h * 0.10f, r * 0.62f)
+                    val b = blob(mid, 0.30f, w * 1.0f, h * 0.42f, r * 0.52f)
+                    val c = blob(tertiary, 0.34f, w * 0.18f, h * 0.92f, r * 0.58f)
+                    val iw = (w / BackdropScale).toInt().coerceAtLeast(1)
+                    val ih = (h / BackdropScale).toInt().coerceAtLeast(1)
+                    val image = ImageBitmap(iw, ih)
+                    CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(image), Size(iw.toFloat(), ih.toFloat())) {
+                        scale(1f / BackdropScale, 1f / BackdropScale, pivot = Offset.Zero) {
+                            drawRect(base, size = Size(w, h))
+                            drawRect(a, size = Size(w, h))
+                            drawRect(b, size = Size(w, h))
+                            drawRect(c, size = Size(w, h))
+                        }
+                    }
+                    source.image = image
+                    onDrawBehind {
+                        drawImage(image, dstSize = IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.Low)
                     }
                 }
-                source.image = image
-                onDrawBehind {
-                    drawImage(image, dstSize = IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.Low)
-                }
-            }
         )
         CompositionLocalProvider(
+            LocalKyantBackdrop provides kyantBackdrop,
             LocalLiquidBackdrop provides source,
             LocalGlassLight provides lightSource,
             LocalContentColor provides scheme.onBackground,
@@ -237,11 +252,6 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
     }
 }
 
-/**
- * Мягкая тень, нарисованная только снаружи [shape]. Обычная тень Compose
- * просвечивала бы сквозь прозрачное стекло и мутила его. До Android 9 аппаратное
- * ускорение не рисует такие тени — там их просто нет.
- */
 fun Modifier.outerShadow(shape: Shape, color: Color, blur: Dp, offsetY: Dp): Modifier = drawWithCache {
     val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
     val paint = Paint().nativePaint.apply {
@@ -256,20 +266,8 @@ fun Modifier.outerShadow(shape: Shape, color: Color, blur: Dp, offsetY: Dp): Mod
     }
 }
 
-/* Оптика стекла — по мотивам «Glass Lens» (DesignBookmark): стекло читается
- * не по обводке, а по тому, как оно ведёт себя со светом — тёмная полоса
- * преломления у края толстого стекла, тонкий яркий ободок, мягкое отражение окна
- * сверху слева, искорка снизу справа и лёгкая цветная кайма у самой кромки. */
-
-/** Цвет полосы преломления: край толстого стекла чуть темнее. */
 private val RefractionInk = Color(0xFF0A141E)
 
-/**
- * Цветная кайма (дисперсия) по кругу: тёплая с одной стороны, холодная с
- * другой. В CSS — `conic-gradient(from 200deg, …)`: отсчёт от «12 часов». У
- * sweepGradient отсчёт от «3 часов», поэтому стопы сдвинуты на 110°. Двигаем
- * именно стопы, а не поворачиваем рисунок, — иначе повернулась бы и сама фигура.
- */
 private val FringeStops: Array<Pair<Float, Color>> = run {
     val css = listOf(
         0f to Color(0x00FF5050),
@@ -282,7 +280,6 @@ private val FringeStops: Array<Pair<Float, Color>> = run {
     )
     val shift = 110f / 360f
     val moved = css.dropLast(1).map { (f, c) -> ((f + shift) % 1f) to c }.sortedBy { it.first }
-    // Цвет на стыке 0/1: между последним и первым стопом после сдвига.
     val last = moved.last()
     val first = moved.first()
     val gap = 1f - last.first + first.first
@@ -291,11 +288,6 @@ private val FringeStops: Array<Pair<Float, Color>> = run {
     (listOf(0f to seam) + moved + listOf(1f to seam)).toTypedArray()
 }
 
-/**
- * Эллиптический радиальный градиент с центром ([cx], [cy]) и полуосями [rx], [ry]
- * — аналог CSS `radial-gradient(rx ry at cx cy)`. Рисует прямоугольник,
- * описанный вокруг эллипса.
- */
 private fun DrawScope.ellipseGradient(
     cx: Float,
     cy: Float,
@@ -316,11 +308,6 @@ private fun DrawScope.ellipseGradient(
     }
 }
 
-/**
- * Мягкое отражение окна сверху слева и (для [spark]) маленькая искорка снизу
- * справа. Рецепт рассчитан на круглую линзу, поэтому на широких панелях ширина
- * блика ограничена высотой — иначе он вытягивался бы в полосу.
- */
 private fun DrawScope.drawSpecular(strength: Float, spark: Boolean) {
     val w = size.width
     val h = size.height
@@ -340,18 +327,13 @@ private fun DrawScope.drawSpecular(strength: Float, spark: Boolean) {
     }
 }
 
-/** Кисть цветной каймы: конический градиент, повёрнутый как `from 200deg` в CSS. */
 private fun DrawScope.fringeBrush(): Brush = Brush.sweepGradient(*FringeStops, center = center)
 
 /**
- * Материал «жидкого стекла». [tint] слегка окрашивает стекло (выделение,
- * акцентная кнопка); без него стекло нейтральное. [elevation] — размер мягкой
- * внешней тени, 0 — без тени.
- *
- * На Android 13+ стекло по-настоящему преломляет фон под собой шейдером Liquid
- * Glass Studio ([LiquidShader]): искажение у края, дисперсия, френель и блик.
- * [refract] = false — без преломления (например, в диалоге: он живёт в другом
- * окне, и слой фона туда не дотянуть). На старых версиях — прежняя отрисовка.
+ * Материал «жидкого стекла» в точности как в iOS 26 (на базе Kyant0/AndroidLiquidGlass).
+ * На Android 13+ использует `drawBackdrop` с физическим AGSL-шейдером преломления,
+ * 7-полосной хроматической дисперсией, vibrancy, направленным бликом [Highlight]
+ * и мягкими внутренними/внешними тенями.
  */
 @Composable
 fun Modifier.liquidGlass(
@@ -362,6 +344,53 @@ fun Modifier.liquidGlass(
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
+    val kyantBackdrop = LocalKyantBackdrop.current
+    val surfaceTint = if (dark) Color(0xFF141824).copy(alpha = 0.34f) else Color(0xFFFAFAFA).copy(alpha = 0.46f)
+    val accentTint = if (tint != Color.Unspecified) tint else Color.Unspecified
+
+    if (refract && kyantBackdrop != null && !LiquidPreview.enabled) {
+        return this.drawBackdrop(
+            backdrop = kyantBackdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(if (dark) 5f.dp.toPx() else 3.5f.dp.toPx())
+                lens(
+                    refractionHeight = 14f.dp.toPx(),
+                    refractionAmount = 28f.dp.toPx(),
+                    depthEffect = true,
+                    chromaticAberration = true
+                )
+            },
+            highlight = {
+                if (dark) Highlight.Ambient else Highlight.Default
+            },
+            innerShadow = {
+                InnerShadow(
+                    radius = 8.dp,
+                    alpha = if (dark) 0.16f else 0.08f
+                )
+            },
+            shadow = {
+                if (elevation > 0.dp) {
+                    Shadow(
+                        radius = elevation * 1.4f,
+                        color = Color.Black.copy(alpha = if (dark) 0.32f else 0.12f)
+                    )
+                } else {
+                    null
+                }
+            },
+            onDrawSurface = {
+                drawRect(surfaceTint)
+                if (accentTint != Color.Unspecified) {
+                    drawRect(accentTint, blendMode = BlendMode.Hue)
+                    drawRect(accentTint.copy(alpha = 0.24f))
+                }
+            }
+        )
+    }
+
     val clear = if (dark) lerp(scheme.surface, Color.White, 0.10f).copy(alpha = 0.42f) else Color.White.copy(alpha = 0.55f)
     val tintFill = if (tint != Color.Unspecified) tint.copy(alpha = tint.alpha * 0.55f) else Color.Transparent
     val rimTop = Color.White.copy(alpha = if (dark) 0.50f else 0.95f)
@@ -373,7 +402,6 @@ fun Modifier.liquidGlass(
     var origin by remember { mutableStateOf(Offset.Zero) }
     val backdrop = LocalLiquidBackdrop.current
     val refractive = refract && backdrop != null && LiquidShader.available
-    // Заливка стекла для шейдера: оттенок поверх прозрачной основы; альфа — доля заливки.
     val glassTint = tintFill.compositeOver(clear)
     val base = if (elevation > 0.dp) outerShadow(shape, shadow, elevation * 1.6f, elevation * 0.45f) else this
     return base
@@ -395,9 +423,6 @@ fun Modifier.liquidGlass(
                 Offset.Zero,
                 glintRadius
             )
-            // Обводки рисуются по контуру и наполовину обрезаются формой, поэтому
-            // ширина вдвое больше видимой. Полоса преломления — несколько слоёв:
-            // темнее всего у края, к середине плавно сходит на нет.
             val refraction = (if (dark) listOf(20.dp to 0.025f, 12.dp to 0.04f, 6.dp to 0.05f)
                 else listOf(14.dp to 0.010f, 8.dp to 0.016f, 4.dp to 0.022f)).map { (w, a) ->
                 Stroke(width = w.toPx()) to RefractionInk.copy(alpha = a)
@@ -409,7 +434,6 @@ fun Modifier.liquidGlass(
             onDrawWithContent {
                 val image = backdrop?.image
                 if (refractive && image != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    // Под стеклом — кусок фона: BitmapShader в координатах панели.
                     val under = android.graphics.BitmapShader(
                         image.asAndroidBitmap(),
                         android.graphics.Shader.TileMode.CLAMP,
@@ -442,14 +466,7 @@ fun Modifier.liquidGlass(
         }
 }
 
-/** Стекло панелей: тоньше и спокойнее линзы — под ним плавный фон, а не иконки. */
 private val PanelParams = LiquidShader.Params(thickness = 14f, offsetDp = 10f, dispersion = 5f)
-
-/**
- * Линза: та же форма угла, что у панели (обычная дуга, n = 2), и концентричный
- * радиус ([Liquid.LensRadius] = радиус панели − отступ) — линза повторяет контур
- * панели с ровным зазором, в том числе в углах. Толстое стекло, сильное преломление.
- */
 private val LensParams = LiquidShader.Params(roundness = 2f, thickness = 18f, offsetDp = 14f, dispersion = 5f, fresnelFactor = 0.25f)
 
 /**

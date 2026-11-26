@@ -61,7 +61,7 @@ object Design {
     const val GLASS = "glass"
     const val LIQUID = "liquid"
     const val FROSTED = "frosted"
-    const val DEFAULT = PLAIN
+    const val DEFAULT = LIQUID
 
     /** Старый ключ переключателя стеклянного стиля (PR #4) — только для миграции. */
     const val LEGACY_GLASS_KEY = "glass_enabled"

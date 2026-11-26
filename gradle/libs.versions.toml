@@ -14,6 +14,8 @@ activityCompose = "1.13.0"
 lifecycle = "2.11.1"
 zxing = "3.5.4"
 haze = "2.1.0"
+kyantBackdrop = "2.0.1"
+kyantShapes = "1.0.0"
 retrofit = "3.0.0"
 gson = "2.15.0"
 okhttp = "5.5.1"
@@ -48,6 +50,10 @@ zxing = { module = "com.google.zxing:core", version.ref = "zxing" }
 # Настоящее backdrop-размытие для «матового стекла» (blur того, что под панелью).
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
+
+# Настоящий iOS 26 Liquid Glass (Kyant0/AndroidLiquidGlass): LayerBackdrop, 7-полосная дисперсия, lens, vibrancy, highlight.
+kyant-backdrop = { module = "io.github.kyant0:backdrop", version.ref = "kyantBackdrop" }
+kyant-shapes = { module = "io.github.kyant0:shapes", version.ref = "kyantShapes" }
 # Glance: домашний виджет без Compose/Activity.
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }

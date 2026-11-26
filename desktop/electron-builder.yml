@@ -1,0 +1,68 @@
+appId: ru.mesh.foss.desktop
+productName: MESHFOSS
+copyright: Copyright © 2026 MESHFOSS Contributors (GPL-3.0)
+asar: true
+compression: maximum
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - main.cjs
+  - preload.cjs
+  - renderer/**/*
+  - package.json
+
+extraMetadata:
+  main: main.cjs
+
+mac:
+  category: public.app-category.education
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  darkModeSupport: true
+  artifactName: MESHFOSS-${version}-mac-${arch}.${ext}
+
+dmg:
+  backgroundColor: "#0B0F1A"
+  window:
+    width: 540
+    height: 380
+
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64]
+  artifactName: MESHFOSS-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MESHFOSS
+
+linux:
+  category: Education
+  maintainer: MESHFOSS Contributors <dev@meshfoss.org>
+  synopsis: Free GPLv3 client for МЭШ (school.mos.ru) with Liquid Glass UI
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: rpm
+      arch: [x64]
+  artifactName: MESHFOSS-${version}-linux-${arch}.${ext}
+
+publish:
+  provider: github
+  releaseType: release
