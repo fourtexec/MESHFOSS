@@ -604,13 +604,13 @@ fun QrLoginPanel(
             Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(16.dp))
-        Button(
+        GlassButton(
             onClick = {
                 val value = link
                 if (value != null) openLinkNow(value) else start()
             },
             enabled = !restoring && !loading && (!running || link != null),
-            shape = MaterialTheme.shapes.extraLarge,
+            shape = if (LocalDesign.current == Design.LIQUID) Liquid.ButtonShape else MaterialTheme.shapes.extraLarge,
             contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
         ) {
@@ -703,14 +703,14 @@ fun QrLoginPanel(
             )
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                GlassButton(
                     onClick = { emailDeferred.value?.complete(emailInput) },
                     enabled = emailInput.isNotBlank(),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(Words.Confirm.text)
                 }
-                OutlinedButton(
+                GlassOutlinedButton(
                     onClick = { emailDeferred.value?.complete(null) },
                     modifier = Modifier.weight(1f)
                 ) {

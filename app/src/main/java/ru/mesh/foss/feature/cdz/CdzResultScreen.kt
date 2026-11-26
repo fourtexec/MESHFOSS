@@ -7,7 +7,11 @@ package ru.mesh.foss.feature.cdz
 
 import ru.mesh.foss.core.MeshCdz
 import ru.mesh.foss.core.Words
+import ru.mesh.foss.ui.Design
+import ru.mesh.foss.ui.GlassButton
 import ru.mesh.foss.ui.GlassCard
+import ru.mesh.foss.ui.LiquidTopBar
+import ru.mesh.foss.ui.LocalDesign
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -53,17 +57,29 @@ fun CdzResultScreen(
 ) {
     BackHandler(onBack = onClose)
 
+    val liquid = LocalDesign.current == Design.LIQUID
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (LocalDesign.current == Design.PLAIN) MaterialTheme.colorScheme.background else androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = { Text(Words.CdzResult.text) },
-                navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
+            if (liquid) {
+                LiquidTopBar(
+                    title = Words.CdzResult.text,
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
+                        }
                     }
-                },
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(Words.CdzResult.text) },
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         Box(
@@ -132,7 +148,7 @@ private fun ResultError(
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text(Words.Retry.text) }
+        GlassButton(onClick = onRetry) { Text(Words.Retry.text) }
     }
 }
 

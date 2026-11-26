@@ -7,6 +7,9 @@ package ru.mesh.foss.feature.cdz
 
 import ru.mesh.foss.R
 import ru.mesh.foss.core.Words
+import ru.mesh.foss.ui.Design
+import ru.mesh.foss.ui.LiquidTopBar
+import ru.mesh.foss.ui.LocalDesign
 
 import android.content.Context
 import android.content.Intent
@@ -55,27 +58,49 @@ fun CdzVideoScreen(
     }
     val heading = title?.takeIf { it.isNotBlank() } ?: Words.CdzWatch.text
 
+    val liquid = LocalDesign.current == Design.LIQUID
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (LocalDesign.current == Design.PLAIN) MaterialTheme.colorScheme.background else androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = { Text(heading) },
-                navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
-                    }
-                },
-                actions = {
-                    if (!browserUrl.isNullOrBlank()) {
-                        IconButton(onClick = { openInBrowser(context, browserUrl) }) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_browser),
-                                contentDescription = Words.CdzBrowser.text,
-                            )
+            if (liquid) {
+                LiquidTopBar(
+                    title = heading,
+                    actions = {
+                        if (!browserUrl.isNullOrBlank()) {
+                            IconButton(onClick = { openInBrowser(context, browserUrl) }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_browser),
+                                    contentDescription = Words.CdzBrowser.text,
+                                )
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
                         }
                     }
-                },
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(heading) },
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
+                        }
+                    },
+                    actions = {
+                        if (!browserUrl.isNullOrBlank()) {
+                            IconButton(onClick = { openInBrowser(context, browserUrl) }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_browser),
+                                    contentDescription = Words.CdzBrowser.text,
+                                )
+                            }
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         Column(

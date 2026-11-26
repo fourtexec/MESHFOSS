@@ -132,23 +132,34 @@ fun RankingScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (isGeneral) {
-            // M3E: период — connected-переключатель, выделение меняет форму и цвет.
-            ButtonGroup(
-                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                toggleableItem(
-                    checked = period == "year",
-                    label = Words.Year.text,
-                    onCheckedChange = { period = "year" },
-                    weight = 1f
+            if (LocalDesign.current == Design.LIQUID) {
+                LiquidSegmentedTabs(
+                    options = listOf(
+                        "year" to Words.Year.text,
+                        "month" to Words.Month.text
+                    ),
+                    selected = period,
+                    onSelect = { period = it }
                 )
-                toggleableItem(
-                    checked = period == "month",
-                    label = Words.Month.text,
-                    onCheckedChange = { period = "month" },
-                    weight = 1f
-                )
+            } else {
+                // M3E: период — connected-переключатель, выделение меняет форму и цвет.
+                ButtonGroup(
+                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    toggleableItem(
+                        checked = period == "year",
+                        label = Words.Year.text,
+                        onCheckedChange = { period = "year" },
+                        weight = 1f
+                    )
+                    toggleableItem(
+                        checked = period == "month",
+                        label = Words.Month.text,
+                        onCheckedChange = { period = "month" },
+                        weight = 1f
+                    )
+                }
             }
             Spacer(Modifier.height(6.dp))
         }
@@ -180,7 +191,7 @@ fun RankingScreen(
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             item {
-                FilterChip(
+                GlassFilterChip(
                     selected = selectedSubject == "all",
                     onClick = { onSubjectChange(null) },
                     label = { Text(Words.Overall.text, maxLines = 1) }
@@ -192,7 +203,7 @@ fun RankingScreen(
                     !s.isNull("average") -> s.optDouble("average")
                     else -> null
                 }
-                FilterChip(
+                GlassFilterChip(
                     selected = selectedSubject == s.optString("id"),
                     onClick = { onSubjectChange(s.optString("id").takeIf { it.isNotBlank() }) },
                     label = {
@@ -223,7 +234,7 @@ fun RankingScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load(monthlyMode, force = true) }) { Text(Words.Retry.text) }
+                    GlassButton(onClick = { load(monthlyMode, force = true) }) { Text(Words.Retry.text) }
                 }
             }
             else -> {

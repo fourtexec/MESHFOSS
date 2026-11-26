@@ -201,86 +201,99 @@ fun MarksScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (subjectId == null) {
-            // M3E: connected-группа переключателей — выделенный сегмент меняет и форму, и цвет.
-            // customItem вместо toggleableItem: подпись измеряется один раз в покое и
-            // фиксируется через requiredWidth. Иначе анимация enlarge-on-press при нажатии
-            // сжимает соседние сегменты, текст переносится на лишнюю строку и всё дёргается.
-            ButtonGroup(
-                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                customItem(
-                    buttonGroupContent = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        ToggleButton(
-                            checked = mode == "date",
-                            onCheckedChange = { mode = "date" },
-                            interactionSource = interactionSource,
-                            modifier = Modifier
-                                .animateWidth(interactionSource)
-                                .weight(1f)
-                        ) {
-                            StableGroupLabel(Words.ByDate.text)
-                        }
-                    },
-                    menuContent = { state ->
-                        DropdownMenuItem(
-                            text = { Text(Words.ByDate.text) },
-                            onClick = {
-                                mode = "date"
-                                state.dismiss()
-                            }
-                        )
-                    }
+            if (LocalDesign.current == Design.LIQUID) {
+                LiquidSegmentedTabs(
+                    options = listOf(
+                        "date" to Words.ByDate.text,
+                        "subject" to Words.BySubject.text,
+                        "final" to Words.FinalGrades.text
+                    ),
+                    selected = mode,
+                    onSelect = { mode = it },
+                    modifier = Modifier.fillMaxWidth()
                 )
-                customItem(
-                    buttonGroupContent = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        ToggleButton(
-                            checked = mode == "subject",
-                            onCheckedChange = { mode = "subject" },
-                            interactionSource = interactionSource,
-                            modifier = Modifier
-                                .animateWidth(interactionSource)
-                                .weight(1f)
-                        ) {
-                            StableGroupLabel(Words.BySubject.text)
-                        }
-                    },
-                    menuContent = { state ->
-                        DropdownMenuItem(
-                            text = { Text(Words.BySubject.text) },
-                            onClick = {
-                                mode = "subject"
-                                state.dismiss()
+            } else {
+                // M3E: connected-группа переключателей — выделенный сегмент меняет и форму, и цвет.
+                // customItem вместо toggleableItem: подпись измеряется один раз в покое и
+                // фиксируется через requiredWidth. Иначе анимация enlarge-on-press при нажатии
+                // сжимает соседние сегменты, текст переносится на лишнюю строку и всё дёргается.
+                ButtonGroup(
+                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    customItem(
+                        buttonGroupContent = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            ToggleButton(
+                                checked = mode == "date",
+                                onCheckedChange = { mode = "date" },
+                                interactionSource = interactionSource,
+                                modifier = Modifier
+                                    .animateWidth(interactionSource)
+                                    .weight(1f)
+                            ) {
+                                StableGroupLabel(Words.ByDate.text)
                             }
-                        )
-                    }
-                )
-                customItem(
-                    buttonGroupContent = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        ToggleButton(
-                            checked = mode == "final",
-                            onCheckedChange = { mode = "final" },
-                            interactionSource = interactionSource,
-                            modifier = Modifier
-                                .animateWidth(interactionSource)
-                                .weight(1f)
-                        ) {
-                            StableGroupLabel(Words.FinalGrades.text)
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(Words.ByDate.text) },
+                                onClick = {
+                                    mode = "date"
+                                    state.dismiss()
+                                }
+                            )
                         }
-                    },
-                    menuContent = { state ->
-                        DropdownMenuItem(
-                            text = { Text(Words.FinalGrades.text) },
-                            onClick = {
-                                mode = "final"
-                                state.dismiss()
+                    )
+                    customItem(
+                        buttonGroupContent = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            ToggleButton(
+                                checked = mode == "subject",
+                                onCheckedChange = { mode = "subject" },
+                                interactionSource = interactionSource,
+                                modifier = Modifier
+                                    .animateWidth(interactionSource)
+                                    .weight(1f)
+                            ) {
+                                StableGroupLabel(Words.BySubject.text)
                             }
-                        )
-                    }
-                )
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(Words.BySubject.text) },
+                                onClick = {
+                                    mode = "subject"
+                                    state.dismiss()
+                                }
+                            )
+                        }
+                    )
+                    customItem(
+                        buttonGroupContent = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            ToggleButton(
+                                checked = mode == "final",
+                                onCheckedChange = { mode = "final" },
+                                interactionSource = interactionSource,
+                                modifier = Modifier
+                                    .animateWidth(interactionSource)
+                                    .weight(1f)
+                            ) {
+                                StableGroupLabel(Words.FinalGrades.text)
+                            }
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(Words.FinalGrades.text) },
+                                onClick = {
+                                    mode = "final"
+                                    state.dismiss()
+                                }
+                            )
+                        }
+                    )
+                }
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -310,7 +323,7 @@ fun MarksScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { retryKey++ }) { Text(Words.Retry.text) }
+                    GlassButton(onClick = { retryKey++ }) { Text(Words.Retry.text) }
                 }
             }
             subjectId != null -> {
@@ -702,7 +715,7 @@ private fun FinalMarksSection(
                 )
             }
             Box {
-                OutlinedButton(onClick = { menuOpen = true }, enabled = years.isNotEmpty()) {
+                GlassOutlinedButton(onClick = { menuOpen = true }, enabled = years.isNotEmpty()) {
                     Text(
                         selectedYear?.optString("name")?.takeIf { it.isNotBlank() } ?: Words.SchoolYear.text,
                         maxLines = 1

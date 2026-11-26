@@ -8,12 +8,26 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -39,6 +53,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -354,16 +369,225 @@ fun Modifier.selectionPane(shape: Shape, tint: Color): Modifier = when (LocalDes
  * — просто непрозрачный фон (диалоги задают прозрачный containerColor).
  */
 @Composable
-internal fun Modifier.dialogGlass(): Modifier {
-    val shape = MaterialTheme.shapes.extraLarge
+internal fun Modifier.dialogGlass(shape: Shape = MaterialTheme.shapes.extraLarge): Modifier {
     val solid = background(MaterialTheme.colorScheme.surface.copy(alpha = 1f), shape)
     return when (LocalDesign.current) {
-        // Диалог над затемнением: под стеклом — непрозрачная поверхность, текст не просвечивает.
-        Design.LIQUID -> solid.liquidGlass(shape, elevation = 20.dp, refract = false)
+        Design.LIQUID -> liquidDialogGlass(shape)
         // Диалог над затемнением: почти непрозрачная матовая пластина, текст не просвечивает.
         Design.FROSTED -> frostedSurface(shape, elevation = 18.dp, opacity = 0.96f, blur = false)
         Design.GLASS -> solid.glass(shape)
         else -> solid
+    }
+}
+
+/**
+ * Основная кнопка: в [Design.LIQUID] — настоящая капсула из `Kyant0/AndroidLiquidGlass`
+ * (`LiquidButton`) с преломлением, вибрацией цвета и бликом под пальцем.
+ */
+@Composable
+fun GlassButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = MaterialTheme.shapes.large,
+    tint: Color = Color.Unspecified,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit
+) {
+    if (LocalDesign.current == Design.LIQUID) {
+        val accent = if (tint.isSpecified) tint else MaterialTheme.colorScheme.primary
+        LiquidButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = if (shape == MaterialTheme.shapes.large) Liquid.ButtonShape else shape,
+            tint = accent,
+            contentPadding = contentPadding,
+            content = content
+        )
+    } else {
+        Button(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = shape,
+            colors = if (tint.isSpecified) {
+                ButtonDefaults.buttonColors(containerColor = tint, contentColor = contentColorFor(tint))
+            } else {
+                ButtonDefaults.buttonColors()
+            },
+            contentPadding = contentPadding,
+            content = content
+        )
+    }
+}
+
+/**
+ * Прозрачная стеклянная кнопка (аналог `OutlinedButton`): в [Design.LIQUID] — чистое
+ * преломляющее стекло `LiquidButton` без глухой обводки.
+ */
+@Composable
+fun GlassOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = MaterialTheme.shapes.large,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit
+) {
+    if (LocalDesign.current == Design.LIQUID) {
+        val dark = Liquid.isDark(MaterialTheme.colorScheme.background)
+        LiquidButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = if (shape == MaterialTheme.shapes.large) Liquid.ButtonShape else shape,
+            surfaceColor = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.34f),
+            contentPadding = contentPadding,
+            content = content
+        )
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = shape,
+            contentPadding = contentPadding,
+            content = content
+        )
+    }
+}
+
+/**
+ * Тональная кнопка (`FilledTonalButton`): в [Design.LIQUID] — приглушённое цветное стекло.
+ */
+@Composable
+fun GlassTonalButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = MaterialTheme.shapes.large,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit
+) {
+    if (LocalDesign.current == Design.LIQUID) {
+        val scheme = MaterialTheme.colorScheme
+        val dark = Liquid.isDark(scheme.background)
+        LiquidButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = if (shape == MaterialTheme.shapes.large) Liquid.ButtonShape else shape,
+            surfaceColor = scheme.secondaryContainer.copy(alpha = if (dark) 0.42f else 0.56f),
+            contentColor = scheme.onSecondaryContainer,
+            contentPadding = contentPadding,
+            content = content
+        )
+    } else {
+        FilledTonalButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            shape = shape,
+            contentPadding = contentPadding,
+            content = content
+        )
+    }
+}
+
+/**
+ * Переключатель: в [Design.LIQUID] — `LiquidToggle` из каталога `Kyant0/AndroidLiquidGlass`
+ * с физическим бегунком из преломляющего стекла.
+ */
+@Composable
+fun GlassSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    if (LocalDesign.current == Design.LIQUID) {
+        LiquidToggle(
+            selected = checked,
+            onSelect = onCheckedChange,
+            modifier = modifier,
+            enabled = enabled
+        )
+    } else {
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = modifier,
+            enabled = enabled
+        )
+    }
+}
+
+/**
+ * Фильтр-чип: в [Design.LIQUID] — стеклянная капсула с акцентом на выбранном варианте.
+ */
+@Composable
+fun GlassFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (LocalDesign.current == Design.LIQUID) {
+        val scheme = MaterialTheme.colorScheme
+        val dark = Liquid.isDark(scheme.background)
+        LiquidButton(
+            onClick = onClick,
+            modifier = modifier,
+            height = 38.dp,
+            tint = if (selected) scheme.primary else Color.Unspecified,
+            surfaceColor = if (selected) Color.Unspecified else if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.30f),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            contentColor = if (selected) Color.White else scheme.onSurface
+        ) {
+            label()
+        }
+    } else {
+        FilterChip(selected = selected, onClick = onClick, label = label, modifier = modifier)
+    }
+}
+
+/**
+ * Круглая стеклянная кнопка с иконкой: в [Design.LIQUID] — стеклянная сфера `LiquidIconButton`.
+ */
+@Composable
+fun GlassIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = Color.Unspecified,
+    tonal: Boolean = true,
+    size: Dp = 42.dp,
+    content: @Composable () -> Unit
+) {
+    if (LocalDesign.current == Design.LIQUID) {
+        val scheme = MaterialTheme.colorScheme
+        val dark = Liquid.isDark(scheme.background)
+        val surface = when {
+            tint.isSpecified -> Color.Unspecified
+            tonal -> scheme.secondaryContainer.copy(alpha = if (dark) 0.40f else 0.56f)
+            else -> if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.34f)
+        }
+        LiquidIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            tint = tint,
+            surfaceColor = surface,
+            size = size,
+            content = content
+        )
+    } else if (tint.isSpecified) {
+        FilledIconButton(onClick = onClick, modifier = modifier.size(size), enabled = enabled, content = content)
+    } else if (tonal) {
+        FilledTonalIconButton(onClick = onClick, modifier = modifier.size(size), enabled = enabled, content = content)
+    } else {
+        OutlinedIconButton(onClick = onClick, modifier = modifier.size(size), enabled = enabled, content = content)
     }
 }
 

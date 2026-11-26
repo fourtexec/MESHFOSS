@@ -140,7 +140,7 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
             ) {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text(Words.Retry.text) }
+                GlassButton(onClick = { load() }) { Text(Words.Retry.text) }
             }
             else -> {
                 val day = MeshCore.foodDayFor(menuDays, selectedDate)
@@ -176,39 +176,55 @@ fun FoodScreen(store: SessionStore, client: MeshClient, personId: String?) {
                     item {
                         val paidLabel = Words.Paid.text
                         val freeLabel = Words.Subsidised.text
-                        ButtonGroup(
-                            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            toggleableItem(
-                                checked = !freeMeal,
-                                label = paidLabel,
-                                onCheckedChange = { freeMeal = false },
-                                weight = 1f
+                        if (LocalDesign.current == Design.LIQUID) {
+                            LiquidSegmentedTabs(
+                                options = listOf("paid" to paidLabel, "free" to freeLabel),
+                                selected = if (freeMeal) "free" else "paid",
+                                onSelect = { freeMeal = it == "free" }
                             )
-                            toggleableItem(
-                                checked = freeMeal,
-                                label = freeLabel,
-                                onCheckedChange = { freeMeal = true },
-                                weight = 1f
-                            )
+                        } else {
+                            ButtonGroup(
+                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                toggleableItem(
+                                    checked = !freeMeal,
+                                    label = paidLabel,
+                                    onCheckedChange = { freeMeal = false },
+                                    weight = 1f
+                                )
+                                toggleableItem(
+                                    checked = freeMeal,
+                                    label = freeLabel,
+                                    onCheckedChange = { freeMeal = true },
+                                    weight = 1f
+                                )
+                            }
                         }
                     }
                     // Приёмы пищи, доступные в выбранном режиме.
                     if (kinds.size > 1) {
                         item {
                             val labels = kinds.associateWith { mealLabel(it) }
-                            ButtonGroup(
-                                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                kinds.forEach { kind ->
-                                    toggleableItem(
-                                        checked = kind == activeKind,
-                                        label = labels[kind] ?: "",
-                                        onCheckedChange = { selectedKind = kind },
-                                        weight = 1f
-                                    )
+                            if (LocalDesign.current == Design.LIQUID) {
+                                LiquidSegmentedTabs(
+                                    options = kinds.map { it.toString() to (labels[it] ?: "") },
+                                    selected = activeKind.toString(),
+                                    onSelect = { key -> key.toIntOrNull()?.let { selectedKind = it } }
+                                )
+                            } else {
+                                ButtonGroup(
+                                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    kinds.forEach { kind ->
+                                        toggleableItem(
+                                            checked = kind == activeKind,
+                                            label = labels[kind] ?: "",
+                                            onCheckedChange = { selectedKind = kind },
+                                            weight = 1f
+                                        )
+                                    }
                                 }
                             }
                         }

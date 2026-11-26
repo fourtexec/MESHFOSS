@@ -268,6 +268,8 @@ fun HomeworksScreen(
 
     confirmLaunch?.let { (entryId, material, browser) ->
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onDismissRequest = { confirmLaunch = null },
             title = { Text(Words.CdzTimerTitle.text) },
             text = {
@@ -282,10 +284,12 @@ fun HomeworksScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    confirmLaunch = null
-                    launchMaterial(entryId, material, forceBrowser = browser)
-                }) { Text(Words.CdzBegin.text) }
+                LiquidModalScope {
+                    GlassButton(onClick = {
+                        confirmLaunch = null
+                        launchMaterial(entryId, material, forceBrowser = browser)
+                    }) { Text(Words.CdzBegin.text) }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { confirmLaunch = null }) { Text(Words.Cancel.text) }
@@ -337,23 +341,35 @@ fun HomeworksScreen(
             onNext = { selectedDate = MeshCore.addDays(selectedDate, 1) },
             onDateSelected = { selectedDate = it }
         )
-        // M3E: connected-группа переключателей вместо SegmentedButton.
-        ButtonGroup(
-            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            toggleableItem(
-                checked = mode == "due",
-                label = Words.DueOnDate.text,
-                onCheckedChange = { mode = "due" },
-                weight = 1f
+        Spacer(Modifier.height(6.dp))
+        if (LocalDesign.current == Design.LIQUID) {
+            LiquidSegmentedTabs(
+                options = listOf(
+                    "due" to Words.DueOnDate.text,
+                    "assigned" to Words.Assigned.text
+                ),
+                selected = mode,
+                onSelect = { mode = it }
             )
-            toggleableItem(
-                checked = mode == "assigned",
-                label = Words.Assigned.text,
-                onCheckedChange = { mode = "assigned" },
-                weight = 1f
-            )
+        } else {
+            // M3E: connected-группа переключателей вместо SegmentedButton.
+            ButtonGroup(
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                toggleableItem(
+                    checked = mode == "due",
+                    label = Words.DueOnDate.text,
+                    onCheckedChange = { mode = "due" },
+                    weight = 1f
+                )
+                toggleableItem(
+                    checked = mode == "assigned",
+                    label = Words.Assigned.text,
+                    onCheckedChange = { mode = "assigned" },
+                    weight = 1f
+                )
+            }
         }
         Spacer(Modifier.height(4.dp))
 
@@ -374,7 +390,7 @@ fun HomeworksScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load() }) { Text(Words.Retry.text) }
+                    GlassButton(onClick = { load() }) { Text(Words.Retry.text) }
                 }
             }
             filtered.isEmpty() -> {
@@ -517,12 +533,12 @@ private fun HomeworkCard(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-                OutlinedButton(
+                GlassOutlinedButton(
                     onClick = {
                         clipboardManager.setText(AnnotatedString(description))
                         Toast.makeText(context, Words.AssignmentCopied.text, Toast.LENGTH_SHORT).show()
                     },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_copy),
@@ -757,13 +773,29 @@ private fun CdzMaterialRow(
         rawAction
     }
     val scheme = MaterialTheme.colorScheme
+    val isLiquid = LocalDesign.current == Design.LIQUID
+    val itemShape = RoundedCornerShape(14.dp)
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (done) scheme.tertiaryContainer.copy(alpha = 0.35f) else scheme.surfaceContainerHigh.copy(alpha = 0.6f),
+        shape = itemShape,
+        color = when {
+            isLiquid -> androidx.compose.ui.graphics.Color.Transparent
+            done -> scheme.tertiaryContainer.copy(alpha = 0.35f)
+            else -> scheme.surfaceContainerHigh.copy(alpha = 0.6f)
+        },
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
+            .then(
+                if (isLiquid) {
+                    Modifier.glassPane(
+                        shape = itemShape,
+                        tint = if (done) scheme.tertiary else androidx.compose.ui.graphics.Color.Unspecified
+                    )
+                } else {
+                    Modifier
+                }
+            )
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Text(
@@ -817,9 +849,10 @@ private fun CdzMaterialRow(
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (canLaunch) {
-                        FilledTonalIconButton(
+                        GlassIconButton(
                             onClick = onOpen,
                             enabled = !opening,
+                            tonal = true,
                         ) {
                             if (opening) {
                                 LoadingIndicator(modifier = Modifier.size(18.dp))
@@ -834,9 +867,10 @@ private fun CdzMaterialRow(
                         }
                     }
                     if (canLaunch && isCdz) {
-                        OutlinedIconButton(
+                        GlassIconButton(
                             onClick = onOpenInBrowser,
                             enabled = !opening,
+                            tonal = false,
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_browser),
@@ -845,8 +879,9 @@ private fun CdzMaterialRow(
                         }
                     }
                     if (resultUrl.isNotBlank()) {
-                        OutlinedIconButton(
+                        GlassIconButton(
                             onClick = { onOpenResult(resultUrl) },
+                            tonal = false,
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_result),

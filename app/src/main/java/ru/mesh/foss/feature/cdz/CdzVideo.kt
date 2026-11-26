@@ -6,6 +6,10 @@ package ru.mesh.foss.feature.cdz
 import ru.mesh.foss.R
 import ru.mesh.foss.core.Words
 import ru.mesh.foss.data.CdzNativeClient
+import ru.mesh.foss.ui.Design
+import ru.mesh.foss.ui.GlassTonalButton
+import ru.mesh.foss.ui.Liquid
+import ru.mesh.foss.ui.LocalDesign
 
 import android.Manifest
 import android.app.Activity
@@ -458,7 +462,7 @@ private fun CdzVideoDownloadButton(info: CdzVideoInfo) {
             Toast.makeText(context, Words.CdzDownloadFailed.text, Toast.LENGTH_LONG).show()
         }
     }
-    FilledTonalButton(
+    GlassTonalButton(
         onClick = {
             val needsPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
                 ContextCompat.checkSelfPermission(
@@ -471,7 +475,7 @@ private fun CdzVideoDownloadButton(info: CdzVideoInfo) {
                 downloadVideo(context, info)
             }
         },
-        shape = MaterialTheme.shapes.large,
+        shape = if (ru.mesh.foss.ui.LocalDesign.current == ru.mesh.foss.ui.Design.LIQUID) ru.mesh.foss.ui.Liquid.ButtonShape else MaterialTheme.shapes.large,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp),

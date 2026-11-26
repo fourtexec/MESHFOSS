@@ -30,7 +30,7 @@ fun ProfileScreen(store: SessionStore, client: MeshClient, initialProfile: JSONO
         Spacer(Modifier.height(8.dp))
         ProfileBody(store, client, initialProfile)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text(Words.SignOut.text) }
+        GlassButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text(Words.SignOut.text) }
     }
 }
 
@@ -83,7 +83,7 @@ fun ProfileBody(
             error != null -> {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { load() }) { Text(Words.Retry.text) }
+                GlassButton(onClick = { load() }) { Text(Words.Retry.text) }
             }
             profile != null -> {
                 val p = profile!!

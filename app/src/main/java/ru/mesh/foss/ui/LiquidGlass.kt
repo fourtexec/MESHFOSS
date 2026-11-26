@@ -2,11 +2,18 @@ package ru.mesh.foss.ui
 
 import ru.mesh.foss.core.*
 
+import android.os.Build
+import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -16,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -23,95 +31,133 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import android.os.Build
-import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asAndroidPath
-import androidx.compose.ui.graphics.nativePaint
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.nativePaint
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.RuntimeShader
+import com.kyant.backdrop.asComposeShader
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberBackdrop
+import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.isRuntimeShaderSupported
 import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.tanh
 
 /**
  * «Жидкое стекло» ([Design.LIQUID]) в духе iOS 26 Liquid Glass.
@@ -210,6 +256,45 @@ internal val LocalKyantContentBackdrop = staticCompositionLocalOf<LayerBackdrop?
  */
 internal val LocalKyantChromeBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 
+/** Показывает, что контент рендерится в отдельном окне (`ModalBottomSheet` / `AlertDialog`). */
+internal val LocalInModalWindow = staticCompositionLocalOf { false }
+
+/** Оборачивает содержимое диалога/шторки, чтобы кнопки и тумблеры внутри использовали локальную canvas-подложку. */
+@Composable
+fun LiquidModalScope(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalInModalWindow provides true, content = content)
+}
+
+@Composable
+internal fun rememberLiquidModalBackdrop(): Backdrop {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val (glowA, _, glowC) = LiquidGlassEngine.backdropGlows(scheme.primary, scheme.tertiary)
+    val base = if (dark) lerp(scheme.surface, Color.Black, 0.24f) else scheme.surface
+    return rememberCanvasBackdrop {
+        drawRect(base)
+        drawRect(
+            Brush.linearGradient(
+                listOf(
+                    glowA.copy(alpha = if (dark) 0.22f else 0.14f),
+                    Color.Transparent,
+                    glowC.copy(alpha = if (dark) 0.18f else 0.12f)
+                )
+            )
+        )
+    }
+}
+
+@Composable
+internal fun rememberResolvedLiquidBackdrop(explicit: Backdrop? = null): Backdrop {
+    if (explicit != null) return explicit
+    val windowBackdrop = if (!LocalInModalWindow.current) LocalKyantBackdrop.current else null
+    return windowBackdrop ?: rememberLiquidModalBackdrop()
+}
+
+private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float =
+    start + (stop - start) * fraction
+
 /** Нижний отступ под плавающий таб-бар, чтобы списки прокручивались сквозь стекло. */
 val LocalLiquidBottomPadding = staticCompositionLocalOf { 0.dp }
 
@@ -274,10 +359,57 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                         center = Offset(cx, cy),
                         radius = radius
                     )
-                    val a = blob(glowA, 0.52f, w * 0.12f, h * 0.12f, r * 0.62f)
-                    val b = blob(glowB, 0.36f, w * 0.96f, h * 0.44f, r * 0.54f)
-                    val c = blob(glowC, 0.40f, w * 0.22f, h * 0.88f, r * 0.58f)
-                    val d = blob(glowA, 0.24f, w * 0.82f, h * 0.92f, r * 0.44f)
+                    val a = blob(glowA, 0.56f, w * 0.12f, h * 0.12f, r * 0.62f)
+                    val b = blob(glowB, 0.42f, w * 0.96f, h * 0.44f, r * 0.54f)
+                    val c = blob(glowC, 0.44f, w * 0.22f, h * 0.88f, r * 0.58f)
+                    val d = blob(glowA, 0.28f, w * 0.82f, h * 0.92f, r * 0.44f)
+                    // Чёткие световые ленты и дуги каустики (как в iOS 26 / Desktop):
+                    // благодаря им преломление Kyant0 и дисперсия видны на каждой карточке, а не только в таб-баре.
+                    val ribbonPrimary = Path().apply {
+                        moveTo(-w * 0.12f, h * 0.28f)
+                        cubicTo(w * 0.28f, h * 0.14f, w * 0.62f, h * 0.44f, w * 1.12f, h * 0.20f)
+                    }
+                    val ribbonSecondary = Path().apply {
+                        moveTo(-w * 0.10f, h * 0.72f)
+                        cubicTo(w * 0.34f, h * 0.54f, w * 0.68f, h * 0.84f, w * 1.14f, h * 0.60f)
+                    }
+                    val ribbonDiagonal = Path().apply {
+                        moveTo(w * 0.18f, -h * 0.05f)
+                        cubicTo(w * 0.42f, h * 0.32f, w * 0.58f, h * 0.64f, w * 0.88f, h * 1.06f)
+                    }
+                    val ribbonBrushA = Brush.linearGradient(
+                        listOf(
+                            glowA.copy(alpha = 0f),
+                            glowA.copy(alpha = if (dark) 0.46f else 0.34f),
+                            glowC.copy(alpha = if (dark) 0.38f else 0.28f),
+                            glowC.copy(alpha = 0f)
+                        ),
+                        start = Offset(0f, h * 0.18f),
+                        end = Offset(w, h * 0.38f)
+                    )
+                    val ribbonBrushB = Brush.linearGradient(
+                        listOf(
+                            glowB.copy(alpha = 0f),
+                            glowB.copy(alpha = if (dark) 0.38f else 0.26f),
+                            glowA.copy(alpha = if (dark) 0.30f else 0.22f),
+                            glowA.copy(alpha = 0f)
+                        ),
+                        start = Offset(0f, h * 0.78f),
+                        end = Offset(w, h * 0.55f)
+                    )
+                    val ribbonBrushC = Brush.linearGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = if (dark) 0.12f else 0.42f),
+                            glowC.copy(alpha = if (dark) 0.24f else 0.20f),
+                            Color.Transparent
+                        ),
+                        start = Offset(w * 0.2f, 0f),
+                        end = Offset(w * 0.9f, h)
+                    )
+                    val ribbonStrokeWide = Stroke(width = (r * 0.055f).coerceAtLeast(18.dp.toPx()), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    val ribbonStrokeMid = Stroke(width = (r * 0.022f).coerceAtLeast(8.dp.toPx()), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    val ribbonStrokeThin = Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
                     val iw = (w / BackdropScale).toInt().coerceAtLeast(1)
                     val ih = (h / BackdropScale).toInt().coerceAtLeast(1)
                     val image = ImageBitmap(iw, ih)
@@ -288,6 +420,9 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                             drawRect(b, size = Size(w, h))
                             drawRect(c, size = Size(w, h))
                             drawRect(d, size = Size(w, h))
+                            drawPath(ribbonPrimary, ribbonBrushA, style = ribbonStrokeWide)
+                            drawPath(ribbonSecondary, ribbonBrushB, style = ribbonStrokeWide)
+                            drawPath(ribbonDiagonal, ribbonBrushC, style = ribbonStrokeMid)
                         }
                     }
                     source.image = image
@@ -297,6 +432,11 @@ fun LiquidBackdrop(content: @Composable () -> Unit) {
                         drawRect(b)
                         drawRect(c)
                         drawRect(d)
+                        drawPath(ribbonPrimary, ribbonBrushA, style = ribbonStrokeWide)
+                        drawPath(ribbonPrimary, Color.White.copy(alpha = if (dark) 0.14f else 0.35f), style = ribbonStrokeThin)
+                        drawPath(ribbonSecondary, ribbonBrushB, style = ribbonStrokeWide)
+                        drawPath(ribbonSecondary, Color.White.copy(alpha = if (dark) 0.11f else 0.28f), style = ribbonStrokeThin)
+                        drawPath(ribbonDiagonal, ribbonBrushC, style = ribbonStrokeMid)
                     }
                 }
         )
@@ -427,22 +567,22 @@ fun Modifier.liquidGlass(
     refract: Boolean = true,
     backdrop: Backdrop? = null,
     blurRadius: Dp = Dp.Unspecified,
-    refractionHeight: Dp = 16.dp,
-    refractionAmount: Dp = 32.dp,
+    refractionHeight: Dp = 20.dp,
+    refractionAmount: Dp = 42.dp,
     surfaceAlpha: Float? = null
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = Liquid.isDark(scheme.background)
     val kyantBackdrop = backdrop ?: LocalKyantBackdrop.current
-    val resolvedAlpha = surfaceAlpha ?: if (dark) 0.20f else 0.30f
+    val resolvedAlpha = surfaceAlpha ?: if (dark) 0.13f else 0.22f
     val surfaceTint = if (dark) Color(0xFF141926).copy(alpha = resolvedAlpha) else Color.White.copy(alpha = resolvedAlpha)
     val accentTint = if (tint != Color.Unspecified) tint else Color.Unspecified
 
     if (refract && LiquidGlassEngine.useKyant(Build.VERSION.SDK_INT, LiquidPreview.enabled, kyantBackdrop != null) && kyantBackdrop != null) {
         val resolvedBlur = when {
             blurRadius != Dp.Unspecified -> blurRadius
-            dark -> 4.dp
-            else -> 3.dp
+            dark -> 2.5.dp
+            else -> 2.dp
         }
         return this.drawBackdrop(
             backdrop = kyantBackdrop,
@@ -574,38 +714,828 @@ private val PanelParams = LiquidShader.Params(thickness = 14f, offsetDp = 10f, d
 private val LensParams = LiquidShader.Params(roundness = 2f, thickness = 18f, offsetDp = 14f, dispersion = 5f, fresnelFactor = 0.25f)
 
 /**
- * Шапка в стиле iOS: крупный жирный заголовок прямо на фоне и действия в
- * стеклянной капсуле справа. Содержимое — то же, что у обычной шапки.
+ * Настоящее Kyant0/AndroidLiquidGlass для диалогов и шторки «Ещё» (по мотивам `DialogContent.kt`
+ * из каталога Kyant0): `colorControls`, адаптивный `blur`, `lens(..., depthEffect = true)`,
+ * мягкий `Highlight.Plain` и внешняя/внутренняя тени.
  */
 @Composable
-fun LiquidTopBar(title: String, actions: @Composable RowScope.() -> Unit) {
+internal fun Modifier.liquidDialogGlass(shape: Shape = MaterialTheme.shapes.extraLarge): Modifier {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val (glowA, _, glowC) = LiquidGlassEngine.backdropGlows(scheme.primary, scheme.tertiary)
+    val surfaceColor = if (dark) {
+        lerp(scheme.surface, Color.Black, 0.20f).copy(alpha = 0.88f)
+    } else {
+        Color(0xFFFAFAFA).copy(alpha = 0.90f)
+    }
+    if (!LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) || LiquidPreview.enabled) {
+        return this.background(surfaceColor, shape).liquidGlass(shape, elevation = 20.dp, refract = false)
+    }
+    val canvasBackdrop = rememberCanvasBackdrop {
+        drawRect(surfaceColor)
+        drawRect(
+            Brush.linearGradient(
+                listOf(
+                    glowA.copy(alpha = if (dark) 0.20f else 0.12f),
+                    Color.Transparent,
+                    glowC.copy(alpha = if (dark) 0.16f else 0.10f)
+                )
+            )
+        )
+    }
+    return this.drawBackdrop(
+        backdrop = canvasBackdrop,
+        shape = { shape },
+        effects = {
+            colorControls(
+                brightness = if (dark) 0f else 0.14f,
+                contrast = 1f,
+                saturation = 1.45f
+            )
+            blur(if (dark) 8f.dp.toPx() else 14f.dp.toPx())
+            if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
+                lens(
+                    refractionHeight = 22f.dp.toPx(),
+                    refractionAmount = 44f.dp.toPx(),
+                    depthEffect = true,
+                    chromaticAberration = true
+                )
+            }
+        },
+        highlight = { if (dark) Highlight.Default else Highlight.Plain },
+        innerShadow = {
+            InnerShadow(
+                radius = 10.dp,
+                alpha = if (dark) 0.22f else 0.08f
+            )
+        },
+        shadow = {
+            Shadow(
+                radius = 24.dp,
+                color = Color.Black.copy(alpha = if (dark) 0.48f else 0.18f)
+            )
+        },
+        onDrawSurface = {
+            drawRect(surfaceColor.copy(alpha = if (dark) 0.68f else 0.58f))
+            drawRect(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (dark) 0.07f else 0.24f),
+                        Color.Transparent
+                    )
+                )
+            )
+        }
+    )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Компоненты из каталога Kyant0/AndroidLiquidGlass                           */
+/* (InteractiveHighlight, DampedDragAnimation, LiquidButton, LiquidToggle)    */
+/* -------------------------------------------------------------------------- */
+
+private suspend inline fun PointerInputScope.inspectDragGestures(
+    crossinline onDragStart: (down: PointerInputChange) -> Unit = {},
+    crossinline onDragEnd: (change: PointerInputChange) -> Unit = {},
+    crossinline onDragCancel: () -> Unit = {},
+    crossinline onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit
+) {
+    awaitEachGesture {
+        val initialDown = awaitFirstDown(false, PointerEventPass.Initial)
+        val down = awaitFirstDown(false)
+        onDragStart(down)
+        onDrag(initialDown, Offset.Zero)
+        val upEvent = inspectDrag(
+            pointerId = initialDown.id,
+            onDrag = { onDrag(it, it.positionChange()) }
+        )
+        if (upEvent == null) onDragCancel() else onDragEnd(upEvent)
+    }
+}
+
+private suspend inline fun AwaitPointerEventScope.inspectDrag(
+    pointerId: PointerId,
+    crossinline onDrag: (PointerInputChange) -> Unit
+): PointerInputChange? {
+    val isPointerUp = currentEvent.changes.firstOrNull { it.id == pointerId }?.pressed != true
+    if (isPointerUp) return null
+    var pointer = pointerId
+    while (true) {
+        val change = awaitInspectDragOrUp(pointer) ?: return null
+        if (change.isConsumed) return null
+        if (change.changedToUpIgnoreConsumed()) return change
+        onDrag(change)
+        pointer = change.id
+    }
+}
+
+private suspend inline fun AwaitPointerEventScope.awaitInspectDragOrUp(
+    pointerId: PointerId
+): PointerInputChange? {
+    var pointer = pointerId
+    while (true) {
+        val event = awaitPointerEvent()
+        val dragEvent = event.changes.firstOrNull { it.id == pointer } ?: return null
+        if (dragEvent.changedToUpIgnoreConsumed()) {
+            val otherDown = event.changes.firstOrNull { it.pressed } ?: return dragEvent
+            pointer = otherDown.id
+        } else if (dragEvent.previousPosition != dragEvent.position) {
+            return dragEvent
+        }
+    }
+}
+
+/**
+ * Интерактивный блик из `catalog/utils/InteractiveHighlight.kt` (Kyant0):
+ * при касании/перетаскивании зажигает под пальцем AGSL-радиальное свечение и мягко
+ * смещает/приподнимает стеклянную поверхность.
+ */
+internal class LiquidInteractiveHighlight(
+    private val animationScope: CoroutineScope,
+    private val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset }
+) {
+    private val pressProgressAnimationSpec = spring(0.5f, 300f, 0.001f)
+    private val positionAnimationSpec = spring(0.5f, 300f, Offset.VisibilityThreshold)
+
+    private val pressProgressAnimation = Animatable(0f, 0.001f)
+    private val positionAnimation = Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
+
+    private var startPosition = Offset.Zero
+    val pressProgress: Float get() = pressProgressAnimation.value
+    val offset: Offset get() = positionAnimation.value - startPosition
+
+    private val shader: RuntimeShader? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isRuntimeShaderSupported()) {
+            RuntimeShader(
+                """
+uniform float2 size;
+layout(color) uniform half4 color;
+uniform float radius;
+uniform float2 position;
+
+half4 main(float2 coord) {
+    float dist = distance(coord, position);
+    float intensity = smoothstep(radius, radius * 0.5, dist);
+    return color * intensity;
+}"""
+            )
+        } else {
+            null
+        }
+
+    val modifier: Modifier = Modifier.drawWithContent {
+        val progress = pressProgressAnimation.value
+        if (progress > 0f) {
+            if (shader != null) {
+                drawRect(Color.White.copy(alpha = 0.08f * progress), blendMode = BlendMode.Plus)
+                shader.apply {
+                    val pos = position(size, positionAnimation.value)
+                    setFloatUniform("size", size.width, size.height)
+                    setColorUniform("color", Color.White.copy(alpha = 0.16f * progress))
+                    setFloatUniform("radius", size.minDimension * 1.5f)
+                    setFloatUniform(
+                        "position",
+                        pos.x.coerceIn(0f, size.width),
+                        pos.y.coerceIn(0f, size.height)
+                    )
+                }
+                drawRect(ShaderBrush(shader.asComposeShader()), blendMode = BlendMode.Plus)
+            } else {
+                drawRect(Color.White.copy(alpha = 0.22f * progress), blendMode = BlendMode.Plus)
+            }
+        }
+        drawContent()
+    }
+
+    val gestureModifier: Modifier = Modifier.pointerInput(animationScope) {
+        inspectDragGestures(
+            onDragStart = { down ->
+                startPosition = down.position
+                animationScope.launch {
+                    launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
+                    launch { positionAnimation.snapTo(startPosition) }
+                }
+            },
+            onDragEnd = {
+                animationScope.launch {
+                    launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
+                    launch { positionAnimation.animateTo(startPosition, positionAnimationSpec) }
+                }
+            },
+            onDragCancel = {
+                animationScope.launch {
+                    launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
+                    launch { positionAnimation.animateTo(startPosition, positionAnimationSpec) }
+                }
+            }
+        ) { change, _ ->
+            animationScope.launch { positionAnimation.snapTo(change.position) }
+        }
+    }
+}
+
+/** Пружинная физика перетаскивания из `catalog/utils/DampedDragAnimation.kt` (Kyant0). */
+internal class LiquidDragAnimation(
+    private val animationScope: CoroutineScope,
+    initialValue: Float,
+    val valueRange: ClosedRange<Float>,
+    visibilityThreshold: Float,
+    private val initialScale: Float,
+    private val pressedScale: Float,
+    private val onDragStarted: LiquidDragAnimation.(position: Offset) -> Unit,
+    private val onDragStopped: LiquidDragAnimation.() -> Unit,
+    private val onDrag: LiquidDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
+) {
+    private val valueAnimationSpec = spring(1f, 1000f, visibilityThreshold)
+    private val velocityAnimationSpec = spring(0.5f, 300f, visibilityThreshold * 10f)
+    private val pressProgressAnimationSpec = spring(1f, 1000f, 0.001f)
+    private val scaleXAnimationSpec = spring(0.6f, 250f, 0.001f)
+    private val scaleYAnimationSpec = spring(0.7f, 250f, 0.001f)
+
+    private val valueAnimation = Animatable(initialValue, visibilityThreshold)
+    private val velocityAnimation = Animatable(0f, 5f)
+    private val pressProgressAnimation = Animatable(0f, 0.001f)
+    private val scaleXAnimation = Animatable(initialScale, 0.001f)
+    private val scaleYAnimation = Animatable(initialScale, 0.001f)
+
+    private val mutatorMutex = MutatorMutex()
+    private val velocityTracker = VelocityTracker()
+
+    val value: Float get() = valueAnimation.value
+    val targetValue: Float get() = valueAnimation.targetValue
+    val pressProgress: Float get() = pressProgressAnimation.value
+    val scaleX: Float get() = scaleXAnimation.value
+    val scaleY: Float get() = scaleYAnimation.value
+    val velocity: Float get() = velocityAnimation.value
+
+    val modifier: Modifier = Modifier.pointerInput(Unit) {
+        inspectDragGestures(
+            onDragStart = { down ->
+                onDragStarted(down.position)
+                press()
+            },
+            onDragEnd = {
+                onDragStopped()
+                release()
+            },
+            onDragCancel = {
+                onDragStopped()
+                release()
+            }
+        ) { _, dragAmount ->
+            onDrag(size, dragAmount)
+        }
+    }
+
+    fun press() {
+        velocityTracker.resetTracking()
+        animationScope.launch {
+            launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
+            launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
+            launch { scaleYAnimation.animateTo(pressedScale, scaleYAnimationSpec) }
+        }
+    }
+
+    fun release() {
+        animationScope.launch {
+            withFrameNanos { }
+            if (value != targetValue) {
+                val threshold = (valueRange.endInclusive - valueRange.start) * 0.025f
+                snapshotFlow { valueAnimation.value }
+                    .filter { abs(it - valueAnimation.targetValue) < threshold }
+                    .first()
+            }
+            launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
+            launch { scaleXAnimation.animateTo(initialScale, scaleXAnimationSpec) }
+            launch { scaleYAnimation.animateTo(initialScale, scaleYAnimationSpec) }
+        }
+    }
+
+    fun updateValue(value: Float) {
+        val target = value.coerceIn(valueRange)
+        animationScope.launch {
+            valueAnimation.animateTo(target, valueAnimationSpec) { updateVelocity() }
+        }
+    }
+
+    fun animateToValue(value: Float) {
+        animationScope.launch {
+            mutatorMutex.mutate {
+                press()
+                val target = value.coerceIn(valueRange)
+                launch { valueAnimation.animateTo(target, valueAnimationSpec) }
+                if (velocity != 0f) {
+                    launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+                }
+                release()
+            }
+        }
+    }
+
+    private fun updateVelocity() {
+        velocityTracker.addPosition(SystemClock.uptimeMillis(), Offset(value, 0f))
+        val span = (valueRange.endInclusive - valueRange.start).takeIf { it > 0f } ?: 1f
+        val targetVelocity = velocityTracker.calculateVelocity().x / span
+        animationScope.launch { velocityAnimation.animateTo(targetVelocity, velocityAnimationSpec) }
+    }
+}
+
+/**
+ * Стеклянная кнопка из `catalog/components/LiquidButton.kt` (`Kyant0/AndroidLiquidGlass`):
+ * капсула (или произвольная форма) с `drawBackdrop`, `vibrancy()`, `blur`, `lens`,
+ * [Highlight.Default], тонированием через [BlendMode.Hue] и живым бликом под пальцем.
+ */
+@Composable
+fun LiquidButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    height: Dp = 48.dp,
+    shape: Shape = Liquid.ButtonShape,
+    tint: Color = Color.Unspecified,
+    surfaceColor: Color = Color.Unspecified,
+    backdrop: Backdrop? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+    contentColor: Color = Color.Unspecified,
+    content: @Composable RowScope.() -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val resolvedBackdrop = rememberResolvedLiquidBackdrop(backdrop)
+    val kyantActive = LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) && !LiquidPreview.enabled
+    val animationScope = rememberCoroutineScope()
+    val interactiveHighlight = remember(animationScope) { LiquidInteractiveHighlight(animationScope) }
+    val resolvedContentColor = when {
+        contentColor.isSpecified -> contentColor
+        tint.isSpecified -> if (tint.luminance() > 0.62f) Color(0xFF0E1420) else Color.White
+        else -> scheme.onSurface
+    }
+    val defaultSurface = if (surfaceColor.isSpecified) {
+        surfaceColor
+    } else if (!tint.isSpecified) {
+        if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.34f)
+    } else {
+        Color.Unspecified
+    }
+
+    val backdropModifier = if (kyantActive) {
+        Modifier.drawBackdrop(
+            backdrop = resolvedBackdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(2f.dp.toPx())
+                if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
+                    lens(
+                        refractionHeight = 12f.dp.toPx(),
+                        refractionAmount = 24f.dp.toPx(),
+                        depthEffect = true,
+                        chromaticAberration = true
+                    )
+                }
+            },
+            highlight = { Highlight.Default },
+            innerShadow = {
+                InnerShadow(
+                    radius = 5.dp,
+                    alpha = if (dark) 0.16f else 0.08f
+                )
+            },
+            shadow = {
+                Shadow(
+                    radius = 10.dp,
+                    color = Color.Black.copy(alpha = if (dark) 0.28f else 0.12f)
+                )
+            },
+            layerBlock = if (enabled) {
+                {
+                    val w = size.width
+                    val h = size.height.coerceAtLeast(1f)
+                    val progress = interactiveHighlight.pressProgress
+                    val scale = lerpFloat(1f, 1f + 3f.dp.toPx() / h, progress)
+                    val maxOffset = size.minDimension.coerceAtLeast(1f)
+                    val offset = interactiveHighlight.offset
+                    translationX = maxOffset * tanh(0.05f * offset.x / maxOffset)
+                    translationY = maxOffset * tanh(0.05f * offset.y / maxOffset)
+                    val maxDragScale = 3f.dp.toPx() / h
+                    val offsetAngle = atan2(offset.y, offset.x)
+                    val maxDim = size.maxDimension.coerceAtLeast(1f)
+                    scaleX = scale + maxDragScale * abs(cos(offsetAngle) * offset.x / maxDim) * (w / h).coerceAtMost(1f)
+                    scaleY = scale + maxDragScale * abs(sin(offsetAngle) * offset.y / maxDim) * (h / w).coerceAtMost(1f)
+                }
+            } else {
+                null
+            },
+            onDrawSurface = {
+                if (tint.isSpecified) {
+                    drawRect(tint, blendMode = BlendMode.Hue)
+                    drawRect(tint.copy(alpha = if (enabled) 0.72f else 0.38f))
+                }
+                if (defaultSurface.isSpecified) {
+                    drawRect(defaultSurface)
+                }
+            }
+        )
+    } else {
+        Modifier.liquidGlass(shape = shape, tint = tint, elevation = 6.dp)
+    }
+
+    CompositionLocalProvider(LocalContentColor provides resolvedContentColor.copy(alpha = if (enabled) 1f else 0.48f)) {
+        Row(
+            modifier = modifier
+                .alpha(if (enabled) 1f else 0.62f)
+                .then(backdropModifier)
+                .then(
+                    if (enabled) {
+                        Modifier
+                            .clickable(
+                                interactionSource = null,
+                                indication = null,
+                                role = Role.Button,
+                                onClick = onClick
+                            )
+                            .then(interactiveHighlight.modifier)
+                            .then(interactiveHighlight.gestureModifier)
+                    } else {
+                        Modifier
+                    }
+                )
+                .heightIn(min = height)
+                .padding(contentPadding),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content
+        )
+    }
+}
+
+/** Круглая кнопка-орб из жидкого стекла (`CircleShape`). */
+@Composable
+fun LiquidIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = Color.Unspecified,
+    surfaceColor: Color = Color.Unspecified,
+    size: Dp = 42.dp,
+    content: @Composable () -> Unit
+) {
+    LiquidButton(
+        onClick = onClick,
+        modifier = modifier.size(size),
+        enabled = enabled,
+        height = size,
+        shape = CircleShape,
+        tint = tint,
+        surfaceColor = surfaceColor,
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        content()
+    }
+}
+
+/**
+ * Переключатель из `catalog/components/LiquidToggle.kt` (`Kyant0/AndroidLiquidGlass`):
+ * капсула дорожки + хрустальная подвижная капля-бегунок, которая при касании
+ * становится прозрачной преломляющей линзой с дисперсией и упруго вытягивается от скорости.
+ */
+@Composable
+fun LiquidToggle(
+    selected: Boolean,
+    onSelect: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    backdrop: Backdrop? = null
+) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val resolvedBackdrop = rememberResolvedLiquidBackdrop(backdrop)
+    val kyantActive = LiquidGlassEngine.supportsBackdrop(Build.VERSION.SDK_INT) && !LiquidPreview.enabled
+    val accentColor = scheme.primary
+    val trackColor = if (dark) Color(0xFF787880).copy(alpha = 0.36f) else Color(0xFF787878).copy(alpha = 0.22f)
+
+    val density = LocalDensity.current
+    val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+    val dragWidth = with(density) { 20f.dp.toPx() }
+    val animationScope = rememberCoroutineScope()
+    var didDrag by remember { mutableStateOf(false) }
+    var fraction by remember { mutableFloatStateOf(if (selected) 1f else 0f) }
+    val dampedDragAnimation = remember(animationScope) {
+        LiquidDragAnimation(
+            animationScope = animationScope,
+            initialValue = fraction,
+            valueRange = 0f..1f,
+            visibilityThreshold = 0.001f,
+            initialScale = 1f,
+            pressedScale = 1.42f,
+            onDragStarted = {},
+            onDragStopped = {
+                if (didDrag) {
+                    fraction = if (targetValue >= 0.5f) 1f else 0f
+                    onSelect(fraction == 1f)
+                    didDrag = false
+                } else {
+                    fraction = if (selected) 0f else 1f
+                    onSelect(fraction == 1f)
+                }
+            },
+            onDrag = { _, dragAmount ->
+                if (!didDrag) didDrag = dragAmount.x != 0f
+                val delta = dragAmount.x / dragWidth
+                fraction = if (isLtr) (fraction + delta).coerceIn(0f, 1f) else (fraction - delta).coerceIn(0f, 1f)
+            }
+        )
+    }
+    LaunchedEffect(dampedDragAnimation) {
+        snapshotFlow { fraction }.collectLatest { dampedDragAnimation.updateValue(it) }
+    }
+    LaunchedEffect(selected) {
+        val target = if (selected) 1f else 0f
+        if (target != fraction) {
+            fraction = target
+            dampedDragAnimation.animateToValue(target)
+        }
+    }
+
+    val trackBackdrop = rememberLayerBackdrop()
+    val thumbBackdrop = rememberCombinedBackdrop(
+        resolvedBackdrop,
+        rememberBackdrop(trackBackdrop) { drawBackdrop ->
+            val progress = dampedDragAnimation.pressProgress
+            val sx = lerpFloat(2f / 3f, 0.78f, progress)
+            val sy = lerpFloat(0f, 0.78f, progress)
+            scale(sx, sy) { drawBackdrop() }
+        }
+    )
+
+    Box(
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.5f),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            Modifier
+                .then(if (kyantActive) Modifier.layerBackdrop(trackBackdrop) else Modifier)
+                .clip(Capsule())
+                .drawBehind {
+                    drawRect(lerp(trackColor, accentColor, dampedDragAnimation.value))
+                }
+                .size(64f.dp, 28f.dp)
+        )
+
+        val thumbBaseModifier = Modifier
+            .graphicsLayer {
+                val f = dampedDragAnimation.value
+                val pad = 2f.dp.toPx()
+                translationX = if (isLtr) lerpFloat(pad, pad + dragWidth, f) else lerpFloat(-pad, -(pad + dragWidth), f)
+            }
+            .semantics { role = Role.Switch }
+            .then(if (enabled) dampedDragAnimation.modifier else Modifier)
+
+        if (kyantActive) {
+            Box(
+                thumbBaseModifier
+                    .drawBackdrop(
+                        backdrop = thumbBackdrop,
+                        shape = { Capsule() },
+                        effects = {
+                            val progress = dampedDragAnimation.pressProgress
+                            blur(8f.dp.toPx() * (1f - progress))
+                            if (LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)) {
+                                lens(
+                                    refractionHeight = 5f.dp.toPx() * progress,
+                                    refractionAmount = 10f.dp.toPx() * progress,
+                                    depthEffect = true,
+                                    chromaticAberration = true
+                                )
+                            }
+                        },
+                        highlight = {
+                            val progress = dampedDragAnimation.pressProgress
+                            Highlight.Ambient.copy(
+                                width = Highlight.Ambient.width / 1.5f,
+                                blurRadius = Highlight.Ambient.blurRadius / 1.5f,
+                                alpha = progress
+                            )
+                        },
+                        shadow = {
+                            Shadow(
+                                radius = 4f.dp,
+                                color = Color.Black.copy(alpha = 0.08f)
+                            )
+                        },
+                        innerShadow = {
+                            val progress = dampedDragAnimation.pressProgress
+                            InnerShadow(
+                                radius = 4f.dp * progress,
+                                alpha = progress
+                            )
+                        },
+                        layerBlock = {
+                            scaleX = dampedDragAnimation.scaleX
+                            scaleY = dampedDragAnimation.scaleY
+                            val velocity = dampedDragAnimation.velocity / 50f
+                            scaleX /= 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
+                            scaleY *= 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
+                        },
+                        onDrawSurface = {
+                            val progress = dampedDragAnimation.pressProgress
+                            drawRect(Color.White.copy(alpha = (1f - progress).coerceAtLeast(0.18f)))
+                        }
+                    )
+                    .size(40f.dp, 24f.dp)
+            )
+        } else {
+            Box(
+                thumbBaseModifier
+                    .size(40f.dp, 24f.dp)
+                    .clip(Capsule())
+                    .background(Color.White)
+            )
+        }
+    }
+}
+
+/**
+ * Сегментированный переключатель в стиле iOS 26 Liquid Glass (`Kyant0/AndroidLiquidGlass`):
+ * стеклянная капсула с переезжающей линзой под выбранным пунктом.
+ */
+@Composable
+fun LiquidSegmentedTabs(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val dark = Liquid.isDark(scheme.background)
+    val backdrop = LocalKyantBackdrop.current
+    val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    val kyantActive = LiquidGlassEngine.useKyant(Build.VERSION.SDK_INT, LiquidPreview.enabled, backdrop != null) && backdrop != null
+    val kyantLensActive = kyantActive && LiquidGlassEngine.supportsLens(Build.VERSION.SDK_INT)
+    val rowBackdrop = rememberLayerBackdrop()
+    val lensBackdrop = rememberCombinedBackdrop(*listOfNotNull(backdrop, rowBackdrop).toTypedArray())
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .liquidGlass(
+                shape = Liquid.BarShape,
+                elevation = 8.dp,
+                blurRadius = if (dark) 3.dp else 2.dp,
+                refractionHeight = 12.dp,
+                refractionAmount = 24.dp,
+                surfaceAlpha = if (dark) 0.14f else 0.24f
+            )
+            .padding(3.dp)
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val count = options.size.coerceAtLeast(1)
+            val itemWidth = maxWidth / count
+            val localDensity = androidx.compose.ui.platform.LocalDensity.current
+            val itemWidthPx = with(localDensity) { itemWidth.toPx() }
+            val lensOffsetPx by animateFloatAsState(
+                targetValue = selectedIndex * itemWidthPx,
+                animationSpec = spring(dampingRatio = 0.72f, stiffness = 260f),
+                label = "liquidSegmentOffset"
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (kyantLensActive) Modifier.layerBackdrop(rowBackdrop) else Modifier),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                options.forEach { (key, label) ->
+                    val on = key == selected
+                    val textColor by animateColorAsState(
+                        if (on) scheme.primary else scheme.onSurface,
+                        tween(180),
+                        label = "liquidSegmentText"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(Liquid.LensShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelect(key) }
+                            .padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            color = textColor,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            if (options.isNotEmpty()) {
+                val pillModifier = Modifier
+                    .offset { IntOffset(lensOffsetPx.roundToInt(), 0) }
+                    .width(itemWidth)
+                    .fillMaxHeight()
+                if (kyantLensActive) {
+                    Box(
+                        pillModifier.drawBackdrop(
+                            backdrop = lensBackdrop,
+                            shape = { Liquid.LensShape },
+                            effects = {
+                                vibrancy()
+                                lens(
+                                    refractionHeight = 10f.dp.toPx(),
+                                    refractionAmount = 20f.dp.toPx(),
+                                    depthEffect = true,
+                                    chromaticAberration = true
+                                )
+                            },
+                            highlight = { Highlight.Default },
+                            shadow = {
+                                Shadow(
+                                    radius = 6.dp,
+                                    color = Color.Black.copy(alpha = if (dark) 0.24f else 0.10f)
+                                )
+                            },
+                            innerShadow = {
+                                InnerShadow(
+                                    radius = 5.dp,
+                                    alpha = if (dark) 0.18f else 0.10f
+                                )
+                            },
+                            onDrawSurface = {
+                                drawRect(if (dark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.34f))
+                            }
+                        )
+                    )
+                } else {
+                    Box(
+                        pillModifier
+                            .clip(Liquid.LensShape)
+                            .background(if (dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.55f))
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Шапка в стиле iOS 26 Liquid Glass: плавающая стеклянная капсула с крупным заголовком
+ * и действиями, использующая живой [chromeBackdrop] из Kyant0/AndroidLiquidGlass.
+ */
+@Composable
+fun LiquidTopBar(
+    title: String,
+    actions: @Composable RowScope.() -> Unit = {},
+    navigationIcon: (@Composable () -> Unit)? = null
+) {
     val ink = MaterialTheme.colorScheme.onBackground
+    val dark = Liquid.isDark(MaterialTheme.colorScheme.background)
+    val chromeBackdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 20.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .heightIn(min = 56.dp)
+            .liquidGlass(
+                shape = Liquid.BarShape,
+                elevation = 12.dp,
+                backdrop = chromeBackdrop,
+                blurRadius = if (dark) 4.dp else 3.dp,
+                refractionHeight = 16.dp,
+                refractionAmount = 32.dp,
+                surfaceAlpha = if (dark) 0.16f else 0.28f
+            )
+            .padding(start = if (navigationIcon != null) 6.dp else 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (navigationIcon != null) {
+            CompositionLocalProvider(LocalContentColor provides ink) {
+                navigationIcon()
+            }
+            Spacer(Modifier.width(4.dp))
+        }
         Text(
             title,
             modifier = Modifier.weight(1f),
-            fontSize = 30.sp,
-            lineHeight = 36.sp,
+            fontSize = 22.sp,
+            lineHeight = 26.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.6).sp,
+            letterSpacing = (-0.4).sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = ink
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         CompositionLocalProvider(LocalContentColor provides ink) {
-            val chromeBackdrop = LocalKyantChromeBackdrop.current ?: LocalKyantBackdrop.current
             Row(
-                modifier = Modifier
-                    .height(48.dp)
-                    .liquidGlass(Liquid.ButtonShape, elevation = 10.dp, backdrop = chromeBackdrop, refractionHeight = 14.dp, refractionAmount = 28.dp)
-                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 content = actions
             )
@@ -854,6 +1784,12 @@ fun LiquidTabBar(items: List<BarNavItem>, selected: String, onSelect: (String) -
                                 )
                             },
                             highlight = { Highlight.Default },
+                            shadow = {
+                                Shadow(
+                                    radius = 6.dp,
+                                    color = Color.Black.copy(alpha = if (dark) 0.24f else 0.10f)
+                                )
+                            },
                             innerShadow = {
                                 InnerShadow(
                                     radius = 6.dp,

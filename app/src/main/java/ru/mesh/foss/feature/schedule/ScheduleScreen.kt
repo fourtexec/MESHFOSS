@@ -107,7 +107,7 @@ fun ScheduleScreen(
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { load() }) { Text(Words.Retry.text) }
+                    GlassButton(onClick = { load() }) { Text(Words.Retry.text) }
                 }
             }
             lessons.none { it.optString("subject").let { s -> s.isNotBlank() && s != "—" } } ->

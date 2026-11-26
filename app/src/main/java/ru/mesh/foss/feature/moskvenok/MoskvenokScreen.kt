@@ -458,7 +458,7 @@ fun MoskvenokScreen(store: SessionStore) {
                         )
                     }
                     Spacer(Modifier.height(16.dp))
-                    Button(
+                    GlassButton(
                         onClick = { enableMoskvenok() },
                         enabled = !enabling,
                         modifier = Modifier.fillMaxWidth()
@@ -519,13 +519,14 @@ fun MoskvenokScreen(store: SessionStore) {
                                 )
                             }
                             if (expired && qr != null) {
-                                FilledIconButton(
+                                GlassIconButton(
                                     onClick = {
                                         MeshLog.log("Moskvenok", "qr: нажат refresh — новый barcode_payload")
                                         load(refreshQr = true)
                                     },
                                     enabled = !qrRefreshing,
-                                    modifier = Modifier.size(64.dp)
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    size = 64.dp
                                 ) {
                                     if (qrRefreshing) {
                                         CircularProgressIndicator(
@@ -637,7 +638,7 @@ private fun MoskvenokProcessingCard(onRetry: () -> Unit, retrying: Boolean) {
             // Серверная обработка может зависнуть — повторный POST settings/docs
             // перепоставляет документы в очередь (то же, что жмёт official).
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onRetry, enabled = !retrying) {
+            GlassOutlinedButton(onClick = onRetry, enabled = !retrying) {
                 if (retrying) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
@@ -664,7 +665,7 @@ private fun MoskvenokErrorCard(message: String, onRetry: () -> Unit) {
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onRetry) { Text(Words.Retry.text) }
+            GlassOutlinedButton(onClick = onRetry) { Text(Words.Retry.text) }
         }
     }
 }

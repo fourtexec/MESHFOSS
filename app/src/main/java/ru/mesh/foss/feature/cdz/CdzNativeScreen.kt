@@ -6,7 +6,7 @@
 package ru.mesh.foss.feature.cdz
 
 import ru.mesh.foss.core.Words
-import ru.mesh.foss.ui.GlassCard
+import ru.mesh.foss.ui.*
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -102,17 +102,29 @@ fun CdzNativeScreen(
 
     BackHandler { requestClose() }
 
+    val liquid = LocalDesign.current == Design.LIQUID
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (LocalDesign.current == Design.PLAIN) MaterialTheme.colorScheme.background else androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = ::requestClose) {
-                        Text("‹", style = MaterialTheme.typography.headlineMedium)
+            if (liquid) {
+                LiquidTopBar(
+                    title = "",
+                    navigationIcon = {
+                        IconButton(onClick = ::requestClose) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
+                        }
                     }
-                },
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = {},
+                    navigationIcon = {
+                        IconButton(onClick = ::requestClose) {
+                            Text("‹", style = MaterialTheme.typography.headlineMedium)
+                        }
+                    },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -162,6 +174,8 @@ fun CdzNativeScreen(
 
     if (confirmStart) {
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onDismissRequest = { confirmStart = false },
             title = { Text(Words.CdzStartAttempt.text) },
             text = {
@@ -200,6 +214,8 @@ fun CdzNativeScreen(
             }
         }
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onDismissRequest = { confirmFinish = false },
             title = { Text(Words.CdzFinishTitle.text) },
             text = { Text(message) },
@@ -217,6 +233,8 @@ fun CdzNativeScreen(
 
     if (confirmLeave) {
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onDismissRequest = { confirmLeave = false },
             title = { Text(Words.CdzLeaveTitle.text) },
             text = { Text(Words.CdzLeaveMessage.text) },
@@ -234,6 +252,8 @@ fun CdzNativeScreen(
 
     viewModel.result?.let { result ->
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onDismissRequest = {
                 viewModel.dismissResult()
                 onClose()
@@ -269,6 +289,8 @@ fun CdzNativeScreen(
 
     if (viewModel.historyVisible) {
         AlertDialog(
+            modifier = Modifier.dialogGlass(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             onDismissRequest = viewModel::dismissHistory,
             title = { Text(Words.CdzAttemptHistory.text) },
             text = {
@@ -376,7 +398,7 @@ private fun LoadingPanel(
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onRetry) { Text(Words.Retry.text) }
+            GlassButton(onClick = onRetry) { Text(Words.Retry.text) }
             if (onOpenInBrowser != null) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = onOpenInBrowser) {
@@ -425,7 +447,7 @@ private fun ChoicePanel(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 viewModel.lastAttemptId?.let { last ->
-                    Button(
+                    GlassButton(
                         onClick = onContinue,
                         enabled = !viewModel.busy,
                         modifier = Modifier.fillMaxWidth(),
@@ -433,7 +455,7 @@ private fun ChoicePanel(
                         Text(Words.CdzContinueAttempt(last))
                     }
                 }
-                FilledTonalButton(
+                GlassTonalButton(
                     onClick = onStart,
                     enabled = !viewModel.busy,
                     modifier = Modifier.fillMaxWidth(),
@@ -681,10 +703,19 @@ private fun GameActions(
     onSave: () -> Unit,
 ) {
     val motion = MaterialTheme.motionScheme
+    val liquid = LocalDesign.current == Design.LIQUID
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 3.dp,
-        modifier = Modifier.fillMaxWidth(),
+        color = if (liquid) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = if (liquid) 0.dp else 3.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (liquid) {
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp).liquidChromeGlass(Liquid.BarShape)
+                } else {
+                    Modifier
+                }
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -707,7 +738,7 @@ private fun GameActions(
                     onClick = onPrev,
                 )
             }
-            Button(
+            GlassButton(
                 onClick = onSave,
                 enabled = !busy,
                 modifier = Modifier
@@ -754,17 +785,28 @@ private fun NavArrow(
 
 @Composable
 private fun FinishButton(onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.error,
-        contentColor = MaterialTheme.colorScheme.onError,
-        modifier = Modifier
-            .size(48.dp)
-            .semantics { contentDescription = Words.CdzNativeFinish.text },
-    ) {
-        Box(contentAlignment = Alignment.Center) {
+    if (LocalDesign.current == Design.LIQUID) {
+        GlassIconButton(
+            onClick = onClick,
+            tint = MaterialTheme.colorScheme.error,
+            size = 48.dp,
+            modifier = Modifier.semantics { contentDescription = Words.CdzNativeFinish.text },
+        ) {
             ExitIcon()
+        }
+    } else {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = Words.CdzNativeFinish.text },
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                ExitIcon()
+            }
         }
     }
 }

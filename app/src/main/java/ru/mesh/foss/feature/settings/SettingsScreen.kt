@@ -75,10 +75,18 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         val sections = listOf("appearance" to Words.Appearance.text, "app" to Words.Application.text, "account" to Words.Account.text)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            sections.forEach { (id, title) ->
-                item(key = id) {
-                    FilterChip(selected = section == id, onClick = { section = id }, label = { Text(title) })
+        if (LocalDesign.current == Design.LIQUID) {
+            LiquidSegmentedTabs(
+                options = sections,
+                selected = section,
+                onSelect = { section = it }
+            )
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                sections.forEach { (id, title) ->
+                    item(key = id) {
+                        FilterChip(selected = section == id, onClick = { section = id }, label = { Text(title) })
+                    }
                 }
             }
         }
@@ -187,7 +195,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(Modifier.height(6.dp))
-                                    OutlinedButton(
+                                    GlassOutlinedButton(
                                         onClick = {
                                             prefs.edit().putString("theme_colors", customColors).apply()
                                             applyTheme("custom")
@@ -225,7 +233,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                         style = MaterialTheme.typography.bodyMedium,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    Switch(
+                                    GlassSwitch(
                                         checked = hapticsEnabled,
                                         onCheckedChange = { value ->
                                             hapticsEnabled = value
@@ -248,7 +256,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Switch(
+                                    GlassSwitch(
                                         checked = cdzInApp,
                                         onCheckedChange = { value ->
                                             cdzInApp = value
@@ -273,7 +281,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Switch(
+                                    GlassSwitch(
                                         checked = moskvenokLog,
                                         onCheckedChange = { value ->
                                             moskvenokLog = value
@@ -283,10 +291,10 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                 }
                                 if (moskvenokLog) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(onClick = { showMoskvenokLog = true }) {
+                                        GlassOutlinedButton(onClick = { showMoskvenokLog = true }) {
                                             Text(Words.ShowMoskvenokLog.text)
                                         }
-                                        OutlinedButton(
+                                        GlassOutlinedButton(
                                             onClick = {
                                                 MeshLogStore.clear()
                                                 showMoskvenokLog = false
@@ -306,28 +314,43 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                 // Content-lambda ButtonGroup не @Composable — переводим заранее.
                                 val releasesLabel = Words.Stable.text
                                 val prereleasesLabel = Words.PreReleases.text
-                                ButtonGroup(
-                                    overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    toggleableItem(
-                                        checked = updateChannel == UpdateChecker.CHANNEL_RELEASES,
-                                        label = releasesLabel,
-                                        onCheckedChange = {
-                                            updateChannel = UpdateChecker.CHANNEL_RELEASES
-                                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_RELEASES).apply()
+                                if (LocalDesign.current == Design.LIQUID) {
+                                    LiquidSegmentedTabs(
+                                        options = listOf(
+                                            UpdateChecker.CHANNEL_RELEASES to releasesLabel,
+                                            UpdateChecker.CHANNEL_PRERELEASES to prereleasesLabel
+                                        ),
+                                        selected = updateChannel,
+                                        onSelect = { next ->
+                                            updateChannel = next
+                                            prefs.edit().putString("update_channel", next).apply()
                                         },
-                                        weight = 1f
+                                        modifier = Modifier.fillMaxWidth()
                                     )
-                                    toggleableItem(
-                                        checked = updateChannel == UpdateChecker.CHANNEL_PRERELEASES,
-                                        label = prereleasesLabel,
-                                        onCheckedChange = {
-                                            updateChannel = UpdateChecker.CHANNEL_PRERELEASES
-                                            prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_PRERELEASES).apply()
-                                        },
-                                        weight = 1f
-                                    )
+                                } else {
+                                    ButtonGroup(
+                                        overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        toggleableItem(
+                                            checked = updateChannel == UpdateChecker.CHANNEL_RELEASES,
+                                            label = releasesLabel,
+                                            onCheckedChange = {
+                                                updateChannel = UpdateChecker.CHANNEL_RELEASES
+                                                prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_RELEASES).apply()
+                                            },
+                                            weight = 1f
+                                        )
+                                        toggleableItem(
+                                            checked = updateChannel == UpdateChecker.CHANNEL_PRERELEASES,
+                                            label = prereleasesLabel,
+                                            onCheckedChange = {
+                                                updateChannel = UpdateChecker.CHANNEL_PRERELEASES
+                                                prefs.edit().putString("update_channel", UpdateChecker.CHANNEL_PRERELEASES).apply()
+                                            },
+                                            weight = 1f
+                                        )
+                                    }
                                 }
                                 Text(
                                     Words.IncludesBetaRcAndNightlyBuildsCheckManually.text,
@@ -335,7 +358,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(Modifier.height(10.dp))
-                                OutlinedButton(
+                                GlassOutlinedButton(
                                     onClick = {
                                         if (!checkingUpdates) {
                                             checkingUpdates = true
@@ -392,7 +415,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                     ))
                                 }
                                 Spacer(Modifier.height(8.dp))
-                                Button(
+                                GlassButton(
                                     onClick = {
                                         refreshing = true
                                         message = null
@@ -437,7 +460,7 @@ fun SettingsScreen(store: SessionStore, client: MeshClient, profile: JSONObject?
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Spacer(Modifier.height(10.dp))
-                                OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
+                                GlassOutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth()) {
                                     Text(Words.SignOutAndDeleteToken.text)
                                 }
                             }

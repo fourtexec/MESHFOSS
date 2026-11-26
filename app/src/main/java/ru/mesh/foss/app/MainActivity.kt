@@ -35,7 +35,11 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -550,7 +554,7 @@ fun BootErrorScreen(message: String, onRetry: () -> Unit, onLogout: () -> Unit) 
         Spacer(Modifier.height(8.dp))
         Text(message, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onRetry) { Text(Words.Retry.text) }
+        GlassButton(onClick = onRetry) { Text(Words.Retry.text) }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onLogout) { Text(Words.SignInAgain.text) }
     }
@@ -948,12 +952,14 @@ fun MainScaffold(
 
     if (showMore) {
         val moreSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val sheetShape = RoundedCornerShape(32.dp)
         ModalBottomSheet(
             onDismissRequest = {
                 showMore = false
                 editNav = false
             },
             sheetState = moreSheetState,
+            shape = if (liquid) sheetShape else BottomSheetDefaults.ExpandedShape,
             // Стекло рисуем внутри шторки, а не на её корне: корень ещё до анимации
             // стоит в TopCenter, поэтому фон/клип на нём оставался сверху пустой
             // пластиной, пока содержимое уезжало вниз.
@@ -966,43 +972,86 @@ fun MainScaffold(
             },
             dragHandle = if (liquid) null else { { BottomSheetDefaults.DragHandle() } },
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (liquid) Modifier.dialogGlass() else Modifier)
-            ) {
-                if (liquid) BottomSheetDefaults.DragHandle()
+            LiquidModalScope {
+                val sheetItemColors = if (liquid) {
+                    ListItemDefaults.colors(containerColor = Color.Transparent)
+                } else {
+                    ListItemDefaults.colors()
+                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (liquid) Modifier.navigationBarsPadding() else Modifier)
-                ) {
-                    if (editNav) {
-                        NavEditor(
-                            layout = navLayout,
-                            onChange = { applyNav(it) },
-                            onDone = { editNav = false },
-                        )
-                    } else {
-                        ListItem(
-                            modifier = Modifier.fillMaxWidth().clickable { showAccounts = true },
-                            headlineContent = { Text(Words.Accounts.text) },
-                            leadingContent = { Text("◉") },
-                        )
-                        ListItem(
-                            modifier = Modifier.fillMaxWidth().clickable { editNav = true },
-                            headlineContent = { Text(Words.EditTabs.text) },
-                            leadingContent = { Text("✎") },
-                        )
-                        HorizontalDivider()
-                        navLayout.more.forEach { key ->
-                            MoreSheetItem(NavTabs.label(key), NavTabs.icon(key)) {
-                                showMore = false
-                                editNav = false
-                                navigateTo(NavState(tab = key))
+                        .then(
+                            if (liquid) {
+                                Modifier
+                                    .navigationBarsPadding()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .dialogGlass(sheetShape)
+                            } else {
+                                Modifier
                             }
+                        ),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (liquid) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.44f))
+                            )
                         }
-                        Spacer(Modifier.height(16.dp))
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (liquid) Modifier.padding(bottom = 4.dp) else Modifier)
+                    ) {
+                        if (editNav) {
+                            NavEditor(
+                                layout = navLayout,
+                                onChange = { applyNav(it) },
+                                onDone = { editNav = false },
+                            )
+                        } else {
+                            ListItem(
+                                modifier = Modifier.fillMaxWidth().clickable { showAccounts = true },
+                                colors = sheetItemColors,
+                                headlineContent = { Text(Words.Accounts.text) },
+                                leadingContent = { Text("◉") },
+                            )
+                            ListItem(
+                                modifier = Modifier.fillMaxWidth().clickable { editNav = true },
+                                colors = sheetItemColors,
+                                headlineContent = { Text(Words.EditTabs.text) },
+                                leadingContent = { Text("✎") },
+                            )
+                            HorizontalDivider(
+                                color = if (liquid) {
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                } else {
+                                    DividerDefaults.color
+                                }
+                            )
+                            navLayout.more.forEach { key ->
+                                MoreSheetItem(
+                                    label = NavTabs.label(key),
+                                    iconRes = NavTabs.icon(key),
+                                    transparent = liquid
+                                ) {
+                                    showMore = false
+                                    editNav = false
+                                    navigateTo(NavState(tab = key))
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                        }
                     }
                 }
             }
@@ -1076,9 +1125,10 @@ fun MainScaffold(
 }
 
 @Composable
-private fun MoreSheetItem(label: String, iconRes: Int, onClick: () -> Unit) {
+private fun MoreSheetItem(label: String, iconRes: Int, transparent: Boolean = false, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = if (transparent) ListItemDefaults.colors(containerColor = Color.Transparent) else ListItemDefaults.colors(),
         headlineContent = { Text(label) },
         leadingContent = {
             Icon(
@@ -1137,29 +1187,26 @@ fun LoginScreen(
     )
 
         Spacer(Modifier.height(12.dp))
-        OutlinedButton(
+        val liquid = LocalDesign.current == Design.LIQUID
+        GlassOutlinedButton(
             onClick = onPreview,
             enabled = !loading,
-            shape = MaterialTheme.shapes.extraLarge,
+            shape = if (liquid) Liquid.ButtonShape else MaterialTheme.shapes.extraLarge,
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
-                .glassPane(MaterialTheme.shapes.extraLarge)
         ) {
             Text(Words.PreviewWithoutSignIn.text, style = MaterialTheme.typography.titleSmall)
         }
 
         Spacer(Modifier.height(12.dp))
         // Остальные способы спрятаны за красной кнопкой инструментов.
-        Button(
+        GlassButton(
             onClick = { experimental = true },
             enabled = !loading,
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError
-            ),
+            shape = if (liquid) Liquid.ButtonShape else MaterialTheme.shapes.extraLarge,
+            tint = MaterialTheme.colorScheme.error,
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
         ) {
@@ -1185,127 +1232,129 @@ fun LoginScreen(
             onDismissRequest = { experimental = false },
             title = { Text(Words.ExperimentalSignInMethods.text) },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    // Вход по cookie JSON (например mos_cookies.json) — experimental.
-                    Text(
-                        Words.SignInWithCookiesJson.text,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        Words.CookiesJsonHint.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { cookieFile.launch("*/*") }) {
-                            Text(Words.PickCookiesFile.text)
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = cookieJson,
-                        onValueChange = { cookieJson = it },
-                        label = { Text(Words.PasteCookiesJson.text) },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Button(
-                        onClick = {
-                            val value = cookieJson.trim()
-                            if (value.isNotBlank()) {
-                                onLoginCookies(value)
-                                experimental = false
+                LiquidModalScope {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        // Вход по cookie JSON (например mos_cookies.json) — experimental.
+                        Text(
+                            Words.SignInWithCookiesJson.text,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            Words.CookiesJsonHint.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GlassOutlinedButton(onClick = { cookieFile.launch("*/*") }) {
+                                Text(Words.PickCookiesFile.text)
                             }
-                        },
-                        enabled = !loading && cookieJson.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(Words.SignInWithCookiesJson.text)
-                    }
-                    HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                    Text(
-                        Words.ExperimentalSignInWarning.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    // На горизонтальном экране QR уже показан рядом со ссылкой.
-                    if (!landscape) {
-                        qrLink?.let { link ->
-                            Text(
-                                Words.QrLinkCodeHint.text,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            QrCodeImage(link, size = 160.dp)
-                            Spacer(Modifier.height(18.dp))
                         }
-                    }
-                    Text(
-                        Words.SignInOnTheMeshWebsite.text,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        Words.SignInAtSchoolMosRuThisWindow.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            experimental = false
-                            webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
-                        },
-                        enabled = !loading,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(Words.OpenSchoolMosRu.text)
-                    }
-                    Spacer(Modifier.height(20.dp))
-                    Text(
-                        Words.EnterATokenManually.text,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = Words.Open(url),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = cookieJson,
+                            onValueChange = { cookieJson = it },
+                            label = { Text(Words.PasteCookiesJson.text) },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        GlassButton(
+                            onClick = {
+                                val value = cookieJson.trim()
+                                if (value.isNotBlank()) {
+                                    onLoginCookies(value)
+                                    experimental = false
+                                }
+                            },
+                            enabled = !loading && cookieJson.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(Words.SignInWithCookiesJson.text)
                         }
-                    )
-                    Text(
-                        Words.CopyTheTokenFromThePageAndPaste.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = tokenInput,
-                        onValueChange = { tokenInput = it },
-                        label = { Text(Words.MeshToken.text) },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Button(
-                        onClick = {
-                            experimental = false
-                            onLogin(tokenInput)
-                        },
-                        enabled = !loading && tokenInput.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (loading) LoadingIndicator(modifier = Modifier.size(20.dp))
-                        else Text(Words.SignInWithToken.text)
+                        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                        Text(
+                            Words.ExperimentalSignInWarning.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        // На горизонтальном экране QR уже показан рядом со ссылкой.
+                        if (!landscape) {
+                            qrLink?.let { link ->
+                                Text(
+                                    Words.QrLinkCodeHint.text,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                QrCodeImage(link, size = 160.dp)
+                                Spacer(Modifier.height(18.dp))
+                            }
+                        }
+                        Text(
+                            Words.SignInOnTheMeshWebsite.text,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            Words.SignInAtSchoolMosRuThisWindow.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        GlassOutlinedButton(
+                            onClick = {
+                                experimental = false
+                                webLogin.launch(Intent(context, SchoolLoginActivity::class.java))
+                            },
+                            enabled = !loading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(Words.OpenSchoolMosRu.text)
+                        }
+                        Spacer(Modifier.height(20.dp))
+                        Text(
+                            Words.EnterATokenManually.text,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = Words.Open(url),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        )
+                        Text(
+                            Words.CopyTheTokenFromThePageAndPaste.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = tokenInput,
+                            onValueChange = { tokenInput = it },
+                            label = { Text(Words.MeshToken.text) },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        GlassButton(
+                            onClick = {
+                                experimental = false
+                                onLogin(tokenInput)
+                            },
+                            enabled = !loading && tokenInput.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (loading) LoadingIndicator(modifier = Modifier.size(20.dp))
+                            else Text(Words.SignInWithToken.text)
+                        }
                     }
                 }
             },
