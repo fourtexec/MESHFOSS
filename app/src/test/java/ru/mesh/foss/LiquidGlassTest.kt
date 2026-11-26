@@ -31,6 +31,24 @@ class LiquidGlassTest {
     }
 
     @Test
+    fun firstLaunchAfterPlainMigrationIgnoresSavedLiquid() {
+        assertEquals(
+            Design.PLAIN,
+            Design.resolveInitial(
+                savedDesign = Design.LIQUID,
+                plainDefaultMigrationDone = false,
+            ),
+        )
+        assertEquals(
+            Design.LIQUID,
+            Design.resolveInitial(
+                savedDesign = Design.LIQUID,
+                plainDefaultMigrationDone = true,
+            ),
+        )
+    }
+
+    @Test
     fun kyantEngineRespectsAndroidSdkAndPreviewFlags() {
         assertFalse(LiquidGlassEngine.supportsBackdrop(30))
         assertTrue(LiquidGlassEngine.supportsBackdrop(31))

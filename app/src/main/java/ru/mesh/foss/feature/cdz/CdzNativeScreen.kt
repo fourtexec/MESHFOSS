@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -720,7 +719,9 @@ private fun GameActions(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
+                // Клавиатуру обрабатывает adjustResize окна. Второй imePadding
+                // здесь раздувал нижнюю панель после возврата из «недавних»
+                // приложений: Compose хранил старую высоту IME.
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,

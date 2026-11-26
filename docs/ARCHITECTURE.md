@@ -172,8 +172,9 @@ Bearer); для `family/web` допустимы оба.
 
 - Liquid Glass: базовый слой `io.github.kyant0:backdrop` (`bgBackdrop` для карточек)
   и комбинированный `chromeBackdrop` (`rememberCombinedBackdrop(bgBackdrop, contentBackdrop)`)
-  для плавающего таб-бара, скользящей `Capsule`-линзы, шапки и FAB; `Design.LIQUID`
-  включён по умолчанию (`Design.migrate` / `Design.DEFAULT`).
+  для плавающего таб-бара, скользящей `Capsule`-линзы, шапки и FAB; по умолчанию
+  используется `Design.PLAIN`, а `Design.LIQUID` включается в настройках
+  (`Design.migrate` / `Design.DEFAULT`).
 - Иконки не увеличиваются при нажатии/перетаскивании; двигается только стекло.
 - Линза следует за пальцем, замедляется у центров вкладок и выбирает ближайшую
   левую вкладку при движении справа налево.

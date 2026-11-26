@@ -46,14 +46,42 @@ object Design {
     /** Старый ключ переключателя (для безопасной миграции). */
     const val LEGACY_GLASS_KEY = "glass_enabled"
 
+    /**
+     * Одноразовая миграция после сборок с Liquid по умолчанию.
+     * Сбрасываем сохранённый `liquid`, чтобы обновление открывало привычный PLAIN.
+     */
+    const val PLAIN_DEFAULT_MIGRATION_KEY = "design_plain_default_2_6_1"
+
     fun resolve(savedDesign: String?, legacyGlassEnabled: Boolean? = null): String =
         if (savedDesign == LIQUID) LIQUID else PLAIN
 
-    fun migrate(prefs: android.content.SharedPreferences): String =
-        resolve(
+    /** Значение дизайна при запуске с учётом одноразового возврата к PLAIN. */
+    fun resolveInitial(
+        savedDesign: String?,
+        legacyGlassEnabled: Boolean? = null,
+        plainDefaultMigrationDone: Boolean,
+    ): String =
+        if (plainDefaultMigrationDone) resolve(savedDesign, legacyGlassEnabled) else PLAIN
+
+    fun migrate(prefs: android.content.SharedPreferences): String {
+        val migrated = prefs.getBoolean(PLAIN_DEFAULT_MIGRATION_KEY, false)
+        val value = resolveInitial(
             savedDesign = prefs.getString(PREF_KEY, null),
-            legacyGlassEnabled = if (prefs.contains(LEGACY_GLASS_KEY)) prefs.getBoolean(LEGACY_GLASS_KEY, false) else null
+            legacyGlassEnabled = if (prefs.contains(LEGACY_GLASS_KEY)) {
+                prefs.getBoolean(LEGACY_GLASS_KEY, false)
+            } else {
+                null
+            },
+            plainDefaultMigrationDone = migrated,
         )
+        if (!migrated || prefs.getString(PREF_KEY, null) != value) {
+            prefs.edit()
+                .putString(PREF_KEY, value)
+                .putBoolean(PLAIN_DEFAULT_MIGRATION_KEY, true)
+                .apply()
+        }
+        return value
+    }
 }
 
 /** Текущий дизайн интерфейса. */

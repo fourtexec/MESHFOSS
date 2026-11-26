@@ -949,16 +949,61 @@ fun cdzAbsoluteUrl(raw: String?): String {
     return "https://uchebnik.mos.ru/${value.trimStart('/')}"
 }
 
-/** Разбирает `text_styles` и обрезает диапазоны по границам текста. */
-fun parseTextSpans(text: String, styles: JSONArray?): List<CdzTextSpan> {
+/**
+ * Границы текстовых блоков inline-задания.
+ *
+ * `text_styles.position` в ЦДЗ считается от начала своего `text_block_index`,
+ * а не от всей склеенной строки. Пропуски (`text_position`) находятся ровно
+ * между этими блоками, поэтому их позиции и дают границы.
+ */
+fun inlineTextBlockStarts(textLength: Int, positions: Iterable<Int>): List<Int> {
+    val starts = mutableListOf(0)
+    positions.asSequence()
+        .filter { it in 0..textLength }
+        .sorted()
+        .forEach { position ->
+            if (starts.last() != position) starts += position
+        }
+    if (starts.last() != textLength) starts += textLength
+    return starts
+}
+
+/**
+ * Разбирает `text_styles` и обрезает диапазоны по границам текста.
+ *
+ * [blockStarts] нужен для inline-заданий: в них API нумерует текстовые блоки,
+ * и `position` каждого стиля относится к своему блоку. Без этой карты
+ * индексы SUB/SUP попадали на случайные буквы и визуально «уплывали» вниз.
+ */
+fun parseTextSpans(
+    text: String,
+    styles: JSONArray?,
+    blockStarts: List<Int>? = null,
+): List<CdzTextSpan> {
     if (text.isEmpty() || styles == null) return emptyList()
+    val blocks = blockStarts
+        ?.takeIf { it.size >= 2 && it.first() == 0 && it.last() == text.length }
     val result = mutableListOf<CdzTextSpan>()
     for (index in 0 until styles.length()) {
         val style = styles.optJSONObject(index) ?: continue
         val rawStart = style.optInt("position", -1)
         if (rawStart < 0) continue
-        var start = rawStart.coerceAtMost(text.length)
-        var end = (rawStart + style.optInt("offset", 0)).coerceAtLeast(start).coerceAtMost(text.length)
+
+        val blockIndex = style.optInt("text_block_index", -1)
+        val local = if (blockIndex >= 0 && blocks != null && blockIndex < blocks.lastIndex) {
+            val blockStart = blocks[blockIndex]
+            val blockEnd = blocks[blockIndex + 1]
+            val start = blockStart + rawStart
+            val end = blockStart + rawStart + style.optInt("offset", 0)
+            if (start in blockStart..blockEnd && end >= start) start to end.coerceAtMost(blockEnd) else null
+        } else {
+            // Старый формат: координаты уже от начала всей строки.
+            if (style.has("text_block_index") && blockIndex > 0) null
+            else rawStart to rawStart + style.optInt("offset", 0)
+        } ?: continue
+
+        var start = local.first.coerceIn(0, text.length)
+        var end = local.second.coerceAtLeast(start).coerceIn(0, text.length)
         // API иногда включает в SUB завершающий пробел: "O2 " с offset=2.
         while (start < end && text[start].isWhitespace()) start++
         while (end > start && text[end - 1].isWhitespace()) end--

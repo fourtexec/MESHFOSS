@@ -5,6 +5,7 @@ import ru.mesh.foss.feature.cdz.cdzAtomicMediaType
 import ru.mesh.foss.feature.cdz.hasAnswer
 import ru.mesh.foss.feature.cdz.inlineAnswer
 import ru.mesh.foss.feature.cdz.inlineSelections
+import ru.mesh.foss.feature.cdz.inlineTextBlockStarts
 import ru.mesh.foss.feature.cdz.isInlineChoice
 import ru.mesh.foss.feature.cdz.parseInlineChoices
 import ru.mesh.foss.feature.cdz.parseMathContent
@@ -36,6 +37,38 @@ class CdzRichTextTest {
         assertEquals(7, spans[0].start)
         assertEquals(8, spans[0].end)
         assertEquals(setOf("SUB"), spans[0].tokens)
+    }
+
+    @Test
+    fun `inline styles use their own text block offset`() {
+        val text = "Работа Ап — энергия Qн."
+        val styles = JSONArray()
+            .put(
+                JSONObject()
+                    .put("text_block_index", 0)
+                    .put("position", 8)
+                    .put("offset", 1)
+                    .put("content", JSONArray().put("SUB"))
+            )
+            .put(
+                JSONObject()
+                    .put("text_block_index", 1)
+                    .put("position", 9)
+                    .put("offset", 1)
+                    .put("content", JSONArray().put("SUB"))
+            )
+
+        val spans = parseTextSpans(text, styles, listOf(0, 12, text.length))
+
+        assertEquals(listOf(8, 21), spans.map { it.start })
+        assertEquals(listOf("п", "н"), spans.map { text.substring(it.start, it.end) })
+        assertTrue(spans.all { it.tokens == setOf("SUB") })
+    }
+
+    @Test
+    fun `inline block starts follow gap positions`() {
+        assertEquals(listOf(0, 63, 74, 358), inlineTextBlockStarts(358, listOf(74, 63, 74)))
+        assertEquals(listOf(0, 10), inlineTextBlockStarts(10, emptyList()))
     }
 
     @Test

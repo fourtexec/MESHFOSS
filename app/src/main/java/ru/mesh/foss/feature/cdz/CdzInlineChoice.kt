@@ -144,8 +144,11 @@ private fun CdzInlineChoiceText(
     onChanged: (JSONObject) -> Unit,
 ) {
     val text = block.optString("text")
-    val spans = remember(block) {
-        parseTextSpans(text, block.optJSONArray("text_styles"))
+    val blockStarts = remember(text, choices) {
+        inlineTextBlockStarts(text.length, choices.map { it.position })
+    }
+    val spans = remember(block, blockStarts) {
+        parseTextSpans(text, block.optJSONArray("text_styles"), blockStarts)
     }
 
     fun choose(choice: CdzInlineChoice, optionId: String) {
@@ -163,11 +166,11 @@ private fun CdzInlineChoiceText(
     }
 
     // Ширина пропуска зависит от выбранного слова, а не от фиксированных
-    // 7em: короткие ответы больше не растягивают строку и не наезжают на
-    // соседний текст. Длинные варианты ограничены и обрезаются с ellipsis.
+    // 7em: короткие ответы больше не растягивают строку, а длинные не
+    // превращаются в «…» — поле получает полную ширину варианта.
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelMedium
+    val labelStyle = MaterialTheme.typography.bodyLarge
     val placeholderData = choices.map { choice ->
         val selectedOption = choice.options.firstOrNull { it.id == selected[choice.positionId] }
         val label = optionLabel(selectedOption).ifBlank { "…" }
@@ -193,10 +196,11 @@ private fun CdzInlineChoiceText(
         placeholders[index].id to InlineTextContent(
             placeholder = Placeholder(
                 width = data.width,
-                // Компактная высота: поле остаётся частью строки текста,
-                // а не отдельной высокой плашкой поверх соседних слов.
+                // Высота строки bodyLarge: плашка не раздвигает строку и не
+                // сдвигает соседние буквы вниз. TextCenter держит её на
+                // текстовой оси, а не на всей высоте линии.
                 height = 1.5.em,
-                placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
             ),
         ) {
             CdzInlineChoiceDropdown(
@@ -228,8 +232,9 @@ private data class InlinePlaceholderData(
  *
  * `Placeholder.width` измеряется в единицах текста, поэтому переводим
  * измеренные пиксели в `sp` через текущую density/fontScale. В ширину входят
- * горизонтальные отступы и стрелка; минимум и максимум не дают полю стать
- * ни микроскопическим, ни шире строки.
+ * горизонтальные отступы и стрелка; минимум не даёт пустому полю стать
+ * микроскопическим, а верхнего предела нет — иначе длинный вариант
+ * обрезался бы многоточием.
  */
 private fun inlinePlaceholderWidth(
     label: String,
@@ -238,8 +243,7 @@ private fun inlinePlaceholderWidth(
     density: Density,
 ): TextUnit {
     val minWidth = with(density) { 36.dp.toPx() }
-    val maxWidth = with(density) { 124.dp.toPx() }
-    val chromeWidth = with(density) { 24.dp.toPx() }
+    val chromeWidth = with(density) { 30.dp.toPx() }
     val textWidth = if (label.isBlank()) {
         0f
     } else {
@@ -251,7 +255,7 @@ private fun inlinePlaceholderWidth(
         ).size.width.toFloat()
     }
     return with(density) {
-        (textWidth + chromeWidth).coerceIn(minWidth, maxWidth).toSp()
+        (textWidth + chromeWidth).coerceAtLeast(minWidth).toSp()
     }
 }
 
@@ -313,16 +317,16 @@ private fun CdzInlineChoiceDropdown(
                 .clickable { expanded = true },
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                modifier = Modifier.padding(horizontal = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 CdzRichText(
                     text = optionLabel(selected).ifBlank { "…" },
                     spans = selected?.textSpans.orEmpty(),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier.weight(1f),
                 )
                 Text(

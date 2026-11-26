@@ -39,7 +39,8 @@
             android:name=".app.CdzNativeActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:exported="false"
-            android:theme="@style/Theme.MeshRanker" />
+            android:theme="@style/Theme.MeshRanker"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".app.CdzVideoActivity"
