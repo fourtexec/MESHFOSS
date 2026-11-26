@@ -73,7 +73,9 @@ fun CdzInlineChoiceContent(
         return
     }
 
-    val selected = remember(answer) { inlineSelections(answer) }
+    // Не кэшируем: ответ может обновиться асинхронной подстановкой, пока
+    // задание уже открыто. Выбранные варианты должны появиться сразу.
+    val selected = inlineSelections(answer)
     val elements = task.question
     val targetIndex = findInlineTextIndex(elements, choices)
     // В одном задании может быть несколько текстовых блоков со своими

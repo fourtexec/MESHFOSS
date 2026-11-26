@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -197,6 +198,12 @@ private fun TextAnswer(
     keyboardType: KeyboardType,
 ) {
     var value by remember(task.id) { mutableStateOf(textAnswer(answer)) }
+    // Подстановка из прошлой попытки приходит асинхронно: если поле ещё
+    // пустое, показываем внешний ответ без переключения задания.
+    LaunchedEffect(answer) {
+        val next = textAnswer(answer)
+        if (value.isBlank() && next.isNotBlank()) value = next
+    }
 
     fun emit(next: String) {
         if (next.isBlank()) {
@@ -257,6 +264,10 @@ private fun OrderAnswer(
 ) {
     val options = remember(task.answer) { parseOptions(task.answer) }
     var order by remember(task.id) { mutableStateOf<List<String>>(orderIds(answer, options)) }
+    LaunchedEffect(answer, options) {
+        val next = orderIds(answer, options)
+        if (next != order) order = next
+    }
 
     fun commit(next: List<String>) {
         order = next
@@ -335,9 +346,9 @@ private fun GroupsAnswer(
         groupHeaders.map { it.id to it.label() }
     }
 
-    val initial = remember(task.id) {
+    fun selectionsFrom(value: JSONObject): Map<String, MutableSet<String>> {
         val selected = LinkedHashMap<String, MutableSet<String>>()
-        val groups = answer.optJSONArray("groups")
+        val groups = value.optJSONArray("groups")
         if (groups != null) {
             for (i in 0 until groups.length()) {
                 val group = groups.optJSONObject(i) ?: continue
@@ -349,10 +360,16 @@ private fun GroupsAnswer(
                     .toMutableSet()
             }
         }
-        selected
+        return selected
     }
+
+    val initial = remember(task.id) { selectionsFrom(answer) }
     var selection by remember(task.id) {
         mutableStateOf<Map<String, MutableSet<String>>>(initial)
+    }
+    LaunchedEffect(answer) {
+        val next = selectionsFrom(answer)
+        if (next != selection) selection = next
     }
 
     fun commit() {
@@ -473,6 +490,10 @@ private fun UnsupportedAnswer(
         color = MaterialTheme.colorScheme.error,
     )
     var value by remember(task.id) { mutableStateOf(textAnswer(answer)) }
+    LaunchedEffect(answer) {
+        val next = textAnswer(answer)
+        if (value.isBlank() && next.isNotBlank()) value = next
+    }
     OutlinedTextField(
         value = value,
         onValueChange = { next ->

@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,10 @@ internal fun CdzTableAnswer(
     }
 
     var values by remember(task.id) { mutableStateOf(parseTableValues(answer)) }
+    LaunchedEffect(answer) {
+        val next = parseTableValues(answer)
+        if (next != values) values = next
+    }
 
     fun commit(next: Map<Pair<Int, Int>, String>) {
         values = next

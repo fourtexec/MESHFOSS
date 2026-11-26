@@ -632,7 +632,6 @@ fun MainScaffold(
 
     val design = LocalDesign.current
     val liquid = design == Design.LIQUID
-    val m3eBlurBackdrop = if (!liquid) rememberM3eBlurBackdrop() else null
     // Состав панели редактируется в «Ещё». По умолчанию — четыре частых раздела;
     // панель всегда содержит не больше четырёх вкладок + «Ещё». Благодаря
     // weight(1f) в таб-барах меньшее число вкладок распределяется поровну.
@@ -719,20 +718,34 @@ fun MainScaffold(
             )
         },
         bottomBar = {
-            val barItems = navItems.map { (key, label, iconRes) -> BarNavItem(key, label, painterResource(iconRes)) }
             if (liquid) {
                 LiquidTabBar(
-                    items = barItems,
+                    items = navItems.map { (key, label, iconRes) ->
+                        BarNavItem(key, label, painterResource(iconRes))
+                    },
                     selected = bottomSelected,
                     onSelect = ::onBottomSelect
                 )
-            } else {
-                M3eBlurredTabBar(
-                    items = barItems,
-                    selected = bottomSelected,
-                    onSelect = ::onBottomSelect,
-                    backdrop = m3eBlurBackdrop
-                )
+                return@Scaffold
+            }
+            // M3E — обычная нижняя панель Material 3 без размытия и стекла.
+            ShortNavigationBar(
+                windowInsets = ShortNavigationBarDefaults.windowInsets,
+                containerColor = ShortNavigationBarDefaults.containerColor
+            ) {
+                navItems.forEach { (key, label, iconRes) ->
+                    ShortNavigationBarItem(
+                        selected = bottomSelected == key,
+                        onClick = { onBottomSelect(key) },
+                        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(iconRes),
+                                contentDescription = label
+                            )
+                        }
+                    )
+                }
             }
         },
         floatingActionButton = {
@@ -763,17 +776,23 @@ fun MainScaffold(
     ) { padding ->
         val layoutDir = LocalLayoutDirection.current
         val bottomInset = padding.calculateBottomPadding()
-        val bodyPadding = PaddingValues(
-            start = padding.calculateStartPadding(layoutDir),
-            top = padding.calculateTopPadding(),
-            end = padding.calculateEndPadding(layoutDir),
-            bottom = 0.dp
-        )
-        CompositionLocalProvider(LocalLiquidBottomPadding provides bottomInset) {
+        // Liquid рисует контент под плавающей панелью; обычный M3E оставляет
+        // штатный нижний отступ Scaffold, иначе панель перекрывает список.
+        val bodyPadding = if (liquid) {
+            PaddingValues(
+                start = padding.calculateStartPadding(layoutDir),
+                top = padding.calculateTopPadding(),
+                end = padding.calculateEndPadding(layoutDir),
+                bottom = 0.dp
+            )
+        } else {
+            padding
+        }
+        CompositionLocalProvider(LocalLiquidBottomPadding provides if (liquid) bottomInset else 0.dp) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (liquid) Modifier.liquidContentLayer() else Modifier.m3eBlurSource(m3eBlurBackdrop))
+                    .liquidContentLayer()
                     .padding(bodyPadding)
             ) {
             val motion = MaterialTheme.motionScheme

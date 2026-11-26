@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -77,6 +78,9 @@ fun CdzMatchAnswer(
     }
 
     var links by remember(taskId) { mutableStateOf(LinkedHashMap(initial)) }
+    LaunchedEffect(initial) {
+        if (links != initial) links = LinkedHashMap(initial)
+    }
     var selected by remember(taskId) { mutableStateOf<String?>(null) }
     var dragging by remember(taskId) { mutableStateOf<MatchDrag?>(null) }
     val rootCenters = remember(taskId) { mutableStateMapOf<String, Offset>() }

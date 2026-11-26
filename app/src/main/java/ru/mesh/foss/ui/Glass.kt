@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Дизайн интерфейса. Хранится в настройке `design`:
- *  - [PLAIN] — стандартный Material 3 Expressive (M3E) с размытой нижней панелью;
+ *  - [PLAIN] — стандартный Material 3 Expressive (M3E) без размытия и стекла;
  *  - [LIQUID] — «жидкое стекло»: лёгкие стеклянные карточки и контролы, а нижняя панель
  *    и анимации используют преломление `Kyant0/AndroidLiquidGlass`.
  */
