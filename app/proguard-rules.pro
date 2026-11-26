@@ -10,6 +10,16 @@
 # Аналитика: Gson-модели событий/состояния.
 -keep class ru.mesh.foss.core.analytics.AnalyticsEvent { *; }
 -keep class ru.mesh.foss.data.analytics.AnalyticsState { *; }
+
+
+
+
+# Shapes — именно этот класс падает
+-keep class com.kyant.shapes.** { *; }
+
+# Backdrop — используется в LiquidGlass.kt, тоже может выпасть
+-keep class com.kyant.backdrop.** { *; }
+
 -keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
 
 # WorkManager создаёт воркер по имени класса
