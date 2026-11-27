@@ -1,8 +1,9 @@
 package ru.mesh.foss
 
 import ru.mesh.foss.data.UpdateChecker
+import ru.mesh.foss.data.model.GitHubAsset
+import ru.mesh.foss.data.model.GitHubRelease
 
-import org.json.JSONArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -42,19 +43,40 @@ class UpdateCheckerTest {
         assertNull(compare("2.0.0", "dev.42"))
     }
 
-    private fun release(tag: String, prerelease: Boolean, draft: Boolean = false, code: Long? = null): String {
-        // \\n — экранированные переносы: JSON-строка не может содержать настоящие переводы строк.
-        val body = if (code != null) " notes\\n\\n- versionCode: `$code`\\n- commit: `abc`" else "notes"
-        return """{"tag_name":"$tag","prerelease":$prerelease,"draft":$draft,"html_url":"https://x/$tag","body":"$body",
-            "assets":[{"name":"app.apk","browser_download_url":"https://x/a.apk"}]}"""
+    private fun release(
+        tag: String,
+        prerelease: Boolean,
+        draft: Boolean = false,
+        code: Long? = null,
+        name: String = tag,
+    ): GitHubRelease {
+        val body = if (code != null) {
+            "notes\n\n- versionCode: `$code`\n- commit: `abc`"
+        } else {
+            "notes"
+        }
+        return GitHubRelease(
+            tagName = tag,
+            name = name,
+            prerelease = prerelease,
+            draft = draft,
+            htmlUrl = "https://x/$tag",
+            body = body,
+            assets = listOf(
+                GitHubAsset(
+                    name = "app.apk",
+                    browserDownloadUrl = "https://x/a.apk"
+                )
+            )
+        )
     }
 
     @Test
     fun pickUpdateSkipsDraftsAndOlder() {
-        val releases = JSONArray(
-            "[${release("v1.0.50", prerelease = false, draft = true)}," +
-                "${release("v1.0.52", prerelease = false)}," +
-                "${release("v2.0.0", prerelease = false)}]"
+        val releases = listOf(
+            release("v1.0.50", prerelease = false, draft = true),
+            release("v1.0.52", prerelease = false),
+            release("v2.0.0", prerelease = false)
         )
         val found = UpdateChecker.pickUpdate(releases, "1.0.93", 93, withPrereleases = false, includeNightly = false)
         assertNotNull(found)
@@ -63,7 +85,7 @@ class UpdateCheckerTest {
 
     @Test
     fun releasesChannelHidesPrereleases() {
-        val releases = JSONArray("[${release("v2.0.1-beta.1", prerelease = true)}]")
+        val releases = listOf(release("v2.0.1-beta.1", prerelease = true))
         assertNull(UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = false, includeNightly = true))
         val found = UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = false)
         assertNotNull(found)
@@ -72,9 +94,9 @@ class UpdateCheckerTest {
 
     @Test
     fun nightlyOnlyOnManualCheckWithPrereleaseChannel() {
-        val releases = JSONArray(
-            "[${release("v2.0.0", prerelease = false, code = 96)}," +
-                "${release("nightly", prerelease = true, code = 97)}]"
+        val releases = listOf(
+            release("v2.0.0", prerelease = false, code = 96),
+            release("nightly", prerelease = true, code = 97, name = "MESHFOSS Nightly 2.0.0-dev.97")
         )
         // Авто-предупреждение: nightly не предлагается, стабильный релиз не новее.
         assertNull(UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = false))
@@ -87,9 +109,10 @@ class UpdateCheckerTest {
 
     @Test
     fun versionCodeBeatsSemverForNightly() {
-        // Семантически 2.0.0-dev.97 младше 2.0.0, но versionCode новее —
-        // на канале «Пререлизы» nightly всё равно предлагается.
-        val releases = JSONArray("[${release("nightly", prerelease = true, code = 97)}]")
+        // У nightly нет нормальной semver-версии, поэтому сравнивается versionCode.
+        val releases = listOf(
+            release("nightly", prerelease = true, code = 97, name = "MESHFOSS Nightly 2.0.0-dev.97")
+        )
         val found = UpdateChecker.pickUpdate(releases, "2.0.0", 96, withPrereleases = true, includeNightly = true)
         assertNotNull(found)
         assertEquals("nightly", found!!.versionName)
@@ -99,7 +122,89 @@ class UpdateCheckerTest {
 
     @Test
     fun noUpdateWhenInstalledIsNewer() {
-        val releases = JSONArray("[${release("v2.0.0", prerelease = false)}]")
+        val releases = listOf(release("v2.0.0", prerelease = false))
         assertNull(UpdateChecker.pickUpdate(releases, "2.0.1", 100, withPrereleases = true, includeNightly = true))
+    }
+
+    @Test
+    fun previewDoesNotOfferSameStableCore() {
+        val releases = listOf(release("v2.7.0", prerelease = false, code = 252))
+        assertNull(
+            UpdateChecker.pickUpdate(
+                releases,
+                "2.7.0-preview.16-debug",
+                16,
+                withPrereleases = false,
+                includeNightly = false
+            )
+        )
+    }
+
+    @Test
+    fun previewOffersNextPatchStable() {
+        val releases = listOf(release("v2.7.1", prerelease = false, code = 253))
+        val found = UpdateChecker.pickUpdate(
+            releases,
+            "2.7.0-preview.16-debug",
+            16,
+            withPrereleases = false,
+            includeNightly = false
+        )
+        assertNotNull(found)
+        assertEquals("2.7.1", found!!.versionName)
+    }
+
+    @Test
+    fun previewOffersStableWithHigherCoreVersion() {
+        val releases = listOf(release("v2.7.0", prerelease = false, code = 252))
+        val found = UpdateChecker.pickUpdate(
+            releases,
+            "2.6.9-preview.5-debug",
+            5,
+            withPrereleases = false,
+            includeNightly = false
+        )
+        assertNotNull(found)
+        assertEquals("2.7.0", found!!.versionName)
+    }
+
+    @Test
+    fun previewReleaseTagUsesVersionFromName() {
+        val releases = listOf(
+            release(
+                "preview-17",
+                prerelease = true,
+                name = "MESH Ranker 2.7.0-preview.17"
+            )
+        )
+        val found = UpdateChecker.pickUpdate(
+            releases,
+            "2.7.0-preview.16-debug",
+            16,
+            withPrereleases = true,
+            includeNightly = false
+        )
+        assertNotNull(found)
+        assertEquals("2.7.0-preview.17", found!!.versionName)
+    }
+
+    @Test
+    fun samePreviewIsNotOfferedAgain() {
+        val releases = listOf(
+            release(
+                "preview-16",
+                prerelease = true,
+                name = "MESH Ranker 2.7.0-preview.16"
+            )
+        )
+        assertNull(
+            UpdateChecker.pickUpdate(
+                releases,
+                "2.7.0-preview.16-debug",
+                16,
+                withPrereleases = true,
+                includeNightly = false
+            )
+        )
     }
 }
