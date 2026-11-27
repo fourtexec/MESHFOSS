@@ -6,7 +6,9 @@ import retrofit2.http.GET
 import retrofit2.http.HeaderMap
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Url
 import ru.mesh.foss.data.model.OlympiadDetail
+import ru.mesh.foss.data.model.OlympiadDetailsLink
 import ru.mesh.foss.data.model.OlympiadDictionaryItem
 import ru.mesh.foss.data.model.OlympiadOverviewRequest
 import ru.mesh.foss.data.model.OlympiadOverviewResponse
@@ -64,4 +66,14 @@ interface OlympiadApiService {
         @Path("contestId") contestId: String,
         @HeaderMap headers: Map<String, String>,
     ): Call<OlympiadResult>
+
+    /**
+     * `detailsUrl` из результата — это API-ссылка, а не страница для браузера.
+     * Она возвращает `{ "link": "https://…" }`, которую уже можно открывать.
+     */
+    @GET
+    fun detailsLink(
+        @Url url: String,
+        @HeaderMap headers: Map<String, String>,
+    ): Call<OlympiadDetailsLink>
 }

@@ -24,6 +24,7 @@ internal class PreviewMockInterceptor : Interceptor {
         const val PREVIEW_OLYMPIAD_ID = "demo-olympiad-1"
         const val PREVIEW_OLYMPIAD_PAST_ID = "demo-olympiad-2"
         private const val OLYMPIAD_BASE = "/api/contests/exec/v1/"
+        private const val PORTFOLIO_BASE = "/portfolio/app/"
 
         private val SUBJECTS = listOf(
             1 to "Алгебра",
@@ -423,12 +424,24 @@ internal class PreviewMockInterceptor : Interceptor {
                 when {
                     known == null -> 404 to mapOf("message" to "preview: unknown olympiad")
                     tail == id -> 200 to previewOlympiadDetail(id)
-                    tail.endsWith("/participant") -> 200 to mapOf(
-                        "passingState" to "REGISTERED",
-                        "covered" to true
-                    )
+                    tail.endsWith("/participant") -> if (id == "demo-olympiad-3") {
+                        404 to mapOf("message" to "preview: not a participant")
+                    } else {
+                        200 to mapOf(
+                            "passingState" to "REGISTERED",
+                            "covered" to true,
+                            "resultsPublicationInfoCode" to if (id == PREVIEW_OLYMPIAD_PAST_ID) {
+                                "CONTEST_FINISHED_RESULTS_EXIST"
+                            } else {
+                                "CONTEST_IN_PROGRESS_RESULTS_NOT_EXIST"
+                            }
+                        )
+                    }
                     tail.endsWith("/recommendation") -> 200 to mapOf(
                         "recommendation" to "Демо-рекомендация: проверьте расписание и попробуйте пробный тур."
+                    )
+                    tail.endsWith("/url-details/link") -> 200 to mapOf(
+                        "link" to "https://example.org/demo-result"
                     )
                     tail.endsWith("/result") -> 200 to if (id == PREVIEW_OLYMPIAD_PAST_ID) {
                         mapOf(
@@ -450,13 +463,46 @@ internal class PreviewMockInterceptor : Interceptor {
                                     "name" to "В основном зачёте",
                                     "justification" to "Демо-статус участия"
                                 ),
-                                "portfolioInfo" to "Результат можно добавить в портфолио"
+                                "portfolioInfo" to "Результат можно добавить в портфолио",
+                                "detailsUrl" to
+                                    "/api/contests/exec/v1/contests/$id/result/demo-result/url-details/link"
                             )
                         )
                     } else {
                         mapOf("hasResult" to false)
                     }
                     else -> 404 to mapOf("message" to "preview: unknown olympiad path")
+                }
+            }
+
+            path == PORTFOLIO_BASE + "portfolio/users/context/" ->
+                200 to mapOf("data" to previewPortfolioContext())
+
+            path.startsWith(PORTFOLIO_BASE + "persons/") -> {
+                val tail = path.removePrefix(PORTFOLIO_BASE + "persons/")
+                val personId = tail.substringBefore('/')
+                if (personId != PREVIEW_PERSON_ID) {
+                    404 to mapOf("message" to "preview: unknown portfolio person")
+                } else {
+                    when {
+                        tail.endsWith("/widgets/list") ->
+                            200 to mapOf("data" to previewPortfolioWidgets())
+                        tail.contains("/events/list") ->
+                            200 to mapOf("data" to previewPortfolioEvents())
+                        tail.contains("/rewards/list") ->
+                            200 to mapOf("data" to previewPortfolioRewards())
+                        tail.contains("/academic-performance/final-mark") ->
+                            200 to mapOf("data" to previewPortfolioFinalMarks())
+                        tail.contains("/v2/academic-performance/average-mark") ->
+                            200 to mapOf("data" to previewPortfolioAverageMark())
+                        tail.contains("/independent-diagnostic-grouped") ->
+                            200 to mapOf("data" to previewPortfolioDiagnostics())
+                        tail.contains("/employments/list") ->
+                            200 to mapOf("data" to previewPortfolioEmployments())
+                        tail.contains("/cultural/list") ->
+                            200 to mapOf("data" to previewPortfolioCultural())
+                        else -> 404 to mapOf("message" to "preview: unknown portfolio path")
+                    }
                 }
             }
 
@@ -576,6 +622,167 @@ internal class PreviewMockInterceptor : Interceptor {
         mapOf("id" to "1", "name" to "I уровень"),
         mapOf("id" to "2", "name" to "II уровень"),
         mapOf("id" to "3", "name" to "III уровень")
+    )
+
+    private fun previewPortfolioContext(): Map<String, Any> = mapOf(
+        "meshId" to PREVIEW_PERSON_ID,
+        "personMeshInfo" to mapOf(
+            "classLevel" to "7",
+            "schoolName" to "Школа № 1234",
+            "lastname" to "Демидов",
+            "firstname" to "Пётр",
+            "patronymic" to "Алексеевич",
+            "class" to "7 «Б»",
+            "meshId" to PREVIEW_PERSON_ID
+        )
+    )
+
+    private fun previewPortfolioWidgets(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "blockName" to "OLYMPIAD",
+            "data" to mapOf(
+                "name" to "Школьный этап по математике, 7 класс",
+                "reward" to "Победитель",
+                "subjectName" to "Математика",
+                "creationDate" to "2026-11-19T14:10:05"
+            )
+        ),
+        mapOf(
+            "blockName" to "OLYMPIAD",
+            "data" to mapOf(
+                "name" to "Школьный этап по информатике, 7 класс",
+                "reward" to "Призёр",
+                "subjectName" to "Информатика",
+                "creationDate" to "2026-11-18T12:00:00"
+            )
+        )
+    )
+
+    private fun previewPortfolioEvents(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "id" to 7001L,
+            "name" to "Школьный этап по математике, 7 класс",
+            "result" to "48.0",
+            "maxScore" to 50.0,
+            "startDate" to "2026-11-19",
+            "stageEvent" to "Школьный этап",
+            "category" to mapOf("code" to 1, "value" to "Учеба"),
+            "source" to mapOf("code" to 18, "value" to "МЭШ Олимпиады"),
+            "subjects" to listOf(mapOf("value" to "Математика")),
+            "participationStatus" to mapOf("value" to "В основном зачёте")
+        ),
+        mapOf(
+            "id" to 7002L,
+            "name" to "Школьный этап по информатике, 7 класс",
+            "result" to "42.0",
+            "maxScore" to 50.0,
+            "startDate" to "2026-11-18",
+            "stageEvent" to "Школьный этап",
+            "category" to mapOf("code" to 1, "value" to "Учеба"),
+            "source" to mapOf("code" to 18, "value" to "МЭШ Олимпиады"),
+            "subjects" to listOf(mapOf("value" to "Информатика")),
+            "participationStatus" to mapOf("value" to "В основном зачёте")
+        ),
+        mapOf(
+            "id" to 7003L,
+            "name" to "Городской конкурс проектов",
+            "result" to "Призёр",
+            "startDate" to "2026-10-05",
+            "stageEvent" to "Городской этап",
+            "category" to mapOf("code" to 2, "value" to "Проекты"),
+            "source" to mapOf("code" to 4, "value" to "МЭШ"),
+            "subjects" to listOf(mapOf("value" to "Технология")),
+            "participationStatus" to mapOf("value" to "Командный зачёт")
+        )
+    )
+
+    private fun previewPortfolioRewards(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "id" to 8001L,
+            "name" to "Победитель школьного этапа",
+            "date" to "2026-11-20",
+            "category" to mapOf("value" to "Учеба"),
+            "statusReward" to mapOf("value" to "Победитель"),
+            "entityId" to "7001"
+        ),
+        mapOf(
+            "id" to 8002L,
+            "name" to "Призёр школьного этапа",
+            "date" to "2026-11-19",
+            "category" to mapOf("value" to "Учеба"),
+            "statusReward" to mapOf("value" to "Призёр"),
+            "entityId" to "7002"
+        )
+    )
+
+    private fun previewPortfolioFinalMarks(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "yearTitle" to "2025/26",
+            "educationLevel" to "Основное общее образование",
+            "averageAllSubjects" to 4.72,
+            "subjects" to listOf(
+                mapOf("name" to "Алгебра", "yearValue" to "5", "yearFivePointValue" to 5),
+                mapOf("name" to "Русский язык", "yearValue" to "4", "yearFivePointValue" to 4),
+                mapOf("name" to "Информатика", "yearValue" to "5", "yearFivePointValue" to 5)
+            )
+        )
+    )
+
+    private fun previewPortfolioAverageMark(): Map<String, Any> = mapOf(
+        "averageMarkFive" to 4.78,
+        "subjectsRank" to listOf(
+            mapOf("subjectName" to "Алгебра", "averageMarkFiveSubject" to 4.9),
+            mapOf("subjectName" to "Геометрия", "averageMarkFiveSubject" to 4.7),
+            mapOf("subjectName" to "Русский язык", "averageMarkFiveSubject" to 4.6),
+            mapOf("subjectName" to "Информатика", "averageMarkFiveSubject" to 5.0)
+        )
+    )
+
+    private fun previewPortfolioDiagnostics(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "learningYear" to "2025-2026",
+            "diagnostics" to mapOf(
+                "totalDiagnostic" to mapOf("total" to 2),
+                "bestResult" to mapOf(
+                    "bestResultSubject" to "Математика",
+                    "bestResultPercent" to 88.0
+                ),
+                "diagnostic" to listOf(
+                    mapOf(
+                        "subject" to "Математика",
+                        "eventDate" to "2026-03-12",
+                        "percentResult" to 88.0,
+                        "levelType" to "Высокий",
+                        "url" to "https://example.org/demo-diagnostic"
+                    ),
+                    mapOf(
+                        "subject" to "Русский язык",
+                        "eventDate" to "2026-02-18",
+                        "percentResult" to 74.0,
+                        "levelType" to "Базовый"
+                    )
+                )
+            )
+        )
+    )
+
+    private fun previewPortfolioEmployments(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "name" to "Кружок робототехники",
+            "startDate" to "2026-09-01",
+            "endDate" to "2027-05-31",
+            "category" to mapOf("value" to "Дополнительное образование"),
+            "achievementActivityFormat" to mapOf("value" to "Очно")
+        )
+    )
+
+    private fun previewPortfolioCultural(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "visitTime" to "2026-10-12",
+            "culturalInstitutionType" to "Музей",
+            "culturalInstitutionName" to "Городской музей науки",
+            "address" to "ул. Демонстрационная, 1"
+        )
     )
 
     private fun markItem(

@@ -44,6 +44,7 @@ class DemoMeshServer(
         const val DEMO_OLYMPIAD_PAST_ID = "demo-olympiad-2"
 
         private const val OLYMPIAD_BASE = "/api/contests/exec/v1/"
+        private const val PORTFOLIO_BASE = "/portfolio/app/"
 
         /** Служебный ключ: ответ отдаётся как есть (строка), а не JSON-объектом. */
         private const val RAW_BODY = "__raw_body__"
@@ -204,6 +205,23 @@ class DemoMeshServer(
 
     @Volatile
     var lastOlympiadAuthorization: String = ""
+        private set
+
+    /** Заголовки последнего запроса раздела «Портфолио» — для проверки контракта. */
+    @Volatile
+    var lastPortfolioSubsystem: String = ""
+        private set
+
+    @Volatile
+    var lastPortfolioProfileId: String = ""
+        private set
+
+    @Volatile
+    var lastPortfolioAuthToken: String = ""
+        private set
+
+    @Volatile
+    var lastPortfolioAuthorization: String = ""
         private set
 
     init {
@@ -393,6 +411,12 @@ class DemoMeshServer(
                     lastOlympiadAuthToken = authToken
                     lastOlympiadAuthorization = authorization
                 }
+                if (pathOnly.startsWith(PORTFOLIO_BASE)) {
+                    lastPortfolioSubsystem = subsystem
+                    lastPortfolioProfileId = profileId
+                    lastPortfolioAuthToken = authToken
+                    lastPortfolioAuthorization = authorization
+                }
                 if (pathOnly == DEMO_CDZ_PAGE) {
                     respondRaw(socket, 200, "text/html; charset=utf-8", demoCdzPage(path))
                     return
@@ -464,16 +488,16 @@ class DemoMeshServer(
     }
 
     private fun respond(socket: Socket, status: Int, payload: JSONObject) {
-        val body = payload.toString().toByteArray(Charsets.UTF_8)
+        val body = if (status == 204) ByteArray(0) else payload.toString().toByteArray(Charsets.UTF_8)
         val header = buildString {
-            append("HTTP/1.1 $status ${if (status == 200) "OK" else "Error"}\r\n")
-            append("Content-Type: application/json; charset=utf-8\r\n")
+            append("HTTP/1.1 $status ${if (status == 200) "OK" else if (status == 204) "No Content" else "Error"}\r\n")
+            if (status != 204) append("Content-Type: application/json; charset=utf-8\r\n")
             append("Content-Length: ${body.size}\r\n")
             append("Connection: close\r\n\r\n")
         }
         val out: OutputStream = socket.getOutputStream()
         out.write(header.toByteArray(Charsets.UTF_8))
-        out.write(body)
+        if (body.isNotEmpty()) out.write(body)
         out.flush()
     }
 
@@ -884,6 +908,9 @@ class DemoMeshServer(
             OLYMPIAD_BASE + "contests/levels" -> 200 to dictionary(OLYMPIAD_LEVELS)
 
             else -> {
+                if (path.startsWith(PORTFOLIO_BASE)) {
+                    return portfolioRoute(path)
+                }
                 if (path.startsWith(OLYMPIAD_BASE + "contests/")) {
                     val tail = path.removePrefix(OLYMPIAD_BASE + "contests/")
                     val id = tail.substringBefore('/')
@@ -893,12 +920,27 @@ class DemoMeshServer(
                     }
                     when {
                         tail == id -> 200 to olympiadDetail(olympiad)
-                        tail.endsWith("/participant") -> 200 to JSONObject()
-                            .put("passingState", if (olympiad.mine) "REGISTERED" else "UNREGISTERED")
-                            .put("covered", olympiad.mine)
+                        tail.endsWith("/participant") -> {
+                            if (!olympiad.mine) {
+                                404 to JSONObject().put("message", "demo: not a participant")
+                            } else {
+                                200 to JSONObject()
+                                    .put("passingState", "REGISTERED")
+                                    .put("covered", true)
+                                    .put(
+                                        "resultsPublicationInfoCode",
+                                        if (olympiad.hasResult) {
+                                            "CONTEST_FINISHED_RESULTS_EXIST"
+                                        } else {
+                                            "CONTEST_IN_PROGRESS_RESULTS_NOT_EXIST"
+                                        }
+                                    )
+                            }
+                        }
                         tail.endsWith("/recommendation") -> {
                             if (!olympiad.mine) {
-                                404 to JSONObject().put("message", "demo: no recommendation")
+                                // Как в HAR: рекомендации нет — 204 без тела.
+                                204 to JSONObject()
                             } else {
                                 200 to JSONObject().put(
                                     "recommendation",
@@ -907,6 +949,8 @@ class DemoMeshServer(
                             }
                         }
                         tail.endsWith("/result") -> 200 to olympiadResult(olympiad)
+                        tail.endsWith("/url-details/link") -> 200 to JSONObject()
+                            .put("link", "https://example.org/demo-result")
                         else -> 404 to JSONObject().put("message", "demo: unknown olympiad path")
                     }
                 } else {
@@ -915,6 +959,185 @@ class DemoMeshServer(
             }
         }
     }
+
+    // ---------------------------------------------------------- ПОРТФОЛИО ----
+
+    private fun portfolioRoute(path: String): Pair<Int, JSONObject> {
+        if (path == PORTFOLIO_BASE + "portfolio/users/context/") {
+            return 200 to JSONObject().put("data", portfolioContext())
+        }
+        if (!path.startsWith(PORTFOLIO_BASE + "persons/")) {
+            return 404 to JSONObject().put("message", "demo: unknown portfolio path")
+        }
+        val tail = path.removePrefix(PORTFOLIO_BASE + "persons/")
+        val personId = tail.substringBefore('/')
+        if (personId != UUID_ME) {
+            return 404 to JSONObject().put("message", "demo: unknown portfolio person")
+        }
+        return when {
+            tail.endsWith("/widgets/list") ->
+                200 to JSONObject().put("data", portfolioWidgets())
+            tail.contains("/events/list") ->
+                200 to JSONObject().put("data", portfolioEvents())
+            tail.contains("/rewards/list") ->
+                200 to JSONObject().put("data", portfolioRewards())
+            tail.contains("/academic-performance/final-mark") ->
+                200 to JSONObject().put("data", portfolioFinalMarks())
+            tail.contains("/v2/academic-performance/average-mark") ->
+                200 to JSONObject().put("data", portfolioAverageMark())
+            tail.contains("/independent-diagnostic-grouped") ->
+                200 to JSONObject().put("data", portfolioDiagnostics())
+            tail.contains("/employments/list") ->
+                200 to JSONObject().put("data", portfolioEmployments())
+            tail.contains("/cultural/list") ->
+                200 to JSONObject().put("data", portfolioCultural())
+            else -> 404 to JSONObject().put("message", "demo: unknown portfolio path")
+        }
+    }
+
+    private fun portfolioContext(): JSONObject = JSONObject()
+        .put("meshId", UUID_ME)
+        .put(
+            "personMeshInfo",
+            JSONObject()
+                .put("classLevel", "7")
+                .put("schoolName", "Школа № 1234")
+                .put("lastname", "Демидов")
+                .put("firstname", "Пётр")
+                .put("patronymic", "Алексеевич")
+                .put("class", "7 «Б»")
+                .put("meshId", UUID_ME)
+        )
+
+    private fun portfolioWidgets(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("blockName", "OLYMPIAD")
+                .put(
+                    "data",
+                    JSONObject()
+                        .put("name", "Школьный этап по математике, 7 класс")
+                        .put("reward", "Победитель")
+                        .put("subjectName", "Математика")
+                        .put("creationDate", "2026-11-19T14:10:05")
+                )
+        )
+        .put(
+            JSONObject()
+                .put("blockName", "OLYMPIAD")
+                .put(
+                    "data",
+                    JSONObject()
+                        .put("name", "Школьный этап по информатике, 7 класс")
+                        .put("reward", "Призёр")
+                        .put("subjectName", "Информатика")
+                        .put("creationDate", "2026-11-18T12:00:00")
+                )
+        )
+
+    private fun portfolioEvents(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("id", 7001L)
+                .put("name", "Школьный этап по математике, 7 класс")
+                .put("result", "48.0")
+                .put("maxScore", 50.0)
+                .put("startDate", "2026-11-19")
+                .put("stageEvent", "Школьный этап")
+                .put("category", JSONObject().put("value", "Учеба"))
+                .put("source", JSONObject().put("value", "МЭШ Олимпиады"))
+                .put("subjects", JSONArray().put(JSONObject().put("value", "Математика")))
+        )
+        .put(
+            JSONObject()
+                .put("id", 7002L)
+                .put("name", "Школьный этап по информатике, 7 класс")
+                .put("result", "42.0")
+                .put("maxScore", 50.0)
+                .put("startDate", "2026-11-18")
+                .put("stageEvent", "Школьный этап")
+                .put("category", JSONObject().put("value", "Учеба"))
+                .put("source", JSONObject().put("value", "МЭШ Олимпиады"))
+                .put("subjects", JSONArray().put(JSONObject().put("value", "Информатика")))
+        )
+
+    private fun portfolioRewards(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("id", 8001L)
+                .put("name", "Победитель школьного этапа")
+                .put("date", "2026-11-20")
+                .put("category", JSONObject().put("value", "Учеба"))
+                .put("statusReward", JSONObject().put("value", "Победитель"))
+                .put("entityId", "7001")
+        )
+
+    private fun portfolioFinalMarks(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("yearTitle", "2025/26")
+                .put("educationLevel", "Основное общее образование")
+                .put("averageAllSubjects", 4.72)
+                .put(
+                    "subjects",
+                    JSONArray()
+                        .put(JSONObject().put("name", "Алгебра").put("yearValue", "5"))
+                        .put(JSONObject().put("name", "Русский язык").put("yearValue", "4"))
+                )
+        )
+
+    private fun portfolioAverageMark(): JSONObject = JSONObject()
+        .put("averageMarkFive", 4.78)
+        .put(
+            "subjectsRank",
+            JSONArray()
+                .put(JSONObject().put("subjectName", "Алгебра").put("averageMarkFiveSubject", 4.9))
+                .put(JSONObject().put("subjectName", "Информатика").put("averageMarkFiveSubject", 5.0))
+        )
+
+    private fun portfolioDiagnostics(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("learningYear", "2025-2026")
+                .put(
+                    "diagnostics",
+                    JSONObject()
+                        .put("totalDiagnostic", JSONObject().put("total", 1))
+                        .put(
+                            "bestResult",
+                            JSONObject()
+                                .put("bestResultSubject", "Математика")
+                                .put("bestResultPercent", 88.0)
+                        )
+                        .put(
+                            "diagnostic",
+                            JSONArray().put(
+                                JSONObject()
+                                    .put("subject", "Математика")
+                                    .put("eventDate", "2026-03-12")
+                                    .put("percentResult", 88.0)
+                                    .put("levelType", "Высокий")
+                            )
+                        )
+                )
+        )
+
+    private fun portfolioEmployments(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("name", "Кружок робототехники")
+                .put("startDate", "2026-09-01")
+                .put("endDate", "2027-05-31")
+                .put("category", JSONObject().put("value", "Дополнительное образование"))
+        )
+
+    private fun portfolioCultural(): JSONArray = JSONArray()
+        .put(
+            JSONObject()
+                .put("visitTime", "2026-10-12")
+                .put("culturalInstitutionType", "Музей")
+                .put("culturalInstitutionName", "Городской музей науки")
+        )
 
     // ---------------------------------------------------------- ОЛИМПИАДЫ ----
 
@@ -1026,6 +1249,10 @@ class DemoMeshServer(
                             .put("justification", "Демо-статус участия")
                     )
                     .put("portfolioInfo", "Результат можно добавить в портфолио")
+                    .put(
+                        "detailsUrl",
+                        "/api/contests/exec/v1/contests/${olympiad.id}/result/demo-result/url-details/link"
+                    )
             )
     }
 

@@ -17,14 +17,19 @@ import ru.mesh.foss.data.MeshClient
 import ru.mesh.foss.data.model.OlympiadDetail
 import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewItem
+import ru.mesh.foss.data.model.OlympiadParticipant
 import ru.mesh.foss.data.model.OlympiadResult
 
 enum class OlympiadTab { MY, ALL }
+
+enum class OlympiadParticipation { UNKNOWN, NOT_PARTICIPATED, PARTICIPATED }
 
 data class OlympiadDetailState(
     val contestId: String,
     val loading: Boolean = true,
     val detail: OlympiadDetail? = null,
+    val participant: OlympiadParticipant? = null,
+    val participation: OlympiadParticipation = OlympiadParticipation.UNKNOWN,
     val result: OlympiadResult? = null,
     val recommendation: String? = null,
     val error: String? = null,
@@ -42,6 +47,11 @@ data class OlympiadUiState(
     val dictionaries: OlympiadDictionaries = OlympiadDictionaries(),
     val error: String? = null,
     val detail: OlympiadDetailState? = null,
+)
+
+private data class ParticipantLookup(
+    val participant: OlympiadParticipant?,
+    val participation: OlympiadParticipation,
 )
 
 /** Состояние списка олимпиад, поиска и карточки конкретной олимпиады. */
@@ -91,15 +101,25 @@ class OlympiadViewModel(
             try {
                 coroutineScope {
                     val detail = async { repository.detail(id) }
+                    val participant = async { loadParticipant(id) }
+                    val loaded = detail.await()
+                    val participantLookup = participant.await()
+
+                    // 404 от `/participant` — это «не участвовал», но результат
+                    // всё равно проверяем: если он есть, показываем его, а не
+                    // подменяем состояние участия. Если результата нет, UI
+                    // скажет «не участвовал», а не «результатов пока нет».
                     val result = async { optional { repository.result(id) } }
                     val recommendation = async { optional { repository.recommendation(id) } }
-                    val loaded = detail.await()
                     val resultValue = result.await()
                     val recommendationText = recommendation.await()?.recommendation
+
                     updateDetail(id) {
                         it.copy(
                             loading = false,
                             detail = loaded,
+                            participant = participantLookup.participant,
+                            participation = participantLookup.participation,
                             result = resultValue,
                             recommendation = recommendationText,
                             error = null,
@@ -115,6 +135,30 @@ class OlympiadViewModel(
             }
         }
     }
+
+    private suspend fun loadParticipant(contestId: String): ParticipantLookup =
+        try {
+            val participant = repository.participant(contestId)
+            if (participant == null || participant.passingState == "UNREGISTERED") {
+                ParticipantLookup(participant, OlympiadParticipation.NOT_PARTICIPATED)
+            } else {
+                ParticipantLookup(participant, OlympiadParticipation.PARTICIPATED)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            ParticipantLookup(null, OlympiadParticipation.UNKNOWN)
+        }
+
+    /** `detailsUrl` — API-ссылка; сначала получаем из неё настоящий URL. */
+    suspend fun resolveDetailsLink(detailsUrl: String): String? =
+        try {
+            repository.detailsLink(detailsUrl)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
 
     fun retryDetail() {
         _state.value.detail?.contestId?.let(::openContest)

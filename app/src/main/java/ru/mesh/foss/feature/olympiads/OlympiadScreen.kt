@@ -39,6 +39,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,12 +55,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import ru.mesh.foss.core.UiLanguage
 import ru.mesh.foss.core.Words
 import ru.mesh.foss.data.MeshClient
 import ru.mesh.foss.data.model.OlympiadDetail
 import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewItem
+import ru.mesh.foss.data.model.OlympiadParticipant
 import ru.mesh.foss.data.model.OlympiadPreviousStage
 import ru.mesh.foss.data.model.OlympiadResult
 import ru.mesh.foss.ui.Design
@@ -92,6 +96,7 @@ fun OlympiadScreen(
             dictionaries = state.dictionaries,
             onBack = vm::closeDetail,
             onRetry = vm::retryDetail,
+            onResolveDetails = vm::resolveDetailsLink,
             modifier = modifier,
         )
     } else {
@@ -379,6 +384,7 @@ private fun OlympiadDetailScreen(
     dictionaries: OlympiadDictionaries,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onResolveDetails: suspend (String) -> String?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -415,9 +421,12 @@ private fun OlympiadDetailScreen(
 
                 else -> OlympiadDetailBody(
                     detail = loaded,
+                    participant = detail.participant,
+                    participation = detail.participation,
                     result = detail.result,
                     recommendation = detail.recommendation,
                     dictionaries = dictionaries,
+                    onResolveDetails = onResolveDetails,
                 )
             }
         }
@@ -427,9 +436,12 @@ private fun OlympiadDetailScreen(
 @Composable
 private fun OlympiadDetailBody(
     detail: OlympiadDetail,
+    participant: OlympiadParticipant?,
+    participation: OlympiadParticipation,
     result: OlympiadResult?,
     recommendation: String?,
     dictionaries: OlympiadDictionaries,
+    onResolveDetails: suspend (String) -> String?,
 ) {
     val subjects = dictionaries.subjectNames(detail.commonInfo?.subjectIds.orEmpty())
     val stage = dictionaries.stageName(detail.commonInfo?.stageCode)
@@ -554,7 +566,14 @@ private fun OlympiadDetailBody(
             }
         } else {
             item {
-                OlympiadResultsCard(detail, result, uriHandler)
+                OlympiadResultsCard(
+                    detail = detail,
+                    participant = participant,
+                    participation = participation,
+                    result = result,
+                    uriHandler = uriHandler,
+                    onResolveDetails = onResolveDetails,
+                )
             }
         }
         item { Spacer(Modifier.height(4.dp)) }
@@ -667,20 +686,37 @@ private fun PreviousStageRow(stage: OlympiadPreviousStage, dictionaries: Olympia
 @Composable
 private fun OlympiadResultsCard(
     detail: OlympiadDetail,
+    participant: OlympiadParticipant?,
+    participation: OlympiadParticipation,
     result: OlympiadResult?,
     uriHandler: androidx.compose.ui.platform.UriHandler,
+    onResolveDetails: suspend (String) -> String?,
 ) {
     val final = detail.effectiveStatus == "PUBLISHED_FINAL_RESULTS"
+    val scope = rememberCoroutineScope()
+    var resolvingDetails by remember { mutableStateOf(false) }
     OlympiadInfoCard(
         if (final) Words.OlympiadFinalResults.text else Words.OlympiadPreliminaryResults.text
     ) {
         val model = result?.resultModel
         if (result?.hasResult != true || model == null) {
             Text(
-                Words.OlympiadNoResults.text,
+                olympiadNoResultsText(participant, participation),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            val checkResultsLink = participant?.checkResultsLink?.takeIf { it.isNotBlank() }
+            if (
+                checkResultsLink != null &&
+                participant?.resultsPublicationInfoCode == "CONTEST_FINISHED_RESULTS_NOT_IN_MESH"
+            ) {
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = {
+                    runCatching { uriHandler.openUri(checkResultsLink) }
+                }) {
+                    Text(Words.OlympiadCheckResults.text)
+                }
+            }
         } else {
             DetailValue(
                 Words.OlympiadDateTime.text,
@@ -722,13 +758,48 @@ private fun OlympiadResultsCard(
                 DetailValue(Words.OlympiadPortfolio.text, it)
             }
             val detailsUrl = model.detailsUrl?.takeIf { it.isNotBlank() }
-            if (detailsUrl != null && detailsUrl.startsWith("http")) {
-                TextButton(onClick = { runCatching { uriHandler.openUri(detailsUrl) } }) {
-                    Text(Words.OlympiadDetails.text)
+            if (detailsUrl != null) {
+                TextButton(
+                    enabled = !resolvingDetails,
+                    onClick = {
+                        if (!resolvingDetails) {
+                            resolvingDetails = true
+                            scope.launch {
+                                val link = onResolveDetails(detailsUrl)
+                                resolvingDetails = false
+                                if (!link.isNullOrBlank()) {
+                                    runCatching { uriHandler.openUri(link) }
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    if (resolvingDetails) {
+                        LoadingIndicator(Modifier.size(18.dp))
+                    } else {
+                        Text(Words.OlympiadDetails.text)
+                    }
                 }
             }
         }
     }
+}
+
+private fun olympiadNoResultsText(
+    participant: OlympiadParticipant?,
+    participation: OlympiadParticipation,
+): String = when {
+    participation == OlympiadParticipation.NOT_PARTICIPATED -> Words.OlympiadNotParticipated.text
+    participant?.resultsPublicationInfoCode == "CONTEST_FINISHED_RESULTS_NOT_EXIST" ->
+        Words.OlympiadNotParticipated.text
+    participant?.resultsPublicationInfoCode == "CONTEST_IN_PROGRESS_RESULTS_NOT_EXIST" ->
+        Words.OlympiadResultsAfterParticipation.text
+    participant?.resultsPublicationInfoCode == "CONTEST_IN_PROGRESS_RESULTS_EXIST" ||
+        participant?.resultsPublicationInfoCode == "CONTEST_FINISHED_RESULTS_EXIST" ->
+        Words.OlympiadResultsPending.text
+    participant?.resultsPublicationInfoCode == "CONTEST_FINISHED_RESULTS_NOT_IN_MESH" ->
+        Words.OlympiadResultsNotLoaded.text
+    else -> Words.OlympiadNoResults.text
 }
 
 @Composable

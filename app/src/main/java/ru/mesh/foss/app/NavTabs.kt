@@ -21,10 +21,10 @@ object NavTabs {
 
     val ALL = listOf(
         "ranking", "marks", "homeworks", "schedule",
-        "attendance", "moskvenok", "olympiads", "food", "settings"
+        "attendance", "moskvenok", "olympiads", "portfolio", "food", "settings"
     )
     val DEFAULT_BOTTOM = listOf("ranking", "marks", "homeworks", "schedule")
-    val DEFAULT_MORE = listOf("attendance", "moskvenok", "olympiads", "food", "settings")
+    val DEFAULT_MORE = listOf("attendance", "moskvenok", "olympiads", "portfolio", "food", "settings")
 
     fun label(key: String): String = when (key) {
         "ranking" -> Words.Ranking.text
@@ -34,6 +34,7 @@ object NavTabs {
         "attendance" -> Words.Attendance.text
         "moskvenok" -> Words.Moskvenok.text
         "olympiads" -> Words.Olympiads.text
+        "portfolio" -> Words.Portfolio.text
         "food" -> Words.MealsAndBalance.text
         "settings" -> Words.Settings.text
         else -> Words.More.text
@@ -47,6 +48,7 @@ object NavTabs {
         "attendance" -> R.drawable.ic_nav_attendance
         "moskvenok" -> R.drawable.ic_nav_moskvenok
         "olympiads" -> R.drawable.ic_nav_olympiads
+        "portfolio" -> R.drawable.ic_nav_portfolio
         "food" -> R.drawable.ic_nav_food
         "settings" -> R.drawable.ic_settings
         else -> R.drawable.ic_nav_more

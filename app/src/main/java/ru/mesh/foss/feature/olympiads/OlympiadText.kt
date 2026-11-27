@@ -2,9 +2,8 @@ package ru.mesh.foss.feature.olympiads
 
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
+import ru.mesh.foss.core.DateText
 
 /**
  * Чистые преобразования данных олимпиад: описание приходит то HTML-строкой,
@@ -23,16 +22,6 @@ object OlympiadText {
     private val SAFE_KEYS = listOf(
         "text", "content", "title", "description", "body", "label", "caption",
         "paragraph", "items", "children", "blocks", "data", "value"
-    )
-
-    private val INPUT_PATTERNS = listOf(
-        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
-        "yyyy-MM-dd'T'HH:mm:ssXXX",
-        "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
-        "yyyy-MM-dd'T'HH:mm:ssZ",
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm",
-        "yyyy-MM-dd",
     )
 
     /** HTML/JSON rich-text → обычный текст без разметки и служебных полей. */
@@ -70,29 +59,11 @@ object OlympiadText {
         return normalize(decoded)
     }
 
-    fun formatDateTime(iso: String?, locale: Locale = Locale("ru")): String {
-        val date = parse(iso) ?: return iso?.trim().orEmpty().ifBlank { "—" }
-        val pattern = if (locale.language == "ru") "dd.MM.yyyy HH:mm" else "d MMM yyyy, HH:mm"
-        return SimpleDateFormat(pattern, locale).format(date)
-    }
+    fun formatDateTime(iso: String?, locale: Locale = Locale("ru")): String =
+        DateText.formatDateTime(iso, locale)
 
-    fun formatDate(iso: String?, locale: Locale = Locale("ru")): String {
-        val date = parse(iso) ?: return iso?.trim().orEmpty().ifBlank { "—" }
-        val pattern = if (locale.language == "ru") "dd.MM.yyyy" else "d MMM yyyy"
-        return SimpleDateFormat(pattern, locale).format(date)
-    }
-
-    private fun parse(iso: String?): Date? {
-        val text = iso?.trim().orEmpty()
-        if (text.isEmpty()) return null
-        INPUT_PATTERNS.forEach { pattern ->
-            val format = SimpleDateFormat(pattern, Locale.US)
-            format.isLenient = false
-            val parsed = runCatching { format.parse(text) }.getOrNull()
-            if (parsed != null) return parsed
-        }
-        return null
-    }
+    fun formatDate(iso: String?, locale: Locale = Locale("ru")): String =
+        DateText.formatDate(iso, locale)
 
     private fun collectText(element: JsonElement, depth: Int): List<String> {
         if (depth > 24) return emptyList()

@@ -153,13 +153,25 @@ class OlympiadTest {
         assertEquals("PUBLISHED_FINAL_RESULTS", detail.effectiveStatus)
         assertEquals("MUNICIPAL", detail.commonInfo?.stageCode)
 
+        val participant = client.getOlympiadParticipant(DemoMeshServer.DEMO_OLYMPIAD_PAST_ID)
+        assertNotNull(participant)
+        assertEquals("REGISTERED", participant?.passingState)
+        assertNull(client.getOlympiadParticipant("demo-olympiad-3"))
+
         val result = client.getOlympiadResult(DemoMeshServer.DEMO_OLYMPIAD_PAST_ID)
         assertNotNull(result)
         assertTrue(result!!.hasResult)
         assertEquals(18.0, result.resultModel?.score?.mark ?: 0.0, 0.001)
         assertEquals("Победитель", result.resultModel?.reward?.label)
+        val detailsUrl = result.resultModel?.detailsUrl
+        assertNotNull(detailsUrl)
+        assertEquals(
+            "https://example.org/demo-result",
+            client.getOlympiadDetailsLink(detailsUrl!!),
+        )
 
         assertNotNull(client.getOlympiadRecommendation(DemoMeshServer.DEMO_OLYMPIAD_ID))
+        // 204 без тела — это нормальное отсутствие рекомендации, не ошибка.
         assertNull(client.getOlympiadRecommendation("demo-olympiad-3"))
     }
 }

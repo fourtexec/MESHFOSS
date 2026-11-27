@@ -14,8 +14,12 @@
   - `Accept: application/json`.
 - Семейные заголовки `Profile-Id`, `Profile-Type`, `X-Mes-RoleId` и
   `Auth-Token` в этот API не отправляются.
-- 404 для `/participant`, `/recommendation` и `/result` — нормальный ответ
-  «данных ещё нет», а не ошибка экрана.
+- `404` от `/participant` — это не «результатов пока нет», а «ученик не
+  участвовал в олимпиаде». Приложение всё равно проверяет `/result`, чтобы
+  не скрыть валидный результат, если он уже опубликован.
+- `204` от `/recommendation` — нормальное отсутствие рекомендации, не ошибка.
+- `404` от `/result` и `/recommendation` обрабатывается как отсутствие
+  подресурса, но не подменяет статус участия.
 
 ## Эндпоинты
 
@@ -30,6 +34,7 @@
 | `GET` | `contests/{id}/participant` | Статус участия |
 | `GET` | `contests/{id}/recommendation` | Рекомендация |
 | `GET` | `contests/{id}/result` | Результат |
+| `GET` | `contests/{id}/result/{resultId}/url-details/link` | Ссылка на подробности результата |
 
 ## `POST contests/overview`
 
@@ -91,10 +96,19 @@
       "justification": "…"
     },
     "portfolioInfo": "…",
-    "detailsUrl": "…"
+    "detailsUrl": "/api/contests/exec/v1/contests/{id}/result/{resultId}/url-details/link"
   }
 }
 ```
+
+`detailsUrl` — не страница для браузера. Приложение делает по нему
+авторизованный `GET`, получает `{ "link": "https://…" }` и открывает уже
+`link`. Прямое открытие `detailsUrl` показывает JSON/ошибку API.
+
+`/participant` также отдаёт `resultsPublicationInfoCode` и
+`checkResultsLink`. Код используется только для текста в пустой вкладке
+результатов; `checkResultsLink` показывается кнопкой «Проверить баллы»,
+когда результаты ещё не загружены в МЭШ.
 
 ## Ограничения
 

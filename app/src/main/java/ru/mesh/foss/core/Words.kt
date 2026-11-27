@@ -3364,6 +3364,41 @@ internal enum class Words(
         "Aún no hay resultados",
         "Pas encore de résultats"
     ),
+    OlympiadNotParticipated(
+        "Вы не участвовали в олимпиаде",
+        "You did not participate in the olympiad",
+        "Nem vettél részt az olimpián",
+        "No participaste en la olimpiada",
+        "Vous n’avez pas participé à l’olympiade"
+    ),
+    OlympiadResultsAfterParticipation(
+        "Результаты появятся после прохождения олимпиады",
+        "Results will appear after you complete the olympiad",
+        "Az eredmények az olimpia teljesítése után jelennek meg",
+        "Los resultados aparecerán después de completar la olimpiada",
+        "Les résultats apparaîtront après avoir terminé l’olympiade"
+    ),
+    OlympiadResultsPending(
+        "Идёт проверка, результаты скоро появятся",
+        "Results are being checked and will appear soon",
+        "Az eredmények ellenőrzése folyamatban van, hamarosan megjelennek",
+        "Los resultados se están revisando y aparecerán pronto",
+        "Les résultats sont en cours de vérification et apparaîtront bientôt"
+    ),
+    OlympiadResultsNotLoaded(
+        "Результаты ещё не загружены",
+        "Results have not been uploaded yet",
+        "Az eredmények még nincsenek feltöltve",
+        "Los resultados aún no se han cargado",
+        "Les résultats ne sont pas encore chargés"
+    ),
+    OlympiadCheckResults(
+        "Проверить баллы",
+        "Check scores",
+        "Pontszámok ellenőrzése",
+        "Comprobar puntuación",
+        "Vérifier les scores"
+    ),
     OlympiadScore(
         "Результат",
         "Score",
@@ -3475,6 +3510,146 @@ internal enum class Words(
         "Az olimpia nem érhető el",
         "La olimpiada no está disponible",
         "L’olympiade est indisponible"
+    ),
+    Portfolio(
+        "Портфолио",
+        "Portfolio",
+        "Portfólió",
+        "Portafolio",
+        "Portfolio"
+    ),
+    PortfolioUnavailable(
+        "Портфолио недоступно",
+        "Portfolio is unavailable",
+        "A portfólió nem érhető el",
+        "El portafolio no está disponible",
+        "Le portfolio est indisponible"
+    ),
+    PortfolioEmpty(
+        "В портфолио пока нет данных",
+        "No portfolio data yet",
+        "Még nincsenek portfólióadatok",
+        "Aún no hay datos en el portafolio",
+        "Aucune donnée de portfolio pour le moment"
+    ),
+    PortfolioPartialError(
+        "Не удалось загрузить часть данных",
+        "Some data could not be loaded",
+        "Néhány adatot nem sikerült betölteni",
+        "No se pudieron cargar algunos datos",
+        "Certaines données n’ont pas pu être chargées"
+    ),
+    PortfolioAchievements(
+        "Достижения",
+        "Achievements",
+        "Eredmények",
+        "Logros",
+        "Réalisations"
+    ),
+    PortfolioPerformance(
+        "Успеваемость",
+        "Academic performance",
+        "Tanulmányi eredmény",
+        "Rendimiento académico",
+        "Résultats scolaires"
+    ),
+    PortfolioAverageMark(
+        "Средний балл",
+        "Average mark",
+        "Átlagjegy",
+        "Nota media",
+        "Moyenne"
+    ),
+    PortfolioFinalMarks(
+        "Итоговые оценки",
+        "Final marks",
+        "Zárójegyek",
+        "Notas finales",
+        "Notes finales"
+    ),
+    PortfolioEvents(
+        "Олимпиады и события",
+        "Olympiads and events",
+        "Olimpiák és események",
+        "Olimpiadas y eventos",
+        "Olympiades et événements"
+    ),
+    PortfolioRewards(
+        "Награды",
+        "Awards",
+        "Díjak",
+        "Premios",
+        "Récompenses"
+    ),
+    PortfolioDiagnostics(
+        "Диагностики",
+        "Diagnostics",
+        "Diagnosztikák",
+        "Diagnósticos",
+        "Diagnostics"
+    ),
+    PortfolioEmployments(
+        "Занятия",
+        "Classes and activities",
+        "Foglalkozások",
+        "Clases y actividades",
+        "Activités"
+    ),
+    PortfolioCultural(
+        "Культура",
+        "Culture",
+        "Kultúra",
+        "Cultura",
+        "Culture"
+    ),
+    PortfolioShowAll(
+        "Показать все",
+        "Show all",
+        "Összes",
+        "Mostrar todo",
+        "Tout afficher"
+    ),
+    PortfolioShowLess(
+        "Свернуть",
+        "Show less",
+        "Kevesebb",
+        "Mostrar menos",
+        "Afficher moins"
+    ),
+    PortfolioBestResult(
+        "Лучший результат",
+        "Best result",
+        "Legjobb eredmény",
+        "Mejor resultado",
+        "Meilleur résultat"
+    ),
+    PortfolioDiagnosticsCount(
+        "Диагностик: %d",
+        "Diagnostics: %d",
+        "Diagnosztikák: %d",
+        "Diagnósticos: %d",
+        "Diagnostics : %d"
+    ),
+    PortfolioOpenResult(
+        "Открыть результат",
+        "Open result",
+        "Eredmény megnyitása",
+        "Abrir resultado",
+        "Ouvrir le résultat"
+    ),
+    PortfolioDate(
+        "Дата",
+        "Date",
+        "Dátum",
+        "Fecha",
+        "Date"
+    ),
+    PortfolioYear(
+        "Учебный год",
+        "Academic year",
+        "Tanév",
+        "Curso académico",
+        "Année scolaire"
     ),
     PreviewWithoutSignIn(
         "Предпросмотр без входа",

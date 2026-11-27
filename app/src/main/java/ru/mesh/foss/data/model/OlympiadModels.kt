@@ -174,6 +174,12 @@ data class OlympiadParticipant(
     @SerializedName("personId") val personId: String? = null,
     @SerializedName("personalInfo") val personalInfo: OlympiadPersonalInfo? = null,
     @SerializedName("resultsPublicationInfoCode") val resultsPublicationInfoCode: String? = null,
+    @SerializedName("checkResultsLink") val checkResultsLink: String? = null,
+)
+
+/** Ответ `url-details/link`: сам результат — только ссылка на страницу организатора. */
+data class OlympiadDetailsLink(
+    @SerializedName("link") val link: String? = null,
 )
 
 data class OlympiadPersonalInfo(

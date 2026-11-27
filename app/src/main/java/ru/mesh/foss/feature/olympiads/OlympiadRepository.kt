@@ -6,6 +6,7 @@ import ru.mesh.foss.data.MeshClient
 import ru.mesh.foss.data.model.OlympiadDetail
 import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewResponse
+import ru.mesh.foss.data.model.OlympiadParticipant
 import ru.mesh.foss.data.model.OlympiadRecommendation
 import ru.mesh.foss.data.model.OlympiadResult
 
@@ -20,8 +21,10 @@ interface OlympiadRepository {
 
     suspend fun dictionaries(): OlympiadDictionaries
     suspend fun detail(contestId: String): OlympiadDetail
+    suspend fun participant(contestId: String): OlympiadParticipant?
     suspend fun result(contestId: String): OlympiadResult?
     suspend fun recommendation(contestId: String): OlympiadRecommendation?
+    suspend fun detailsLink(detailsUrl: String): String?
 }
 
 class MeshOlympiadRepository(private val client: MeshClient) : OlympiadRepository {
@@ -43,6 +46,11 @@ class MeshOlympiadRepository(private val client: MeshClient) : OlympiadRepositor
         client.getOlympiadDetail(contestId)
     }
 
+    override suspend fun participant(contestId: String): OlympiadParticipant? =
+        withContext(Dispatchers.IO) {
+            client.getOlympiadParticipant(contestId)
+        }
+
     override suspend fun result(contestId: String): OlympiadResult? = withContext(Dispatchers.IO) {
         client.getOlympiadResult(contestId)
     }
@@ -51,4 +59,8 @@ class MeshOlympiadRepository(private val client: MeshClient) : OlympiadRepositor
         withContext(Dispatchers.IO) {
             client.getOlympiadRecommendation(contestId)
         }
+
+    override suspend fun detailsLink(detailsUrl: String): String? = withContext(Dispatchers.IO) {
+        client.getOlympiadDetailsLink(detailsUrl)
+    }
 }

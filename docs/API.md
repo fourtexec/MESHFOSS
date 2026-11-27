@@ -143,6 +143,12 @@ DTO — `VisitDurationsResponse`:
 Retrofit-контракт `OlympiadApiService`; подробности — в
 [`docs/olympiads_api.md`](olympiads_api.md).
 
+## Портфолио
+
+Read-only раздел `/portfolio/app/` вынесен в отдельный Retrofit-контракт
+`PortfolioApiService`; подробности — в
+[`docs/portfolio_api.md`](portfolio_api.md).
+
 ## Москвёнок и QR-вход
 
 QR-вход и «Москвёнок» используют отдельные сценарии (`QrLogin`, `MoskvenokApi`)

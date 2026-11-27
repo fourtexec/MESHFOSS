@@ -21,6 +21,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import ru.mesh.foss.data.api.MeshApiService
 import ru.mesh.foss.data.api.OlympiadApiService
+import ru.mesh.foss.data.api.PortfolioApiService
 import ru.mesh.foss.data.model.AttendanceResponse
 import ru.mesh.foss.data.model.HomeworkLaunchLink
 import ru.mesh.foss.data.model.MarkDetail
@@ -33,6 +34,15 @@ import ru.mesh.foss.data.model.OlympiadPageRequest
 import ru.mesh.foss.data.model.OlympiadParticipant
 import ru.mesh.foss.data.model.OlympiadRecommendation
 import ru.mesh.foss.data.model.OlympiadResult
+import ru.mesh.foss.data.model.PortfolioAverageMark
+import ru.mesh.foss.data.model.PortfolioContext
+import ru.mesh.foss.data.model.PortfolioCulturalVisit
+import ru.mesh.foss.data.model.PortfolioDiagnosticYear
+import ru.mesh.foss.data.model.PortfolioEmployment
+import ru.mesh.foss.data.model.PortfolioEvent
+import ru.mesh.foss.data.model.PortfolioFinalYear
+import ru.mesh.foss.data.model.PortfolioReward
+import ru.mesh.foss.data.model.PortfolioWidget
 import ru.mesh.foss.data.model.VisitDurationsResponse
 
 /**
@@ -91,6 +101,9 @@ class MeshClient(
     private companion object {
         /** С запасом ниже типичного лимита заголовков 8 КБ. */
         const val MAX_LAUNCH_COOKIE_LENGTH = 6_000
+
+        /** Веб-портфолио запрашивает списки с `size=9999`. */
+        const val PORTFOLIO_LIST_SIZE = 9999
     }
 
     private val gson = GsonBuilder().setLenient().create()
@@ -125,6 +138,12 @@ class MeshClient(
 
     @Volatile
     private var cachedOlympiadService: OlympiadApiService? = null
+
+    @Volatile
+    private var cachedPortfolioBase: String? = null
+
+    @Volatile
+    private var cachedPortfolioService: PortfolioApiService? = null
 
     private fun createService(client: OkHttpClient): MeshApiService =
         Retrofit.Builder()
@@ -171,6 +190,22 @@ class MeshClient(
         return built
     }
 
+    /** Отдельный read-only контракт веб-портфолио. */
+    @Synchronized
+    private fun portfolioApi(): PortfolioApiService {
+        val normalized = baseUrl.trimEnd('/') + "/portfolio/app/"
+        cachedPortfolioService?.takeIf { cachedPortfolioBase == normalized }?.let { return it }
+        val built = Retrofit.Builder()
+            .baseUrl(normalized)
+            .client(http)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(PortfolioApiService::class.java)
+        cachedPortfolioBase = normalized
+        cachedPortfolioService = built
+        return built
+    }
+
     private fun headers(
         extra: Map<String, String> = emptyMap(),
         includeAuthToken: Boolean = true
@@ -187,6 +222,19 @@ class MeshClient(
         (headers(includeAuthToken = false) + mapOf(
             "Accept" to "application/json",
             "X-Mes-Subsystem" to "constuweb"
+        )) - "Profile-Id" - "Profile-Type" - "X-Mes-RoleId"
+
+    /**
+     * Заголовки веб-портфолио.
+     *
+     * HAR `school.mos.ru/portfolio/student/study` подтверждает Bearer-токен и
+     * `x-mes-subsystem: studentportfolioweb`; семейные заголовки не нужны.
+     */
+    private fun portfolioHeaders(): Map<String, String> =
+        (headers(includeAuthToken = false) + mapOf(
+            "Accept" to "application/json",
+            "X-Mes-Subsystem" to "studentportfolioweb",
+            "Referer" to (baseUrl.trimEnd('/') + "/portfolio/student/study")
         )) - "Profile-Id" - "Profile-Type" - "X-Mes-RoleId"
 
     private fun refreshHeaders(current: String): Map<String, String> =
@@ -261,12 +309,17 @@ class MeshClient(
         else -> MeshCore.MeshError(Words.MeshErrorHttp(code), "http-$code", code)
     }
 
-    /** GET, для которого 404 — нормальный ответ («результата ещё нет»). */
+    /**
+     * GET, у которого отсутствие подресурса — нормальный ответ.
+     *
+     * `404` для `/participant` означает «не участвовал», а `204` приходит
+     * у `/recommendation` без тела. Оба случая не должны ломать карточку.
+     */
     private fun <T> optional(callFactory: () -> Call<T>, path: String): T? =
         try {
             execute(callFactory, path)
         } catch (error: MeshCore.MeshError) {
-            if (error.status == 404) null else throw error
+            if (error.status == 404 || error.status == 204) null else throw error
         }
 
     /**
@@ -916,9 +969,96 @@ class MeshClient(
         )
     }
 
+    /**
+     * Разворачивает `detailsUrl` результата в ссылку для браузера.
+     *
+     * Веб-приложение сначала делает авторизованный GET по `detailsUrl`,
+     * получает `{ "link": … }` и только потом открывает `link`. Прямое
+     * открытие `detailsUrl` показывало пользователю JSON/ошибку API.
+     */
+    fun getOlympiadDetailsLink(detailsUrl: String): String? {
+        val raw = detailsUrl.trim()
+        if (raw.isBlank()) return null
+        return optional(
+            { olympiadApi().detailsLink(olympiadAbsoluteUrl(raw), olympiadHeaders()) },
+            "/api/contests/exec/v1/contests/.../result/.../url-details/link"
+        )?.link?.takeIf { it.isNotBlank() }
+    }
+
+    private fun olympiadAbsoluteUrl(raw: String): String {
+        val base = baseUrl.trimEnd('/')
+        return when {
+            raw.startsWith("http://") || raw.startsWith("https://") -> raw
+            raw.startsWith("/") -> base + raw
+            raw.startsWith("api/") -> "$base/$raw"
+            else -> "$base/api/contests/exec/v1/$raw"
+        }
+    }
+
     private fun requireContestId(contestId: String): String {
         val id = contestId.trim()
         if (id.isBlank()) throw MeshCore.MeshError(Words.OlympiadUnavailable.text, "bad-olympiad")
+        return id
+    }
+
+    // ------------------------------------------------------------- ПОРТФОЛИО ----
+
+    fun getPortfolioContext(): PortfolioContext =
+        execute({ portfolioApi().context(portfolioHeaders()) }, "/portfolio/app/portfolio/users/context/")
+            .data
+            ?: throw MeshCore.MeshError(Words.PortfolioUnavailable.text, "invalid-json")
+
+    fun getPortfolioWidgets(personId: String): List<PortfolioWidget> =
+        execute(
+            { portfolioApi().widgets(requirePortfolioPersonId(personId), portfolioHeaders()) },
+            "/portfolio/app/persons/.../widgets/list"
+        ).data.orEmpty()
+
+    fun getPortfolioEvents(personId: String, size: Int = PORTFOLIO_LIST_SIZE): List<PortfolioEvent> =
+        execute(
+            { portfolioApi().events(requirePortfolioPersonId(personId), size, portfolioHeaders()) },
+            "/portfolio/app/persons/.../events/list"
+        ).data.orEmpty()
+
+    fun getPortfolioRewards(personId: String, size: Int = PORTFOLIO_LIST_SIZE): List<PortfolioReward> =
+        execute(
+            { portfolioApi().rewards(requirePortfolioPersonId(personId), size, portfolioHeaders()) },
+            "/portfolio/app/persons/.../rewards/list"
+        ).data.orEmpty()
+
+    fun getPortfolioFinalMarks(personId: String): List<PortfolioFinalYear> =
+        execute(
+            { portfolioApi().finalMarks(requirePortfolioPersonId(personId), portfolioHeaders()) },
+            "/portfolio/app/persons/.../academic-performance/final-mark"
+        ).data.orEmpty()
+
+    fun getPortfolioAverageMark(personId: String): PortfolioAverageMark? =
+        execute(
+            { portfolioApi().averageMark(requirePortfolioPersonId(personId), portfolioHeaders()) },
+            "/portfolio/app/persons/.../v2/academic-performance/average-mark"
+        ).data
+
+    fun getPortfolioDiagnostics(personId: String): List<PortfolioDiagnosticYear> =
+        execute(
+            { portfolioApi().diagnostics(requirePortfolioPersonId(personId), 2, portfolioHeaders()) },
+            "/portfolio/app/persons/.../independent-diagnostic-grouped"
+        ).data.orEmpty()
+
+    fun getPortfolioEmployments(personId: String, size: Int = PORTFOLIO_LIST_SIZE): List<PortfolioEmployment> =
+        execute(
+            { portfolioApi().employments(requirePortfolioPersonId(personId), size, portfolioHeaders()) },
+            "/portfolio/app/persons/.../employments/list"
+        ).data.orEmpty()
+
+    fun getPortfolioCulturalVisits(personId: String, size: Int = PORTFOLIO_LIST_SIZE): List<PortfolioCulturalVisit> =
+        execute(
+            { portfolioApi().cultural(requirePortfolioPersonId(personId), size, portfolioHeaders()) },
+            "/portfolio/app/persons/.../cultural/list"
+        ).data.orEmpty()
+
+    private fun requirePortfolioPersonId(personId: String): String {
+        val id = personId.trim()
+        if (id.isBlank()) throw MeshCore.MeshError(Words.PortfolioUnavailable.text, "bad-portfolio")
         return id
     }
 
