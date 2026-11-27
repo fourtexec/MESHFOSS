@@ -129,6 +129,12 @@ private fun MarkDetailBody(detail: MarkDetail) {
             InfoRow(Words.MarkUpdatedAt.text, updatedText)
         }
 
+        // История и файлы — сразу под временем, а не после длинного комментария:
+        // иначе в небольшом диалоге они остаются за нижней границей и кажется,
+        // что их нет вовсе.
+        MarkHistorySection(detail.history, detail.value)
+        MarkFilesSection(detail)
+
         if (teacherName.isNotBlank()) InfoRow(Words.Teacher.text, teacherName)
 
         val topic = detail.activity?.lessonTopic
@@ -143,9 +149,6 @@ private fun MarkDetailBody(detail: MarkDetail) {
             )
             Text(comment, style = MaterialTheme.typography.bodyMedium)
         }
-
-        MarkFilesSection(detail)
-        MarkHistorySection(detail.history, detail.value)
 
         val classResults = detail.classResults
         if (classResults != null) {

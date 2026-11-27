@@ -15,6 +15,7 @@ import ru.mesh.foss.feature.marks.markDateTime
 import ru.mesh.foss.feature.marks.markFileExtension
 import ru.mesh.foss.feature.marks.markFileIsImage
 import ru.mesh.foss.feature.marks.markFileSizeLabel
+import ru.mesh.foss.feature.marks.markHistoryChanges
 import ru.mesh.foss.feature.marks.markHistoryChain
 import ru.mesh.foss.feature.marks.markTimesDiffer
 
@@ -145,5 +146,18 @@ class MarkFilesTest {
         )
         assertEquals(listOf("4", "5"), markHistoryChain(history, "5.0"))
         assertEquals(listOf("4", "5", "3"), markHistoryChain(history, "3"))
+    }
+
+    @Test
+    fun keepsExplicitSameValueHistoryChange() {
+        val entry = MarkHistoryEntry(
+            changeDate = "2026-10-19T15:56:17",
+            before = MarkSnapshot(value = "5.0"),
+            after = MarkSnapshot(value = "5.0")
+        )
+        val changes = markHistoryChanges(entry)
+        assertEquals(1, changes.size)
+        assertEquals("5", changes.single().before)
+        assertEquals("5", changes.single().after)
     }
 }

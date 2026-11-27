@@ -70,7 +70,8 @@ internal fun markValueLabel(value: String?): String {
 
 /**
  * Хронологическая цепочка оценок: старые значения идут серыми, последнее —
- * актуальное. Дубли подряд убираем, иначе `before`/`after` дают «5 → 5».
+ * актуальное. В цепочке дубли подряд убираем, а явный переход `5 → 5`
+ * показываем отдельной строкой изменения с временем.
  */
 internal fun markHistoryChain(
     history: List<MarkHistoryEntry>?,
@@ -184,20 +185,22 @@ private fun HistoryGradeBadge(value: String) {
     }
 }
 
-private data class HistoryChange(
+internal data class HistoryChange(
     val label: String,
     val before: String,
     val after: String,
 )
 
-private fun markHistoryChanges(entry: MarkHistoryEntry): List<HistoryChange> {
+internal fun markHistoryChanges(entry: MarkHistoryEntry): List<HistoryChange> {
     val before = entry.before ?: return emptyList()
     val after = entry.after ?: return emptyList()
     val changes = mutableListOf<HistoryChange>()
 
     val beforeValue = markValueLabel(before.value)
     val afterValue = markValueLabel(after.value)
-    if (beforeValue != afterValue) {
+    // Показываем переход даже при 5 → 5: учитель мог пересохранить оценку,
+    // и пользователь хочет видеть сам факт изменения и его время.
+    if (beforeValue != "—" || afterValue != "—") {
         changes += HistoryChange(Words.Grade.text, beforeValue, afterValue)
     }
     if (before.weight != after.weight) {
