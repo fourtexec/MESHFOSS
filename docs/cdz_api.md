@@ -1840,8 +1840,10 @@ school.mos.ru/api/ej/partners/v1/homeworks/launch?homework_entry_id=…&material
 
 В Android-клиенте первый запрос выполняет Retrofit
 (`MeshApiService.homeworkLaunch`) через отдельный OkHttp-клиент без
-автоперехода. Заголовки — Bearer, профиль и cookie jar аккаунта (как у
-веб-дневника); ответ разбирается как `Location`, строка-URL или Gson-модель
+автоперехода. Заголовки — Bearer, профиль и только auth-куки аккаунта
+(`aupd_token`, `student_person_id`, `Ltpatoken2`, session-куки и т.п.), а не
+весь WebView-jar: иначе `school.mos.ru` отвечает `431 Request Header Fields
+Too Large`. Ответ разбирается как `Location`, строка-URL или Gson-модель
 `HomeworkLaunchLink`. Полученный `api/launcher/v1/launch` уже открывается в
 браузере или нативном ЦДЗ, а не запрашивается клиентом повторно.
 

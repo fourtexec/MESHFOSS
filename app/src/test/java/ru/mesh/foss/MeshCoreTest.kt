@@ -584,12 +584,12 @@ class MeshCoreTest {
     fun `food-запросы не отправляют Auth-Token`() {
         // Шлюз /api/food/... отвечает 401, если в запросе есть Auth-Token,
         // и принимает только Authorization: Bearer.
-        val food = MeshCore.authHeaders("test-token", "36847597", includeAuthToken = false)
+        val food = MeshCore.authHeaders("test-token", "12345678", includeAuthToken = false)
         assertEquals("Bearer test-token", food["Authorization"])
-        assertEquals("36847597", food["Profile-Id"])
+        assertEquals("12345678", food["Profile-Id"])
         assertFalse(food.containsKey("Auth-Token"))
 
-        val regular = MeshCore.authHeaders("test-token", "36847597")
+        val regular = MeshCore.authHeaders("test-token", "12345678")
         assertEquals("test-token", regular["Auth-Token"])
     }
 

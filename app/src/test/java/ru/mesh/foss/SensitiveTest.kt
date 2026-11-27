@@ -20,13 +20,13 @@ class SensitiveTest {
         val line =
             "→ GET https://school.mos.ru/api/x?token=SECRETTOKEN123456 " +
                 "Authorization: Bearer abc.def.ghi Auth-Token: deadbeefdeadbeef " +
-                "Cookie: aupd_token=zzz Profile-Id: 36847597"
+                "Cookie: aupd_token=zzz Profile-Id: 12345678"
         val out = Sensitive.scrub(line)
         assertFalse(out.contains("SECRETTOKEN123456"))
         assertFalse(out.contains("abc.def.ghi"))
         assertFalse(out.contains("deadbeefdeadbeef"))
         assertFalse(out.contains("aupd_token=zzz"))
-        assertFalse(out.contains("36847597"))
+        assertFalse(out.contains("12345678"))
     }
 
     @Test

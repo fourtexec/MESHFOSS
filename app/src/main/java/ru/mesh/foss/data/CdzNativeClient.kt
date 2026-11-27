@@ -40,7 +40,7 @@ class CdzNativeClient(
         private const val UA = "Mozilla/5.0 (X11; Linux x86_64; rv:160.0) Gecko/20100101 Firefox/160.0"
         const val PROFILE_KEY = "cdz_native_profile_v1"
 
-        /** uchebnik ждёт профиль school (1002991417), а не student_id (36847597). */
+        /** uchebnik ждёт профиль school, а не student_id. */
         fun profileJson(profileId: String?, userId: String?): String =
             JSONObject().put("id", profileId.orEmpty()).put("type", "student").toString()
 

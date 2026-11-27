@@ -78,6 +78,11 @@ class MeshClient(
     private var lastRefreshAt: Long = 0L
     private val refreshSuccessCooldownMs = 10_000L
 
+    private companion object {
+        /** С запасом ниже типичного лимита заголовков 8 КБ. */
+        const val MAX_LAUNCH_COOKIE_LENGTH = 6_000
+    }
+
     private val gson = GsonBuilder().setLenient().create()
 
     private val http = OkHttpClient.Builder()
@@ -144,20 +149,57 @@ class MeshClient(
         MeshCore.baseHeaders() + MeshCore.authHeaders(current, null)
 
     /**
-     * Заголовки `homeworks/launch`: как у веб-дневника, к Bearer-токену
-     * добавляется cookie-сессия аккаунта. Если в jar нет `aupd_token`,
-     * подставляем текущий токен, чтобы запрос не остался без cookie вовсе.
+     * Cookie для `homeworks/launch` — только auth-куки, а не весь WebView-jar.
+     *
+     * Полный jar может содержать десятки аналитических/UI-кук и легко
+     * превышает лимит заголовков: school.mos.ru отвечает `431 Request Header
+     * Fields Too Large`. Поэтому берём известный набор МЭШ и ограничиваем
+     * итоговую длину. `student_person_id` не синтезируем: это отдельный
+     * contingent-cookie, он уходит только если реально есть в jar.
      */
-    private fun launchHeaders(): Map<String, String> {
+    private fun launchCookieHeader(): String? {
         val jar = runCatching { cookieJar?.invoke() }.getOrNull().orEmpty()
-        val cookies = LinkedHashMap(jar)
-        if (cookies["aupd_token"].isNullOrBlank()) {
-            token?.takeIf { it.isNotBlank() }?.let { cookies["aupd_token"] = it }
+        val authToken = jar["aupd_token"]?.takeIf { it.isNotBlank() }
+            ?: token?.takeIf { it.isNotBlank() }
+        val hasAuth = !authToken.isNullOrBlank() || listOf(
+            "student_person_id",
+            "Ltpatoken2",
+            "Session-Id-External",
+            "Session-Eom-Profile"
+        ).any { !jar[it].isNullOrBlank() }
+        if (!hasAuth) return null
+
+        val ordered = listOf(
+            "aupd_token" to authToken,
+            "student_person_id" to jar["student_person_id"],
+            "Ltpatoken2" to jar["Ltpatoken2"],
+            "auth_flag" to (jar["auth_flag"] ?: "main"),
+            "subsystem_id" to (jar["subsystem_id"] ?: MeshCore.SUBSYSTEM_ID),
+            "aupd_current_role" to (jar["aupd_current_role"] ?: "2:2"),
+            "user_login" to jar["user_login"],
+            "obr_id" to jar["obr_id"],
+            "Session-Id-External" to jar["Session-Id-External"],
+            "Session-Eom-Profile" to jar["Session-Eom-Profile"]
+        )
+        val header = StringBuilder()
+        ordered.forEach { (name, raw) ->
+            val value = raw?.trim().orEmpty()
+            if (value.isBlank()) return@forEach
+            // Значение cookie не должно ломать заголовок переносом строки.
+            if (value.any { it == '\r' || it == '\n' || it == ';' }) return@forEach
+            val pair = "$name=$value"
+            if (header.length > 0 && header.length + 2 + pair.length > MAX_LAUNCH_COOKIE_LENGTH) {
+                return@forEach
+            }
+            if (header.length > 0) header.append("; ")
+            header.append(pair)
         }
+        return header.toString().ifBlank { null }
+    }
+
+    private fun launchHeaders(): Map<String, String> {
         val extra = mutableMapOf<String, String>()
-        if (cookies.isNotEmpty()) {
-            extra["Cookie"] = cookies.entries.joinToString("; ") { (key, value) -> "$key=$value" }
-        }
+        launchCookieHeader()?.let { extra["Cookie"] = it }
         extra["Referer"] = baseUrl.trimEnd('/') + "/diary/homeworks"
         return headers(extra)
     }

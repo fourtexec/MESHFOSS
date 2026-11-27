@@ -224,7 +224,9 @@ class CdzTest {
             cookieJar = {
                 mapOf(
                     "aupd_token" to DemoMeshServer.DEMO_TOKEN,
-                    "student_person_id" to "17234613"
+                    "student_person_id" to "synthetic-contingent",
+                    // Посторонняя кука не должна раздувать заголовок до 431.
+                    "analytics_blob" to "x".repeat(9_000)
                 )
             }
         )
@@ -256,7 +258,9 @@ class CdzTest {
         assertTrue(launch1 != launch2)
         val demo = server ?: error("demo server is not running")
         assertTrue(demo.lastLaunchCookie.contains("aupd_token=${DemoMeshServer.DEMO_TOKEN}"))
-        assertTrue(demo.lastLaunchCookie.contains("student_person_id=17234613"))
+        assertTrue(demo.lastLaunchCookie.contains("student_person_id=synthetic-contingent"))
+        assertFalse(demo.lastLaunchCookie.contains("analytics_blob"))
+        assertTrue(demo.lastLaunchCookie.length < 7_000)
         assertTrue(demo.lastLaunchReferer.endsWith("/diary/homeworks"))
     }
 
