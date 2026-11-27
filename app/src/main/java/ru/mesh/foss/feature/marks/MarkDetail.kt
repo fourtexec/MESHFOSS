@@ -88,6 +88,8 @@ private fun MarkDetailBody(detail: MarkDetail) {
     ).filter { it.isNotBlank() }.joinToString(" ")
     val hasFiles = detail.resultFiles.orEmpty().isNotEmpty() ||
         detail.studentWorkResultFiles.orEmpty().isNotEmpty()
+    val createdText = markDateTime(detail.createdAt)
+    val updatedText = markDateTime(detail.updatedAt)
 
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -122,6 +124,11 @@ private fun MarkDetailBody(detail: MarkDetail) {
             }
         }
 
+        if (createdText.isNotBlank()) InfoRow(Words.MarkCreatedAt.text, createdText)
+        if (markTimesDiffer(detail.createdAt, detail.updatedAt)) {
+            InfoRow(Words.MarkUpdatedAt.text, updatedText)
+        }
+
         if (teacherName.isNotBlank()) InfoRow(Words.Teacher.text, teacherName)
 
         val topic = detail.activity?.lessonTopic
@@ -138,6 +145,7 @@ private fun MarkDetailBody(detail: MarkDetail) {
         }
 
         MarkFilesSection(detail)
+        MarkHistorySection(detail.history, detail.value)
 
         val classResults = detail.classResults
         if (classResults != null) {

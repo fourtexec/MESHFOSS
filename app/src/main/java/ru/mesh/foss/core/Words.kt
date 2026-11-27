@@ -494,6 +494,41 @@ internal enum class Words(
         "Docente",
         "Enseignant"
     ),
+    Weight(
+        "Вес",
+        "Weight",
+        "Súly",
+        "Peso",
+        "Poids"
+    ),
+    ControlForm(
+        "Форма контроля",
+        "Control form",
+        "Ellenőrzés formája",
+        "Forma de control",
+        "Forme de contrôle"
+    ),
+    PointMark(
+        "Балльная оценка",
+        "Point grade",
+        "Pontérték",
+        "Nota por puntos",
+        "Note par points"
+    ),
+    Yes(
+        "Да",
+        "Yes",
+        "Igen",
+        "Sí",
+        "Oui"
+    ),
+    No(
+        "Нет",
+        "No",
+        "Nem",
+        "No",
+        "Non"
+    ),
     Topic(
         "Тема",
         "Topic",
@@ -507,6 +542,34 @@ internal enum class Words(
         "Megjegyzés",
         "Comentario",
         "Commentaire"
+    ),
+    MarkCreatedAt(
+        "Выставлено",
+        "Created",
+        "Kiállítva",
+        "Publicada",
+        "Attribuée"
+    ),
+    MarkUpdatedAt(
+        "Обновлено",
+        "Updated",
+        "Frissítve",
+        "Actualizada",
+        "Mise à jour"
+    ),
+    MarkHistory(
+        "История изменений",
+        "Change history",
+        "Változások előzményei",
+        "Historial de cambios",
+        "Historique des modifications"
+    ),
+    MarkHistoryUpdated(
+        "Оценка обновлена",
+        "Grade updated",
+        "A jegy frissítve",
+        "Nota actualizada",
+        "Note mise à jour"
     ),
     ClassResultsStudents(
         "Результаты по классу (%s учеников)",
