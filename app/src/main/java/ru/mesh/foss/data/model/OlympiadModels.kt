@@ -38,10 +38,14 @@ data class OlympiadOverviewResponse(
     @SerializedName("page") val page: OlympiadPage = OlympiadPage(),
     @SerializedName("hiddenTotal") val hiddenTotal: Int = 0,
 ) {
+    /** Gson может положить null в список, даже если в JSON поле было явно null. */
+    val items: List<OlympiadOverviewItem>
+        get() = page?.content.orEmpty()
+
     val total: Int
         get() = hiddenTotal.takeIf { it > 0 }
-            ?: page.totalElements?.toInt()?.takeIf { it > 0 }
-            ?: page.content.size
+            ?: page?.totalElements?.toInt()?.takeIf { it > 0 }
+            ?: items.size
 }
 
 data class OlympiadPage(
@@ -146,9 +150,9 @@ data class OlympiadDictionaries(
     val stages: List<OlympiadDictionaryItem> = emptyList(),
     val levels: List<OlympiadDictionaryItem> = emptyList(),
 ) {
-    fun subjectNames(ids: List<String>): String = names(ids, subjects)
+    fun subjectNames(ids: List<String>?): String = names(ids.orEmpty(), subjects)
 
-    fun parallelNames(ids: List<String>): String = names(ids, parallels)
+    fun parallelNames(ids: List<String>?): String = names(ids.orEmpty(), parallels)
 
     fun stageName(id: String?): String? = nameOf(id, stages)
 
@@ -160,7 +164,7 @@ data class OlympiadDictionaries(
     private fun nameOf(id: String?, items: List<OlympiadDictionaryItem>): String? {
         val key = id?.trim().orEmpty()
         if (key.isEmpty()) return null
-        return items.firstOrNull { it.id == key }?.label
+        return items.orEmpty().firstOrNull { it.id == key }?.label
     }
 }
 

@@ -9,6 +9,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import ru.mesh.foss.data.MeshClient
+import ru.mesh.foss.data.model.OlympiadDetail
+import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewResponse
 import ru.mesh.foss.feature.olympiads.OlympiadText
 import java.util.Locale
@@ -57,8 +59,28 @@ class OlympiadTest {
         )
 
         assertEquals(2, parsed.total)
-        assertEquals("demo-1", parsed.page.content[0].resolvedContestId)
-        assertEquals("demo-2", parsed.page.content[1].resolvedContestId)
+        assertEquals("demo-1", parsed.items[0].resolvedContestId)
+        assertEquals("demo-2", parsed.items[1].resolvedContestId)
+    }
+
+    @Test
+    fun `explicit null collections do not crash parsing`() {
+        val gson = GsonBuilder().setLenient().create()
+        val overview = gson.fromJson(
+            """{"page":null,"hiddenTotal":0}""",
+            OlympiadOverviewResponse::class.java,
+        )
+        assertEquals(0, overview.items.size)
+        assertEquals(0, overview.total)
+
+        val detail = gson.fromJson(
+            """{"prevContestStages":null,"commonInfo":{"subjectIds":null},"additionalInfo":{"testContests":null}}""",
+            OlympiadDetail::class.java,
+        )
+        assertTrue(detail.prevContestStages.orEmpty().isEmpty())
+        assertTrue(detail.commonInfo?.subjectIds.orEmpty().isEmpty())
+        assertTrue(detail.additionalInfo?.testContests.orEmpty().isEmpty())
+        assertEquals("", OlympiadDictionaries().subjectNames(null))
     }
 
     @Test
@@ -90,20 +112,20 @@ class OlympiadTest {
         val client = client()
 
         val mine = client.getOlympiadOverview(showParticipantContests = true)
-        assertEquals(2, mine.page.content.size)
+        assertEquals(2, mine.items.size)
         assertEquals(2, mine.total)
-        assertEquals(DemoMeshServer.DEMO_OLYMPIAD_ID, mine.page.content.first().resolvedContestId)
+        assertEquals(DemoMeshServer.DEMO_OLYMPIAD_ID, mine.items.first().resolvedContestId)
 
         val all = client.getOlympiadOverview(showParticipantContests = false)
-        assertEquals(3, all.page.content.size)
+        assertEquals(3, all.items.size)
         assertEquals(3, all.total)
 
         val search = client.getOlympiadOverview(
             showParticipantContests = false,
             searchString = "физике",
         )
-        assertEquals(1, search.page.content.size)
-        assertEquals("demo-olympiad-3", search.page.content.first().resolvedContestId)
+        assertEquals(1, search.items.size)
+        assertEquals("demo-olympiad-3", search.items.first().resolvedContestId)
     }
 
     @Test

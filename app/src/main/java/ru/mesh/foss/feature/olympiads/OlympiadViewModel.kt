@@ -159,7 +159,7 @@ class OlympiadViewModel(
                         loading = false,
                         refreshing = false,
                         loadingMore = false,
-                        items = if (reset) response.page.content else current.items + response.page.content,
+                        items = if (reset) response.items else current.items + response.items,
                         total = response.total,
                         page = page,
                         error = null,

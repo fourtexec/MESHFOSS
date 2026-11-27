@@ -309,9 +309,9 @@ private fun OlympiadCard(
     onClick: () -> Unit,
 ) {
     val title = item.contestName?.takeIf { it.isNotBlank() } ?: Words.OlympiadUnavailable.text
-    val subjects = dictionaries.subjectNames(item.subjectIds)
+    val subjects = dictionaries.subjectNames(item.subjectIds.orEmpty())
     val stage = dictionaries.stageName(item.stageCode)
-    val parallels = dictionaries.parallelNames(item.parallelIds)
+    val parallels = dictionaries.parallelNames(item.parallelIds.orEmpty())
     val meta = listOfNotNull(stage, parallels).filter { it.isNotBlank() }.joinToString(" · ")
     val dates = dateRange(item.startAt, item.finishAt)
 
@@ -540,10 +540,10 @@ private fun OlympiadDetailBody(
                     }
                 }
             }
-            if (detail.prevContestStages.isNotEmpty()) {
+            if (detail.prevContestStages.orEmpty().isNotEmpty()) {
                 item {
                     OlympiadInfoCard(Words.OlympiadPreviousStages.text) {
-                        detail.prevContestStages.forEachIndexed { index, previous ->
+                        detail.prevContestStages.orEmpty().forEachIndexed { index, previous ->
                             if (index > 0) {
                                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                             }
@@ -619,12 +619,12 @@ private fun DetailValue(label: String, value: String?) {
 
 @Composable
 private fun PreviousStageRow(stage: OlympiadPreviousStage, dictionaries: OlympiadDictionaries) {
-    val subjectText = stage.subjects.mapNotNull { it.label }.distinct().joinToString(", ")
-        .ifBlank { dictionaries.subjectNames(stage.subjectIds) }
-    val parallelText = stage.parallels.mapNotNull { it.label }.distinct().joinToString(", ")
-        .ifBlank { dictionaries.parallelNames(stage.parallelIds) }
+    val subjectText = stage.subjects.orEmpty().mapNotNull { it.label }.distinct().joinToString(", ")
+        .ifBlank { dictionaries.subjectNames(stage.subjectIds.orEmpty()) }
+    val parallelText = stage.parallels.orEmpty().mapNotNull { it.label }.distinct().joinToString(", ")
+        .ifBlank { dictionaries.parallelNames(stage.parallelIds.orEmpty()) }
     val stageText = stage.stage?.label ?: dictionaries.stageName(stage.stageCode)
-    val rewards = stage.rewards.mapNotNull { it.label }.distinct().joinToString(", ")
+    val rewards = stage.rewards.orEmpty().mapNotNull { it.label }.distinct().joinToString(", ")
     Text(
         stage.title ?: stageText ?: Words.OlympiadStage.text,
         style = MaterialTheme.typography.bodyMedium,

@@ -80,10 +80,10 @@ class PreviewModeTest {
         val client = previewClient()
 
         val overview = client.getOlympiadOverview(showParticipantContests = true)
-        assertTrue(overview.page.content.size >= 2)
+        assertTrue(overview.items.size >= 2)
         assertEquals(
             PreviewMockInterceptor.PREVIEW_OLYMPIAD_ID,
-            overview.page.content.first().resolvedContestId
+            overview.items.first().resolvedContestId
         )
 
         val detail = client.getOlympiadDetail(PreviewMockInterceptor.PREVIEW_OLYMPIAD_PAST_ID)

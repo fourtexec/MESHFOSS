@@ -848,15 +848,19 @@ class MeshClient(
 
     fun getOlympiadSubjects(): List<OlympiadDictionaryItem> =
         execute({ olympiadApi().subjects(olympiadHeaders()) }, "/api/contests/exec/v1/subjects")
+            .orEmpty()
 
     fun getOlympiadParallels(): List<OlympiadDictionaryItem> =
         execute({ olympiadApi().parallels(olympiadHeaders()) }, "/api/contests/exec/v1/parallels")
+            .orEmpty()
 
     fun getOlympiadStages(): List<OlympiadDictionaryItem> =
         execute({ olympiadApi().stages(olympiadHeaders()) }, "/api/contests/exec/v1/contests/stages")
+            .orEmpty()
 
     fun getOlympiadLevels(): List<OlympiadDictionaryItem> =
         execute({ olympiadApi().levels(olympiadHeaders()) }, "/api/contests/exec/v1/contests/levels")
+            .orEmpty()
 
     /** Все справочники одним вызовом; запросы идут параллельно, как в вебе. */
     fun getOlympiadDictionaries(force: Boolean = false): OlympiadDictionaries {
@@ -868,10 +872,10 @@ class MeshClient(
             val stages = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadStages() }
             val levels = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadLevels() }
             val result = OlympiadDictionaries(
-                subjects = subjects.get(),
-                parallels = parallels.get(),
-                stages = stages.get(),
-                levels = levels.get(),
+                subjects = subjects.get().orEmpty(),
+                parallels = parallels.get().orEmpty(),
+                stages = stages.get().orEmpty(),
+                levels = levels.get().orEmpty(),
             )
             olympiadDictionariesCache = result
             return result
