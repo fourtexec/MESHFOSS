@@ -1480,6 +1480,20 @@ object MeshCore {
         return days
     }
 
+    /**
+     * Блюда комплекса по убыванию калорийности. Блюда без калорий (`0` или
+     * отсутствующее поле) остаются в конце; равные значения сохраняют исходный
+     * порядок — сортировка стабильная.
+     */
+    fun foodDishesByCalories(dishes: JSONArray): JSONArray {
+        val sorted = (0 until dishes.length())
+            .mapNotNull { dishes.optJSONObject(it) }
+            .sortedByDescending { it.optInt("calories", 0) }
+        val result = JSONArray()
+        sorted.forEach { result.put(it) }
+        return result
+    }
+
     /** «Экспресс»-комплексы: в списке приёма пищи они идут после основного блока. */
     fun foodIsExpress(complex: JSONObject): Boolean =
         complex.optString("name").contains("экспресс", ignoreCase = true)

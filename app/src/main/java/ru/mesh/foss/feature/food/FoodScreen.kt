@@ -406,7 +406,7 @@ private fun FeedingWeekRow(week: JSONObject?) {
 @Composable
 private fun ComplexCard(complex: JSONObject, showPrice: Boolean, expandedByDefault: Boolean) {
     var expanded by remember(complex.opt("id"), expandedByDefault) { mutableStateOf(expandedByDefault) }
-    val dishes = complex.optJSONArray("dishes") ?: JSONArray()
+    val dishes = MeshCore.foodDishesByCalories(complex.optJSONArray("dishes") ?: JSONArray())
     val kindLabel = complex.optString("kindLabel")
     val priceLabel = complex.optString("priceLabel")
     val mealLabel = Words.Meal.text

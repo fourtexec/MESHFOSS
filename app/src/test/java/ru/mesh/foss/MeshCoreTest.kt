@@ -564,6 +564,23 @@ class MeshCoreTest {
     }
 
     @Test
+    fun `еда — блюда сортируются по калорийности по убыванию`() {
+        val dishes = JSONArray(
+            """[
+                {"name": "Компот", "calories": 90},
+                {"name": "Котлета", "calories": 340},
+                {"name": "Борщ", "calories": 180},
+                {"name": "Без калорий"}
+            ]"""
+        )
+        val sorted = MeshCore.foodDishesByCalories(dishes)
+        assertEquals(
+            listOf("Котлета", "Борщ", "Компот", "Без калорий"),
+            (0 until sorted.length()).map { sorted.getJSONObject(it).getString("name") }
+        )
+    }
+
+    @Test
     fun `food-запросы не отправляют Auth-Token`() {
         // Шлюз /api/food/... отвечает 401, если в запросе есть Auth-Token,
         // и принимает только Authorization: Bearer.
