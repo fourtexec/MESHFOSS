@@ -12,6 +12,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import ru.mesh.foss.data.model.AttendanceResponse
+import ru.mesh.foss.data.model.MarkDetail
 import ru.mesh.foss.data.model.VisitDurationsResponse
 
 /**
@@ -62,7 +63,7 @@ interface MeshApiService {
         @Query("person_id") personId: String?,
         @Query("markId") markIdQuery: String,
         @HeaderMap headers: Map<String, String>,
-    ): Call<JsonElement>
+    ): Call<MarkDetail>
 
     @GET("api/family/web/v1/subject_marks")
     fun subjectMarks(

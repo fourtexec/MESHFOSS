@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +70,8 @@ fun MarksScreen(
 ) {
     var mode by remember { mutableStateOf("date") }
     var loading by remember { mutableStateOf(false) }
+    // Обновление свайпом: старый список остаётся на экране под индикатором.
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var marks by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -88,6 +92,10 @@ fun MarksScreen(
 
     val listState = rememberLazyListState()
     val effectivePersonId = personId?.takeIf { it.isNotBlank() } ?: store.personId
+
+    // Индикатор свайпа относится к текущему режиму и не должен переезжать
+    // на другой экран при переключении вкладки.
+    LaunchedEffect(mode, subjectId) { refreshing = false }
 
     fun loadOlderMarks() {
         val sid = studentId ?: return
@@ -123,6 +131,7 @@ fun MarksScreen(
     LaunchedEffect(studentId, mode, subjectId, retryKey) {
         if (studentId.isNullOrBlank()) {
             loading = false
+            refreshing = false
             return@LaunchedEffect
         }
         // «Итоговые» грузятся своим эффектом (итоги + выбор года).
@@ -149,7 +158,10 @@ fun MarksScreen(
         } catch (e: Exception) {
             error = MeshCore.describeError(e)
         } finally {
-            if (isActive) loading = false
+            if (isActive) {
+                loading = false
+                refreshing = false
+            }
         }
     }
 
@@ -171,10 +183,12 @@ fun MarksScreen(
         }
     }
 
-    // Итоговые оценки перезагружаем при смене года.
-    LaunchedEffect(studentId, effectivePersonId, selectedYearId) {
+    // Итоговые оценки перезагружаем при смене года или свайпе.
+    LaunchedEffect(studentId, effectivePersonId, selectedYearId, retryKey, mode) {
+        if (mode != "final") return@LaunchedEffect
         val yearId = selectedYearId
         if (studentId.isNullOrBlank() || effectivePersonId.isNullOrBlank() || yearId.isNullOrBlank()) {
+            refreshing = false
             return@LaunchedEffect
         }
         finalLoading = true
@@ -195,7 +209,10 @@ fun MarksScreen(
         } catch (e: Exception) {
             finalError = MeshCore.describeError(e)
         } finally {
-            if (isActive) finalLoading = false
+            if (isActive) {
+                finalLoading = false
+                refreshing = false
+            }
         }
     }
 
@@ -298,59 +315,70 @@ fun MarksScreen(
             Spacer(Modifier.height(4.dp))
         }
 
-        when {
-            studentId.isNullOrBlank() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        LoadingIndicator()
-                        Spacer(Modifier.height(8.dp))
-                        Text(Words.LoadingStudentProfile.text)
-                    }
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                if (!studentId.isNullOrBlank()) {
+                    refreshing = true
+                    retryKey++
                 }
-            }
-            mode == "final" -> FinalMarksSection(
-                years = academicYears,
-                selectedYearId = selectedYearId,
-                onYearChange = { selectedYearId = it },
-                marks = finalMarks,
-                loading = finalLoading,
-                error = finalError
-            )
-            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
-            }
-            error != null -> {
-                Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                    Text(error!!, color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(8.dp))
-                    GlassButton(onClick = { retryKey++ }) { Text(Words.Retry.text) }
-                }
-            }
-            subjectId != null -> {
-                val subject = subjects.firstOrNull { it.optString("subjectId") == subjectId }
-                SubjectMarksDetail(subject) { id -> selectedMarkId = id }
-            }
-            mode == "subject" -> {
-                if (subjects.isEmpty()) {
+            },
+            modifier = Modifier.weight(1f)
+        ) {
+            when {
+                studentId.isNullOrBlank() -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(Words.NoGradedSubjects.text)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            LoadingIndicator()
+                            Spacer(Modifier.height(8.dp))
+                            Text(Words.LoadingStudentProfile.text)
+                        }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
-                    ) {
-                        items(subjects) { subject ->
-                            SubjectMarksCard(subject) {
-                                val id = subject.optString("subjectId")
-                                val name = subject.optString("subjectName")
-                                if (id.isNotBlank()) onOpenSubject(id, name)
+                }
+                mode == "final" -> FinalMarksSection(
+                    years = academicYears,
+                    selectedYearId = selectedYearId,
+                    onYearChange = { selectedYearId = it },
+                    marks = finalMarks,
+                    loading = finalLoading && !refreshing,
+                    error = finalError
+                )
+                loading && !refreshing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    LoadingIndicator()
+                }
+                error != null -> {
+                    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                        Text(error!!, color = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(8.dp))
+                        GlassButton(onClick = { retryKey++ }) { Text(Words.Retry.text) }
+                    }
+                }
+                subjectId != null -> {
+                    val subject = subjects.firstOrNull { it.optString("subjectId") == subjectId }
+                    SubjectMarksDetail(subject) { id -> selectedMarkId = id }
+                }
+                mode == "subject" -> {
+                    if (subjects.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(Words.NoGradedSubjects.text)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = LocalLiquidBottomPadding.current)
+                        ) {
+                            items(subjects) { subject ->
+                                SubjectMarksCard(subject) {
+                                    val id = subject.optString("subjectId")
+                                    val name = subject.optString("subjectName")
+                                    if (id.isNotBlank()) onOpenSubject(id, name)
+                                }
                             }
                         }
                     }
                 }
+                else -> DateMarksList(marks, loadedFrom, loadedTo, Modifier.fillMaxSize(), listState, loadingOlder, noMoreOlder, ::loadOlderMarks) { id -> selectedMarkId = id }
             }
-            else -> DateMarksList(marks, loadedFrom, loadedTo, Modifier.weight(1f), listState, loadingOlder, noMoreOlder, ::loadOlderMarks) { id -> selectedMarkId = id }
         }
     }
 
@@ -1045,6 +1073,15 @@ private fun MarkCard(mark: JSONObject, showSubject: Boolean, showDate: Boolean, 
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+            if (mark.optBoolean("hasFiles")) {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    painter = painterResource(R.drawable.ic_attachment),
+                    contentDescription = Words.Files.text,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Spacer(Modifier.width(12.dp))
             WeightedGradeBadge(markText, value, weight)

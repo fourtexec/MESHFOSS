@@ -47,7 +47,7 @@ jobs:
           BASE="$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
           if [ -z "${BASE}" ]; then BASE="2.0.0"; fi
           VERSION_CODE="${GITHUB_RUN_NUMBER}"
-          VERSION_NAME="${BASE}-cdz-ui.${VERSION_CODE}"
+          VERSION_NAME="${BASE}-preview.${VERSION_CODE}"
           {
             echo "VERSION_CODE=${VERSION_CODE}"
             echo "VERSION_NAME=${VERSION_NAME}"
@@ -79,13 +79,14 @@ jobs:
       - name: Publish GitHub pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: cdz-ui-ux-${{ github.run_number }}
+          tag_name: preview-${{ github.run_number }}
           name: MESH Ranker ${{ env.VERSION_NAME }}
           body: |
-            Debug-сборка ветки `${{ github.ref_name }}` для проверки CDZ UI/UX.
+            Debug-сборка ветки `${{ github.ref_name }}` для проверки изменений
+            перед стабильным релизом.
 
-            - компактные адаптивные inline-поля;
-            - M3E-переходы и жесты внутри ЦДЗ;
+            - APK собран из текущей ветки, stable-тег не создаётся;
+            - список изменений — в коммитах ветки;
             - debug applicationId, устанавливается рядом со стабильной версией.
           prerelease: true
           generate_release_notes: true

@@ -22,6 +22,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import ru.mesh.foss.data.api.MeshApiService
 import ru.mesh.foss.data.model.AttendanceResponse
+import ru.mesh.foss.data.model.MarkDetail
 import ru.mesh.foss.data.model.VisitDurationsResponse
 
 /**
@@ -394,10 +395,10 @@ class MeshClient(
             .sortedByDescending { it.optString("date") }
     }
 
-    /** Подробная информация об оценке (тема урока, комментарий, результаты по классу). */
-    fun getMark(markId: String, personId: String?): JSONObject {
+    /** Подробная информация об оценке и прикреплённых файлах. */
+    fun getMarkDetail(markId: String, personId: String?): MarkDetail {
         val path = "${MeshCore.Paths.MARKS}/$markId"
-        return asObject({ api().mark(markId, personId, markId, headers()) }, path) ?: JSONObject()
+        return execute({ api().mark(markId, personId, markId, headers()) }, path)
     }
 
     fun getSubjectMarks(studentId: String?): JSONArray {

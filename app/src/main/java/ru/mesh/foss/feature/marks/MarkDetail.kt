@@ -2,25 +2,27 @@
 
 package ru.mesh.foss.feature.marks
 
+import ru.mesh.foss.R
 import ru.mesh.foss.core.*
 import ru.mesh.foss.data.*
+import ru.mesh.foss.data.model.MarkDetail
 import ru.mesh.foss.ui.*
-import ru.mesh.foss.R
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 
 @Composable
 fun MarkDetailDialog(
@@ -30,17 +32,17 @@ fun MarkDetailDialog(
     store: SessionStore,
     onDismiss: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var detail by remember { mutableStateOf<JSONObject?>(null) }
+    var detail by remember { mutableStateOf<MarkDetail?>(null) }
 
     LaunchedEffect(markId) {
         loading = true
         error = null
+        detail = null
         try {
             val pid = personId?.takeIf { it.isNotBlank() } ?: store.personId
-            detail = withContext(Dispatchers.IO) { client.getMark(markId, pid) }
+            detail = withContext(Dispatchers.IO) { client.getMarkDetail(markId, pid) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -58,7 +60,7 @@ fun MarkDetailDialog(
             TextButton(onClick = onDismiss) { Text(Words.Close.text) }
         },
         title = {
-            Text(detail?.optString("subject_name")?.takeIf { it.isNotBlank() } ?: Words.Grade.text)
+            Text(detail?.subjectName?.takeIf { it.isNotBlank() } ?: Words.Grade.text)
         },
         text = {
             if (loading) {
@@ -68,87 +70,114 @@ fun MarkDetailDialog(
             } else if (error != null) {
                 Text(error!!, color = MaterialTheme.colorScheme.error)
             } else {
-                val d = detail ?: return@AlertDialog
-                val value = d.nullableDouble("value")
-                val markText = d.optString("markText").takeIf { it.isNotBlank() }
-                    ?: d.optString("value").ifBlank { formatMark(value) }
-                val weight = d.nullableDouble("weight") ?: 1.0
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        WeightedGradeBadge(markText, value, weight)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            val controlForm = d.optString("control_form_name")
-                            if (controlForm.isNotBlank() && controlForm != "—") {
-                                Text(controlForm, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            }
-                            Text(
-                                MeshCore.dateShort(d.optString("date")),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    val teacher = d.optJSONObject("teacher")
-                    val teacherName = buildString {
-                        teacher?.optString("last_name")?.takeIf { it.isNotBlank() }?.let { append(it) }
-                        teacher?.optString("first_name")?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" "); append(it) }
-                        teacher?.optString("middle_name")?.takeIf { it.isNotBlank() }?.let { if (isNotEmpty()) append(" "); append(it) }
-                    }
-                    if (teacherName.isNotBlank()) InfoRow(Words.Teacher.text, teacherName)
-
-                    val activity = d.optJSONObject("activity")
-                    val topic = activity?.optString("lesson_topic")
-                    if (!topic.isNullOrBlank()) InfoRow(Words.Topic.text, topic)
-
-                    val comment = d.optString("comment")
-                    if (comment.isNotBlank()) {
-                        Text(Words.Comment.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(comment, style = MaterialTheme.typography.bodyMedium)
-                    }
-
-                    val classResults = d.optJSONObject("class_results")
-                    if (classResults != null) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            Words.ClassResultsStudents(classResults.optInt("total_students")),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        // Сортировка по возрастанию оценки (2,3,4,5) — сервер отдаёт в произвольном порядке.
-                        val dist = classResults.optJSONArray("marks_distributions")?.toObjectList().orEmpty()
-                            .sortedWith(compareBy { it.gradeFive() ?: Double.MAX_VALUE })
-                        dist.forEach { bucket ->
-                            val grade = bucket.optJSONObject("mark_value")?.opt("five")
-                            val percent = bucket.optInt("percentage_of_students")
-                            val count = bucket.optInt("number_of_students")
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    grade?.toString() ?: "—",
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.width(24.dp)
-                                )
-                                // M3E: «волосяной» индикатор — прогресс живёт волной.
-                                LinearWavyProgressIndicator(
-                                    progress = { (percent / 100f).coerceIn(0f, 1f) },
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                                )
-                                Text(
-                                    "$percent% ($count)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
+                detail?.let { MarkDetailBody(it) }
             }
         }
     )
+}
+
+@Composable
+private fun MarkDetailBody(detail: MarkDetail) {
+    val value = detail.value?.toDoubleOrNull()
+    val markText = detail.value?.takeIf { it.isNotBlank() } ?: formatMark(value)
+    val weight = detail.weight ?: 1.0
+    val teacherName = listOfNotNull(
+        detail.teacher?.lastName,
+        detail.teacher?.firstName,
+        detail.teacher?.middleName
+    ).filter { it.isNotBlank() }.joinToString(" ")
+    val hasFiles = detail.resultFiles.orEmpty().isNotEmpty() ||
+        detail.studentWorkResultFiles.orEmpty().isNotEmpty()
+
+    Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            WeightedGradeBadge(markText, value, weight)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                val controlForm = detail.controlFormName.orEmpty()
+                if (controlForm.isNotBlank() && controlForm != "—") {
+                    Text(controlForm, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                }
+                val date = detail.date?.takeIf { it.isNotBlank() }
+                    ?: detail.createdAt?.takeIf { it.isNotBlank() }
+                if (!date.isNullOrBlank()) {
+                    Text(
+                        MeshCore.dateShort(date),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (hasFiles) {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    painter = painterResource(R.drawable.ic_attachment),
+                    contentDescription = Words.Files.text,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (teacherName.isNotBlank()) InfoRow(Words.Teacher.text, teacherName)
+
+        val topic = detail.activity?.lessonTopic
+        if (!topic.isNullOrBlank()) InfoRow(Words.Topic.text, topic)
+
+        val comment = detail.comment.orEmpty()
+        if (comment.isNotBlank()) {
+            Text(
+                Words.Comment.text,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(comment, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        MarkFilesSection(detail)
+
+        val classResults = detail.classResults
+        if (classResults != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                Words.ClassResultsStudents(classResults.totalStudents ?: 0),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium
+            )
+            // Сортировка по возрастанию оценки (2,3,4,5) — сервер отдаёт в произвольном порядке.
+            val dist = classResults.marksDistributions.orEmpty().sortedBy {
+                it.markValue?.five ?: Double.MAX_VALUE
+            }
+            dist.forEach { bucket ->
+                val grade = bucket.markValue?.five
+                val percent = bucket.percentageOfStudents ?: 0
+                val count = bucket.numberOfStudents ?: 0
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        grade?.let(::formatMark) ?: "—",
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.width(24.dp)
+                    )
+                    // M3E: «волосяной» индикатор — прогресс живёт волной.
+                    LinearWavyProgressIndicator(
+                        progress = { (percent / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                    )
+                    Text(
+                        "$percent% ($count)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -163,19 +192,3 @@ private fun InfoRow(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodySmall)
     }
 }
-
-private fun JSONArray.toObjectList(): List<JSONObject> =
-    (0 until length()).mapNotNull { optJSONObject(it) }
-
-/** Оценка пятибалльной шкалы из marks_distributions: число, строка или null. */
-private fun JSONObject.gradeFive(): Double? {
-    val raw = optJSONObject("mark_value")?.opt("five") ?: return null
-    return when (raw) {
-        is Number -> raw.toDouble()
-        is String -> raw.toDoubleOrNull()
-        else -> null
-    }
-}
-
-private fun JSONObject.nullableDouble(key: String): Double? =
-    if (isNull(key)) null else optDouble(key).takeUnless { it.isNaN() || it.isInfinite() }

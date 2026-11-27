@@ -1376,6 +1376,34 @@ internal enum class Words(
         "Archivo",
         "Fichier"
     ),
+    FileNumber(
+        "Файл %d",
+        "File %d",
+        "%d. fájl",
+        "Archivo %d",
+        "Fichier %d"
+    ),
+    MarkFiles(
+        "Файлы к оценке",
+        "Grade files",
+        "Értékeléshez csatolt fájlok",
+        "Archivos de la nota",
+        "Fichiers de la note"
+    ),
+    StudentWorkFiles(
+        "Работа ученика",
+        "Student work",
+        "Tanulói munka",
+        "Trabajo del alumno",
+        "Travail de l’élève"
+    ),
+    CouldNotOpenFile(
+        "Не удалось открыть файл",
+        "Could not open file",
+        "A fájl nem nyitható meg",
+        "No se pudo abrir el archivo",
+        "Impossible d’ouvrir le fichier"
+    ),
     CouldNotOpenLink(
         "Не удалось открыть ссылку",
         "Could not open link",

@@ -655,6 +655,7 @@ object MeshCore {
         .put("date", toIso(asString(firstDefined(mark.opt("created_at"), mark.opt("date"), today()))).take(10))
         .put("comment", asString(mark.opt("comment")))
         .put("isExam", asBool(firstDefined(mark.opt("is_exam"), mark.opt("isExam"))))
+        .put("hasFiles", asBool(mark.opt("has_files")))
 
     /**
      * Нормализует ответ `/api/family/web/v1/subject_marks`.
