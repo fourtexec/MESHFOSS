@@ -91,6 +91,20 @@ interface MeshApiService {
         @HeaderMap headers: Map<String, String>,
     ): Call<JsonElement>
 
+    /**
+     * Одноразовая ссылка запуска цифрового материала ДЗ.
+     *
+     * Ответ читается как [ResponseBody]: МЭШ может отдать 302 с `Location`,
+     * обычную строку-URL или JSON. Поэтому здесь не подходит Gson-конвертер
+     * напрямую — тело разбирает [ru.mesh.foss.data.MeshClient].
+     */
+    @GET("api/ej/partners/v1/homeworks/launch")
+    fun homeworkLaunch(
+        @Query("homework_entry_id") homeworkEntryId: String,
+        @Query("material_id") materialId: String,
+        @HeaderMap headers: Map<String, String>,
+    ): Call<ResponseBody>
+
     /** Расширенные карточки цифровых материалов ДЗ. */
     @POST("api/family/materials/v1/additional_materials")
     fun additionalMaterials(

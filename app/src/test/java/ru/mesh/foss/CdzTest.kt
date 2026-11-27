@@ -4,7 +4,9 @@ import ru.mesh.foss.core.MeshCdz
 import ru.mesh.foss.core.MeshCore
 import ru.mesh.foss.core.UiLanguage
 import ru.mesh.foss.data.MeshClient
+import ru.mesh.foss.data.model.HomeworkLaunchLink
 
+import com.google.gson.Gson
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
@@ -111,6 +113,20 @@ class CdzTest {
     }
 
     @Test
+    fun `ссылка запуска из JSON разбирается Gson-моделью`() {
+        val link = Gson().fromJson(
+            """{"activity_url":"https://school.mos.ru/api/launcher/v1/launch?activity_url=x","url":null}""",
+            HomeworkLaunchLink::class.java
+        )
+        assertEquals(
+            "https://school.mos.ru/api/launcher/v1/launch?activity_url=x",
+            link.firstUrl()
+        )
+        val oldNull = Gson().fromJson("""{"url":"null"}""", HomeworkLaunchLink::class.java)
+        assertEquals(null, oldNull.firstUrl())
+    }
+
+    @Test
     fun `контекст LRS — work_type строкой, work_id числом`() {
         val context = JSONObject(MeshCdz.lrsContext("aaaa-2", "person-uuid", "355435138"))
         assertEquals("aaaa-2", context.getString("material_id"))
@@ -201,7 +217,17 @@ class CdzTest {
         val demo = DemoMeshServer(seed = 7L, classSize = 26, tokenLifetime = 50)
         val port = demo.start()
         server = demo
-        return MeshClient(baseUrl = "http://127.0.0.1:$port", token = DemoMeshServer.DEMO_TOKEN, timeoutMs = 5_000)
+        return MeshClient(
+            baseUrl = "http://127.0.0.1:$port",
+            token = DemoMeshServer.DEMO_TOKEN,
+            timeoutMs = 5_000,
+            cookieJar = {
+                mapOf(
+                    "aupd_token" to DemoMeshServer.DEMO_TOKEN,
+                    "student_person_id" to "17234613"
+                )
+            }
+        )
     }
 
     @Test
@@ -228,6 +254,10 @@ class CdzTest {
         val launch2 = client.launchHomeworkMaterial(homework.getString("homeworkEntryId"), materials.getJSONObject(0).getString("uuid"))
         assertTrue(launch1.contains(DemoMeshServer.DEMO_CDZ_PAGE))
         assertTrue(launch1 != launch2)
+        val demo = server ?: error("demo server is not running")
+        assertTrue(demo.lastLaunchCookie.contains("aupd_token=${DemoMeshServer.DEMO_TOKEN}"))
+        assertTrue(demo.lastLaunchCookie.contains("student_person_id=17234613"))
+        assertTrue(demo.lastLaunchReferer.endsWith("/diary/homeworks"))
     }
 
     @Test(expected = MeshCore.MeshError::class)

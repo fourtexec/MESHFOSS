@@ -91,6 +91,15 @@ class DemoMeshServer(
     var port: Int = 0
         private set
 
+    /** Заголовки последнего запроса `homeworks/launch` — для проверки в тестах. */
+    @Volatile
+    var lastLaunchCookie: String = ""
+        private set
+
+    @Volatile
+    var lastLaunchReferer: String = ""
+        private set
+
     init {
         generate()
     }
@@ -238,6 +247,8 @@ class DemoMeshServer(
                 var authorization = ""
                 var authToken = ""
                 var profileId = ""
+                var cookie = ""
+                var referer = ""
                 var contentLength = 0
                 while (true) {
                     val line = reader.readLine() ?: break
@@ -247,6 +258,8 @@ class DemoMeshServer(
                         lower.startsWith("authorization:") -> authorization = line.substringAfter(':').trim()
                         lower.startsWith("auth-token:") -> authToken = line.substringAfter(':').trim()
                         lower.startsWith("profile-id:") -> profileId = line.substringAfter(':').trim()
+                        lower.startsWith("cookie:") -> cookie = line.substringAfter(':').trim()
+                        lower.startsWith("referer:") -> referer = line.substringAfter(':').trim()
                         lower.startsWith("content-length:") -> contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
                     }
                 }
@@ -270,7 +283,7 @@ class DemoMeshServer(
                     respondRaw(socket, 200, "text/html; charset=utf-8", demoCdzPage(path))
                     return
                 }
-                val (status, payload) = route(path, token, method, body, bothAuth, profileId)
+                val (status, payload) = route(path, token, method, body, bothAuth, profileId, cookie, referer)
                 if (payload.has(RAW_BODY)) {
                     respondRaw(socket, status, "application/json", payload.optString(RAW_BODY))
                 } else {
@@ -343,6 +356,8 @@ class DemoMeshServer(
         body: String = "",
         bothAuth: Boolean = false,
         profileId: String = "",
+        cookie: String = "",
+        referer: String = "",
     ): Pair<Int, JSONObject> {
         val (path, params) = query(fullPath)
 
@@ -694,6 +709,8 @@ class DemoMeshServer(
             }
 
             MeshCore.Paths.HOMEWORK_LAUNCH -> {
+                lastLaunchCookie = cookie
+                lastLaunchReferer = referer
                 val entry = params["homework_entry_id"].orEmpty()
                 val material = params["material_id"].orEmpty()
                 // Как настоящий МЭШ: student_id вместо entry_id даёт 400 (§7.1).

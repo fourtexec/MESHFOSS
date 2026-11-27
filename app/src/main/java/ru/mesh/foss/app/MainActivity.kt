@@ -194,7 +194,8 @@ fun AppRoot(
             onToken = { newToken -> store.token = newToken },
             onName = { id, name -> store.saveName(id, name) },
             cookieToken = { store.cookieAupdToken() },
-            refreshWithCookies = { store.refreshTokenWithCookies() }
+            refreshWithCookies = { store.refreshTokenWithCookies() },
+            cookieJar = { CookieJson.parse(store.authCookies) }
         )
     }
     val previewClient = remember {

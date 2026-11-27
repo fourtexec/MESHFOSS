@@ -6,7 +6,6 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonElement
 import java.io.IOException
 import java.net.SocketTimeoutException
-import java.net.URLEncoder
 import java.net.UnknownHostException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -22,6 +21,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import ru.mesh.foss.data.api.MeshApiService
 import ru.mesh.foss.data.model.AttendanceResponse
+import ru.mesh.foss.data.model.HomeworkLaunchLink
 import ru.mesh.foss.data.model.MarkDetail
 import ru.mesh.foss.data.model.VisitDurationsResponse
 
@@ -51,6 +51,12 @@ class MeshClient(
     private val cookieToken: (() -> String?)? = null,
     /** Полное обновление по cookie (OAuth), возвращает новый `aupd_token` или null. */
     private val refreshWithCookies: (() -> String?)? = null,
+    /**
+     * Cookie jar аккаунта для запросов, которым нужна именно браузерная сессия.
+     * Сейчас это одноразовая ссылка запуска ЦДЗ: веб шлёт туда cookie вместе
+     * с Bearer-токеном, и одного Authorization может быть недостаточно.
+     */
+    private val cookieJar: (() -> Map<String, String>)? = null,
     /** Автономный предпросмотр интерфейса с демо-данными без сети и токена МЭШ. */
     val previewMode: Boolean = false
 ) {
@@ -93,28 +99,39 @@ class MeshClient(
     @Volatile
     private var cachedService: MeshApiService? = null
 
+    @Volatile
+    private var cachedLaunchBase: String? = null
+
+    @Volatile
+    private var cachedLaunchService: MeshApiService? = null
+
+    private fun createService(client: OkHttpClient): MeshApiService =
+        Retrofit.Builder()
+            .baseUrl(baseUrl.trimEnd('/') + "/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(MeshApiService::class.java)
+
     @Synchronized
     private fun api(): MeshApiService {
         val normalized = baseUrl.trimEnd('/') + "/"
         cachedService?.takeIf { cachedBase == normalized }?.let { return it }
-        val built = Retrofit.Builder()
-            .baseUrl(normalized)
-            .client(http)
-            .addConverterFactory(GsonConverterFactory.create(gson))
-            .build()
-            .create(MeshApiService::class.java)
+        val built = createService(http)
         cachedBase = normalized
         cachedService = built
         return built
     }
 
-    private fun buildUrl(path: String, params: Map<String, Any?> = emptyMap()): String {
-        val query = params.entries
-            .filter { it.value != null && it.value.toString().isNotEmpty() }
-            .joinToString("&") { (key, value) ->
-                "${URLEncoder.encode(key, "UTF-8")}=${URLEncoder.encode(value.toString(), "UTF-8")}"
-            }
-        return baseUrl.trimEnd('/') + path + if (query.isEmpty()) "" else "?$query"
+    /** Retrofit-клиент без автоперехода: 302/`Location` разбираем сами. */
+    @Synchronized
+    private fun launchApi(): MeshApiService {
+        val normalized = baseUrl.trimEnd('/') + "/"
+        cachedLaunchService?.takeIf { cachedLaunchBase == normalized }?.let { return it }
+        val built = createService(launchHttp)
+        cachedLaunchBase = normalized
+        cachedLaunchService = built
+        return built
     }
 
     private fun headers(
@@ -125,6 +142,25 @@ class MeshClient(
 
     private fun refreshHeaders(current: String): Map<String, String> =
         MeshCore.baseHeaders() + MeshCore.authHeaders(current, null)
+
+    /**
+     * Заголовки `homeworks/launch`: как у веб-дневника, к Bearer-токену
+     * добавляется cookie-сессия аккаунта. Если в jar нет `aupd_token`,
+     * подставляем текущий токен, чтобы запрос не остался без cookie вовсе.
+     */
+    private fun launchHeaders(): Map<String, String> {
+        val jar = runCatching { cookieJar?.invoke() }.getOrNull().orEmpty()
+        val cookies = LinkedHashMap(jar)
+        if (cookies["aupd_token"].isNullOrBlank()) {
+            token?.takeIf { it.isNotBlank() }?.let { cookies["aupd_token"] = it }
+        }
+        val extra = mutableMapOf<String, String>()
+        if (cookies.isNotEmpty()) {
+            extra["Cookie"] = cookies.entries.joinToString("; ") { (key, value) -> "$key=$value" }
+        }
+        extra["Referer"] = baseUrl.trimEnd('/') + "/diary/homeworks"
+        return headers(extra)
+    }
 
     private fun networkError(error: Exception): MeshCore.MeshError = when (error) {
         is SocketTimeoutException -> MeshCore.MeshError(Words.MeshRequestTimedOut.text, "timeout", 0, error)
@@ -479,6 +515,10 @@ class MeshClient(
     /**
      * Ссылка запуска цифрового материала ДЗ (тест, «Облако знаний» и т.п.).
      * МЭШ отдаёт 302 на /api/launcher/v1/launch — этот адрес и открываем в браузере.
+     *
+     * Запрос идёт через Retrofit ([MeshApiService.homeworkLaunch]) с отдельным
+     * клиентом без автоперехода: 302/`Location` и тело-URL разбираем сами.
+     * Cookie-сессия аккаунта добавляется в заголовки, как у веб-дневника.
      */
     fun launchHomeworkMaterial(homeworkEntryId: String?, materialId: String?): String {
         val entry = homeworkEntryId?.trim().orEmpty()
@@ -486,58 +526,62 @@ class MeshClient(
         if (entry.isBlank() || material.isBlank()) {
             throw MeshCore.MeshError(Words.MissingHomeworkMaterial.text, "bad-material")
         }
-        val url = buildUrl(
-            MeshCore.Paths.HOMEWORK_LAUNCH,
-            mapOf("homework_entry_id" to entry, "material_id" to material)
-        )
         MeshLog.log("CDZ", "launch: entry=$entry material=$material")
         var attempt = 0
         while (attempt < 2) {
             attempt++
-            val request = Request.Builder()
-                .url(url)
-                .apply { headers().forEach { (key, value) -> header(key, value) } }
-                .build()
             requestCount++
             val response = try {
-                launchHttp.newCall(request).execute()
+                launchApi()
+                    .homeworkLaunch(entry, material, launchHeaders())
+                    .execute()
             } catch (error: Exception) {
                 throw networkError(error)
             }
-            response.use { res ->
-                val status = res.code
-                MeshLog.log("CDZ", "launch: HTTP $status attempt=$attempt")
-                if (status == 401 && attempt < 2) {
-                    if (refreshToken() != null) return@use
-                    throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
-                }
-                if (status == 401) throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
-                if (status == 403) throw MeshCore.MeshError(Words.AccessDenied.text, "forbidden", 403)
-                if (status !in 200..399) {
-                    throw MeshCore.MeshError(Words.CouldNotOpenMaterialHttp(status), "http-$status", status)
-                }
-                res.header("Location")?.takeIf { it.isNotBlank() }?.let { location ->
-                    val absolute = MeshCore.absoluteUrl(location)
-                    MeshLog.log("CDZ", "launch: Location -> $absolute")
-                    return absolute
-                }
-                val text = res.body?.string().orEmpty().trim().trim('"')
-                MeshLog.log("CDZ", "launch: body ${text.take(160)}")
-                if (text.startsWith("http://") || text.startsWith("https://")) return text
-                runCatching { JSONObject(text) }.getOrNull()?.let { json ->
-                    listOf("url", "link", "location", "redirect", "activity_url").forEach { key ->
-                        json.optString(key).takeIf { it.isNotBlank() }?.let { value ->
-                            val absolute = MeshCore.absoluteUrl(value)
-                            MeshLog.log("CDZ", "launch: $key -> $absolute")
-                            return absolute
-                        }
-                    }
-                }
-                if (status in 300..399) {
-                    throw MeshCore.MeshError(Words.NoMaterialLinkReceived.text, "invalid-json", status)
-                }
-                throw MeshCore.MeshError(Words.NoMaterialLinkReceived.text, "invalid-json", status)
+            val status = response.code()
+            MeshLog.log("CDZ", "launch: HTTP $status attempt=$attempt")
+            if (status == 401 && attempt < 2) {
+                response.errorBody()?.close()
+                if (refreshToken() != null) continue
+                throw MeshCore.MeshError(Words.TokenExpiredAndCouldNotBeRenewed.text, "unauthorized", 401)
             }
+            if (status == 401) {
+                response.errorBody()?.close()
+                throw MeshCore.MeshError(Words.Unauthorised.text, "unauthorized", 401)
+            }
+            if (status == 403) {
+                response.errorBody()?.close()
+                throw MeshCore.MeshError(Words.AccessDenied.text, "forbidden", 403)
+            }
+            if (status !in 200..399) {
+                response.errorBody()?.close()
+                throw MeshCore.MeshError(Words.CouldNotOpenMaterialHttp(status), "http-$status", status)
+            }
+            response.headers().get("Location")?.takeIf { it.isNotBlank() }?.let { location ->
+                response.errorBody()?.close()
+                val absolute = MeshCore.absoluteUrl(location)
+                MeshLog.log("CDZ", "launch: Location получен")
+                return absolute
+            }
+            // 302 без Location: URL лежит в теле. Retrofit на не-2xx отдаёт его
+            // через errorBody(), на 2xx — через body().
+            val raw = if (status in 200..299) {
+                response.body()?.string().orEmpty()
+            } else {
+                response.errorBody()?.string().orEmpty()
+            }
+            val text = raw.trim().removeSurrounding("\"")
+            MeshLog.log("CDZ", "launch: body получен (${text.length} симв.)")
+            if (text.startsWith("http://") || text.startsWith("https://")) return text
+            val link = runCatching {
+                gson.fromJson(text, HomeworkLaunchLink::class.java)?.firstUrl()
+            }.getOrNull()
+            if (!link.isNullOrBlank()) {
+                val absolute = MeshCore.absoluteUrl(link)
+                MeshLog.log("CDZ", "launch: ссылка получена")
+                return absolute
+            }
+            throw MeshCore.MeshError(Words.NoMaterialLinkReceived.text, "invalid-json", status)
         }
         throw MeshCore.MeshError(Words.CouldNotOpenMaterial.text, "exhausted")
     }

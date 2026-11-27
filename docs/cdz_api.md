@@ -1838,6 +1838,13 @@ school.mos.ru/api/ej/partners/v1/homeworks/launch?homework_entry_id=…&material
    -> /webtests/exam/rest/secure/*   (разбор в этом документе)
 ```
 
+В Android-клиенте первый запрос выполняет Retrofit
+(`MeshApiService.homeworkLaunch`) через отдельный OkHttp-клиент без
+автоперехода. Заголовки — Bearer, профиль и cookie jar аккаунта (как у
+веб-дневника); ответ разбирается как `Location`, строка-URL или Gson-модель
+`HomeworkLaunchLink`. Полученный `api/launcher/v1/launch` уже открывается в
+браузере или нативном ЦДЗ, а не запрашивается клиентом повторно.
+
 Типы материалов, которые ведут на `/exam/challenge/{challenge_id}`:
 
 | `type` материала | Подпись в UI | Куда ведёт |
