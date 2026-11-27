@@ -849,7 +849,7 @@ class DemoMeshServer(
                 302 to JSONObject().put(RAW_BODY, "${baseUrl()}$DEMO_CDZ_PAGE?material_id=$material&registration=${java.util.UUID.randomUUID()}")
             }
 
-            path == OLYMPIAD_BASE + "contests/overview" -> {
+            OLYMPIAD_BASE + "contests/overview" -> {
                 val request = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
                 val mineOnly = request.optBoolean("showParticipantContests", true)
                 val search = request.optString("searchString").trim()
@@ -878,39 +878,41 @@ class DemoMeshServer(
                     .put("hiddenTotal", filtered.size)
             }
 
-            path == OLYMPIAD_BASE + "subjects" -> 200 to dictionary(OLYMPIAD_SUBJECTS)
-            path == OLYMPIAD_BASE + "parallels" -> 200 to dictionary(OLYMPIAD_PARALLELS)
-            path == OLYMPIAD_BASE + "contests/stages" -> 200 to dictionary(OLYMPIAD_STAGES)
-            path == OLYMPIAD_BASE + "contests/levels" -> 200 to dictionary(OLYMPIAD_LEVELS)
+            OLYMPIAD_BASE + "subjects" -> 200 to dictionary(OLYMPIAD_SUBJECTS)
+            OLYMPIAD_BASE + "parallels" -> 200 to dictionary(OLYMPIAD_PARALLELS)
+            OLYMPIAD_BASE + "contests/stages" -> 200 to dictionary(OLYMPIAD_STAGES)
+            OLYMPIAD_BASE + "contests/levels" -> 200 to dictionary(OLYMPIAD_LEVELS)
 
-            path.startsWith(OLYMPIAD_BASE + "contests/") -> {
-                val tail = path.removePrefix(OLYMPIAD_BASE + "contests/")
-                val id = tail.substringBefore('/')
-                val olympiad = OLYMPIADS.firstOrNull { it.id == id }
-                if (olympiad == null) {
-                    return 404 to JSONObject().put("message", "demo: unknown olympiad")
-                }
-                when {
-                    tail == id -> 200 to olympiadDetail(olympiad)
-                    tail.endsWith("/participant") -> 200 to JSONObject()
-                        .put("passingState", if (olympiad.mine) "REGISTERED" else "UNREGISTERED")
-                        .put("covered", olympiad.mine)
-                    tail.endsWith("/recommendation") -> {
-                        if (!olympiad.mine) {
-                            404 to JSONObject().put("message", "demo: no recommendation")
-                        } else {
-                            200 to JSONObject().put(
-                                "recommendation",
-                                "Демо-рекомендация: проверьте расписание и попробуйте пробный тур."
-                            )
-                        }
+            else -> {
+                if (path.startsWith(OLYMPIAD_BASE + "contests/")) {
+                    val tail = path.removePrefix(OLYMPIAD_BASE + "contests/")
+                    val id = tail.substringBefore('/')
+                    val olympiad = OLYMPIADS.firstOrNull { it.id == id }
+                    if (olympiad == null) {
+                        return 404 to JSONObject().put("message", "demo: unknown olympiad")
                     }
-                    tail.endsWith("/result") -> 200 to olympiadResult(olympiad)
-                    else -> 404 to JSONObject().put("message", "demo: unknown olympiad path")
+                    when {
+                        tail == id -> 200 to olympiadDetail(olympiad)
+                        tail.endsWith("/participant") -> 200 to JSONObject()
+                            .put("passingState", if (olympiad.mine) "REGISTERED" else "UNREGISTERED")
+                            .put("covered", olympiad.mine)
+                        tail.endsWith("/recommendation") -> {
+                            if (!olympiad.mine) {
+                                404 to JSONObject().put("message", "demo: no recommendation")
+                            } else {
+                                200 to JSONObject().put(
+                                    "recommendation",
+                                    "Демо-рекомендация: проверьте расписание и попробуйте пробный тур."
+                                )
+                            }
+                        }
+                        tail.endsWith("/result") -> 200 to olympiadResult(olympiad)
+                        else -> 404 to JSONObject().put("message", "demo: unknown olympiad path")
+                    }
+                } else {
+                    404 to JSONObject().put("message", "demo: unknown path $path")
                 }
             }
-
-            else -> 404 to JSONObject().put("message", "demo: unknown path $path")
         }
     }
 
