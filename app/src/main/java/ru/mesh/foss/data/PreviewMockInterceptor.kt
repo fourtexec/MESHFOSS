@@ -441,7 +441,8 @@ internal class PreviewMockInterceptor : Interceptor {
                         "recommendation" to "Демо-рекомендация: проверьте расписание и попробуйте пробный тур."
                     )
                     tail.endsWith("/url-details/link") -> 200 to mapOf(
-                        "link" to "https://example.org/demo-result"
+                        "link" to
+                            "https://uchebnik.mos.ru/contests/challenge/100000001/attempt/200000001"
                     )
                     tail.endsWith("/result") -> 200 to if (id == PREVIEW_OLYMPIAD_PAST_ID) {
                         mapOf(

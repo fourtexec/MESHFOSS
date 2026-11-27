@@ -224,6 +224,10 @@ class DemoMeshServer(
     var lastPortfolioAuthorization: String = ""
         private set
 
+    @Volatile
+    var lastPortfolioCookie: String = ""
+        private set
+
     init {
         generate()
     }
@@ -416,6 +420,7 @@ class DemoMeshServer(
                     lastPortfolioProfileId = profileId
                     lastPortfolioAuthToken = authToken
                     lastPortfolioAuthorization = authorization
+                    lastPortfolioCookie = cookie
                 }
                 if (pathOnly == DEMO_CDZ_PAGE) {
                     respondRaw(socket, 200, "text/html; charset=utf-8", demoCdzPage(path))

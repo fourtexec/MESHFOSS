@@ -9,9 +9,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import ru.mesh.foss.data.MeshClient
+import ru.mesh.foss.data.model.OlympiadAttemptResponse
 import ru.mesh.foss.data.model.OlympiadDetail
 import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewResponse
+import ru.mesh.foss.feature.olympiads.OlympiadAttemptIds
+import ru.mesh.foss.feature.olympiads.OlympiadAttemptLink
 import ru.mesh.foss.feature.olympiads.OlympiadText
 import java.util.Locale
 
@@ -173,5 +176,58 @@ class OlympiadTest {
         assertNotNull(client.getOlympiadRecommendation(DemoMeshServer.DEMO_OLYMPIAD_ID))
         // 204 без тела — это нормальное отсутствие рекомендации, не ошибка.
         assertNull(client.getOlympiadRecommendation("demo-olympiad-3"))
+    }
+
+    @Test
+    fun `details link exposes native challenge and attempt ids`() {
+        assertEquals(
+            OlympiadAttemptIds(challengeId = 123456789L, attemptId = 987654321L),
+            OlympiadAttemptLink.parse(
+                "https://uchebnik.mos.ru/contests/challenge/123456789/attempt/987654321?role=student"
+            ),
+        )
+        assertEquals(
+            OlympiadAttemptIds(challengeId = 123456789L, attemptId = 987654321L),
+            OlympiadAttemptLink.parse(
+                "https://uchebnik.mos.ru/exam/challenge/123456789/attempt/987654321"
+            ),
+        )
+        assertNull(OlympiadAttemptLink.parse("https://example.org/demo-result"))
+    }
+
+    @Test
+    fun `contest attempt response is parsed by gson`() {
+        val gson = GsonBuilder().setLenient().create()
+        val parsed = gson.fromJson(
+            """
+            {
+              "attempt_info": {
+                "attempt_id": 987654321,
+                "attempt_num": 1,
+                "got_score": 5,
+                "max_score": 10
+              },
+              "results": [
+                {
+                  "test_group_num": 0,
+                  "challenge_tasks": [
+                    {"id": 123, "task_order": 0, "score": 5, "max_score": 5}
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+            OlympiadAttemptResponse::class.java,
+        )
+
+        assertEquals(5, parsed.attemptInfo?.get("got_score")?.asInt)
+        assertEquals(1, parsed.results?.size())
+        assertEquals(
+            123L,
+            parsed.results?.first()?.asJsonObject
+                ?.getAsJsonArray("challenge_tasks")
+                ?.first()?.asJsonObject
+                ?.get("id")?.asLong,
+        )
     }
 }

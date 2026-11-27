@@ -177,7 +177,7 @@ data class OlympiadParticipant(
     @SerializedName("checkResultsLink") val checkResultsLink: String? = null,
 )
 
-/** Ответ `url-details/link`: сам результат — только ссылка на страницу организатора. */
+/** Ответ `url-details/link`: ссылка на страницу попытки, из которой берутся её ID. */
 data class OlympiadDetailsLink(
     @SerializedName("link") val link: String? = null,
 )

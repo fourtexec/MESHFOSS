@@ -12,9 +12,16 @@ HAR-файл `school.mos.ru/portfolio/student/study`; живые ФИО, шко�
   - `Authorization: Bearer <aupd_token>`;
   - `X-Mes-Subsystem: studentportfolioweb`;
   - `Accept: application/json`;
-  - `Referer: https://school.mos.ru/portfolio/student/study`.
+  - `Referer: https://school.mos.ru/portfolio/student/study`;
+  - `Cookie` с auth/session-куками портфолио.
+- Портфолио — отдельная подсистема: в cookie обязательны
+  `subsystem_id=4` и `aupd_current_role=4:1`. Без них контекст отвечает
+  `500 code 442: Отсутствуют обязательные параметры: aupd_current_role`,
+  даже при валидном Bearer-токене. Семейные значения `subsystem_id=2`,
+  `aupd_current_role=2:2` не подходят.
 - Семейные заголовки `Profile-Id`, `Profile-Type`, `X-Mes-RoleId` и
   `Auth-Token` в этот API не отправляются.
+- Cookie-заголовок ограничен по длине, чтобы не получить HTTP 431.
 - Все ответы обёрнуты в `{ "data": …, "result": "OK" }`; списки и вложенные
   объекты в DTO nullable, потому что Gson не вызывает конструктор data-класса.
 - Раздел только читает данные. Запросы на изменение портфолио не выполняются.

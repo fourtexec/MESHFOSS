@@ -40,13 +40,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +55,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
 import ru.mesh.foss.core.UiLanguage
 import ru.mesh.foss.core.Words
 import ru.mesh.foss.data.MeshClient
@@ -65,6 +64,7 @@ import ru.mesh.foss.data.model.OlympiadOverviewItem
 import ru.mesh.foss.data.model.OlympiadParticipant
 import ru.mesh.foss.data.model.OlympiadPreviousStage
 import ru.mesh.foss.data.model.OlympiadResult
+import ru.mesh.foss.feature.cdz.CdzAttemptResultScreen
 import ru.mesh.foss.ui.Design
 import ru.mesh.foss.ui.GlassButton
 import ru.mesh.foss.ui.GlassCard
@@ -83,20 +83,34 @@ fun OlympiadScreen(
     client: MeshClient,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val vm: OlympiadViewModel = viewModel(
         key = "olympiads:${client.profileId.orEmpty()}",
-        factory = OlympiadViewModel.factory(client),
+        factory = OlympiadViewModel.factory(client, context),
     )
     val state by vm.state.collectAsStateWithLifecycle()
-    BackHandler(enabled = state.detail != null) { vm.closeDetail() }
+    BackHandler(enabled = state.attempt != null || state.detail != null) {
+        if (state.attempt != null) vm.closeAttempt() else vm.closeDetail()
+    }
 
-    if (state.detail != null) {
+    if (state.attempt != null) {
+        val attempt = state.attempt!!
+        CdzAttemptResultScreen(
+            info = attempt.info,
+            tasks = attempt.tasks,
+            loading = attempt.loading,
+            error = attempt.error,
+            onClose = vm::closeAttempt,
+            onRetry = vm::retryAttempt,
+            title = Words.OlympiadResults.text,
+        )
+    } else if (state.detail != null) {
         OlympiadDetailScreen(
             detail = state.detail!!,
             dictionaries = state.dictionaries,
             onBack = vm::closeDetail,
             onRetry = vm::retryDetail,
-            onResolveDetails = vm::resolveDetailsLink,
+            onOpenDetails = vm::openDetails,
             modifier = modifier,
         )
     } else {
@@ -384,7 +398,7 @@ private fun OlympiadDetailScreen(
     dictionaries: OlympiadDictionaries,
     onBack: () -> Unit,
     onRetry: () -> Unit,
-    onResolveDetails: suspend (String) -> String?,
+    onOpenDetails: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -426,7 +440,7 @@ private fun OlympiadDetailScreen(
                     result = detail.result,
                     recommendation = detail.recommendation,
                     dictionaries = dictionaries,
-                    onResolveDetails = onResolveDetails,
+                    onOpenDetails = onOpenDetails,
                 )
             }
         }
@@ -441,7 +455,7 @@ private fun OlympiadDetailBody(
     result: OlympiadResult?,
     recommendation: String?,
     dictionaries: OlympiadDictionaries,
-    onResolveDetails: suspend (String) -> String?,
+    onOpenDetails: (String) -> Unit,
 ) {
     val subjects = dictionaries.subjectNames(detail.commonInfo?.subjectIds.orEmpty())
     val stage = dictionaries.stageName(detail.commonInfo?.stageCode)
@@ -572,7 +586,7 @@ private fun OlympiadDetailBody(
                     participation = participation,
                     result = result,
                     uriHandler = uriHandler,
-                    onResolveDetails = onResolveDetails,
+                    onOpenDetails = onOpenDetails,
                 )
             }
         }
@@ -690,11 +704,9 @@ private fun OlympiadResultsCard(
     participation: OlympiadParticipation,
     result: OlympiadResult?,
     uriHandler: androidx.compose.ui.platform.UriHandler,
-    onResolveDetails: suspend (String) -> String?,
+    onOpenDetails: (String) -> Unit,
 ) {
     val final = detail.effectiveStatus == "PUBLISHED_FINAL_RESULTS"
-    val scope = rememberCoroutineScope()
-    var resolvingDetails by remember { mutableStateOf(false) }
     OlympiadInfoCard(
         if (final) Words.OlympiadFinalResults.text else Words.OlympiadPreliminaryResults.text
     ) {
@@ -759,26 +771,8 @@ private fun OlympiadResultsCard(
             }
             val detailsUrl = model.detailsUrl?.takeIf { it.isNotBlank() }
             if (detailsUrl != null) {
-                TextButton(
-                    enabled = !resolvingDetails,
-                    onClick = {
-                        if (!resolvingDetails) {
-                            resolvingDetails = true
-                            scope.launch {
-                                val link = onResolveDetails(detailsUrl)
-                                resolvingDetails = false
-                                if (!link.isNullOrBlank()) {
-                                    runCatching { uriHandler.openUri(link) }
-                                }
-                            }
-                        }
-                    },
-                ) {
-                    if (resolvingDetails) {
-                        LoadingIndicator(Modifier.size(18.dp))
-                    } else {
-                        Text(Words.OlympiadDetails.text)
-                    }
+                TextButton(onClick = { onOpenDetails(detailsUrl) }) {
+                    Text(Words.OlympiadDetails.text)
                 }
             }
         }

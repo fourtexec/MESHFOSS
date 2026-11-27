@@ -1,5 +1,6 @@
 package ru.mesh.foss.feature.olympiads
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import ru.mesh.foss.core.MeshCore
 import ru.mesh.foss.data.MeshClient
 import ru.mesh.foss.data.model.OlympiadDetail
@@ -19,6 +21,7 @@ import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewItem
 import ru.mesh.foss.data.model.OlympiadParticipant
 import ru.mesh.foss.data.model.OlympiadResult
+import ru.mesh.foss.feature.cdz.CdzResultTask
 
 enum class OlympiadTab { MY, ALL }
 
@@ -35,6 +38,14 @@ data class OlympiadDetailState(
     val error: String? = null,
 )
 
+data class OlympiadAttemptState(
+    val detailsUrl: String,
+    val loading: Boolean = true,
+    val info: JSONObject? = null,
+    val tasks: List<CdzResultTask> = emptyList(),
+    val error: String? = null,
+)
+
 data class OlympiadUiState(
     val tab: OlympiadTab = OlympiadTab.MY,
     val query: String = "",
@@ -47,6 +58,7 @@ data class OlympiadUiState(
     val dictionaries: OlympiadDictionaries = OlympiadDictionaries(),
     val error: String? = null,
     val detail: OlympiadDetailState? = null,
+    val attempt: OlympiadAttemptState? = null,
 )
 
 private data class ParticipantLookup(
@@ -57,6 +69,7 @@ private data class ParticipantLookup(
 /** Состояние списка олимпиад, поиска и карточки конкретной олимпиады. */
 class OlympiadViewModel(
     private val repository: OlympiadRepository,
+    private val attemptRepository: OlympiadAttemptRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(OlympiadUiState())
@@ -64,6 +77,7 @@ class OlympiadViewModel(
 
     private var listJob: Job? = null
     private var detailJob: Job? = null
+    private var attemptJob: Job? = null
 
     init {
         loadDictionaries()
@@ -150,15 +164,63 @@ class OlympiadViewModel(
             ParticipantLookup(null, OlympiadParticipation.UNKNOWN)
         }
 
-    /** `detailsUrl` — API-ссылка; сначала получаем из неё настоящий URL. */
-    suspend fun resolveDetailsLink(detailsUrl: String): String? =
-        try {
-            repository.detailsLink(detailsUrl)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
+    /**
+     * «Подробнее»: разворачивает `detailsUrl` в ссылку попытки и открывает
+     * её результат нативно. В браузер ничего не отправляем.
+     */
+    fun openDetails(detailsUrl: String) {
+        val raw = detailsUrl.trim()
+        if (raw.isEmpty()) return
+        attemptJob?.cancel()
+        _state.update { it.copy(attempt = OlympiadAttemptState(detailsUrl = raw)) }
+        attemptJob = viewModelScope.launch {
+            try {
+                val link = repository.detailsLink(raw)
+                    ?: throw IllegalStateException("olympiad details link is empty")
+                val data = attemptRepository.load(link)
+                _state.update { current ->
+                    val attempt = current.attempt
+                    if (attempt == null || attempt.detailsUrl != raw) {
+                        current
+                    } else {
+                        current.copy(
+                            attempt = attempt.copy(
+                                loading = false,
+                                info = data.info,
+                                tasks = data.tasks,
+                                error = null,
+                            )
+                        )
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _state.update { current ->
+                    val attempt = current.attempt
+                    if (attempt == null || attempt.detailsUrl != raw) {
+                        current
+                    } else {
+                        current.copy(
+                            attempt = attempt.copy(
+                                loading = false,
+                                error = MeshCore.describeError(error),
+                            )
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    fun retryAttempt() {
+        _state.value.attempt?.detailsUrl?.let(::openDetails)
+    }
+
+    fun closeAttempt() {
+        attemptJob?.cancel()
+        _state.update { it.copy(attempt = null) }
+    }
 
     fun retryDetail() {
         _state.value.detail?.contestId?.let(::openContest)
@@ -166,7 +228,8 @@ class OlympiadViewModel(
 
     fun closeDetail() {
         detailJob?.cancel()
-        _state.update { it.copy(detail = null) }
+        attemptJob?.cancel()
+        _state.update { it.copy(detail = null, attempt = null) }
     }
 
     private fun loadDictionaries() {
@@ -238,11 +301,18 @@ class OlympiadViewModel(
     companion object {
         const val PAGE_SIZE = 20
 
-        fun factory(client: MeshClient): ViewModelProvider.Factory =
+        fun factory(client: MeshClient, context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return OlympiadViewModel(MeshOlympiadRepository(client)) as T
+                    return OlympiadViewModel(
+                        repository = MeshOlympiadRepository(client),
+                        attemptRepository = if (client.previewMode) {
+                            PreviewOlympiadAttemptRepository()
+                        } else {
+                            UchebnikOlympiadAttemptRepository(context)
+                        },
+                    ) as T
                 }
             }
     }

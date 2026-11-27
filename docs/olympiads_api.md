@@ -34,7 +34,29 @@
 | `GET` | `contests/{id}/participant` | Статус участия |
 | `GET` | `contests/{id}/recommendation` | Рекомендация |
 | `GET` | `contests/{id}/result` | Результат |
-| `GET` | `contests/{id}/result/{resultId}/url-details/link` | Ссылка на подробности результата |
+| `GET` | `contests/{id}/result/{resultId}/url-details/link` | Ссылка на страницу попытки |
+
+## Нативный результат попытки
+
+`detailsUrl` не открывается в браузере. Приложение:
+
+1. делает авторизованный `GET` по `detailsUrl`;
+2. получает `{ "link": "https://uchebnik.mos.ru/contests/challenge/{challenge}/attempt/{attempt}" }`;
+3. извлекает `challenge` и `attempt`;
+4. читает результат через отдельный Retrofit-контракт
+   `OlympiadAttemptApiService`:
+
+```http
+GET https://uchebnik.mos.ru/webtests/contests/rest/secure/challenge/task/answers
+    ?challenge_id={challenge}
+    &challenge_attempt_id={attempt}
+```
+
+Заголовки и cookie-сессию даёт тот же `uchebnik`-контур, что и у ЦДЗ
+(`X-Mes-Subsystem: testw`, `Authorization: Bearer <accessTokenEom>`,
+`User-Id`, `Profile-Id`, `Profile`, cookie). Экран показывает сводку попытки,
+задания, ответ ученика, правильный ответ и баллы. Запросы `start-attempt`,
+отправка ответов и `complete_attempt` не вызываются.
 
 ## `POST contests/overview`
 
@@ -102,8 +124,9 @@
 ```
 
 `detailsUrl` — не страница для браузера. Приложение делает по нему
-авторизованный `GET`, получает `{ "link": "https://…" }` и открывает уже
-`link`. Прямое открытие `detailsUrl` показывает JSON/ошибку API.
+авторизованный `GET`, получает `{ "link": "https://…" }`, разбирает ID
+попытки и открывает результат нативно. Прямое открытие `detailsUrl`
+показывает JSON/ошибку API, а браузерная страница `link` не нужна.
 
 `/participant` также отдаёт `resultsPublicationInfoCode` и
 `checkResultsLink`. Код используется только для текста в пустой вкладке

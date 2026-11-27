@@ -93,6 +93,32 @@ class PortfolioTest {
         assertEquals("", server.lastPortfolioProfileId)
         assertEquals("", server.lastPortfolioAuthToken)
         assertTrue(server.lastPortfolioAuthorization.startsWith("Bearer "))
+        assertTrue(server.lastPortfolioCookie.contains("aupd_current_role=4:1"))
+        assertTrue(server.lastPortfolioCookie.contains("subsystem_id=4"))
+        assertTrue(server.lastPortfolioCookie.contains("aupd_token=${DemoMeshServer.DEMO_TOKEN}"))
+    }
+
+    @Test
+    fun `portfolio overrides family role cookie with portfolio role`() {
+        val client = MeshClient(
+            baseUrl = "http://127.0.0.1:$port",
+            token = DemoMeshServer.DEMO_TOKEN,
+            profileId = "demo-student",
+            timeoutMs = 5_000,
+            cookieJar = {
+                mapOf(
+                    "aupd_token" to DemoMeshServer.DEMO_TOKEN,
+                    "aupd_current_role" to "2:2",
+                    "subsystem_id" to "2",
+                    "Ltpatoken2" to "demo-ltpa",
+                )
+            },
+        )
+        client.getPortfolioContext()
+
+        assertTrue(server.lastPortfolioCookie.contains("aupd_current_role=4:1"))
+        assertTrue(server.lastPortfolioCookie.contains("subsystem_id=4"))
+        assertTrue(server.lastPortfolioCookie.contains("Ltpatoken2=demo-ltpa"))
     }
 
     @Test

@@ -145,6 +145,12 @@ class CdzNativeClient(
     fun currentPersonId(): String? = personId
     fun currentCookies(): Map<String, String> = jar.toMap()
 
+    /**
+     * Заголовки read-only `webtests`-запросов: EOM-токен, профиль, cookie.
+     * Используется Retrofit-клиентом олимпиадных попыток; сам метод сети не делает.
+     */
+    fun webtestsHeaders(): Map<String, String> = baseHeaders("application/json")
+
     private fun params(): Map<String, String> {
         val out = mutableMapOf<String, String>()
         val query = pageUrl.substringAfter('?', "")

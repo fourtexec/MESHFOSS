@@ -104,6 +104,14 @@ class MeshClient(
 
         /** Веб-портфолио запрашивает списки с `size=9999`. */
         const val PORTFOLIO_LIST_SIZE = 9999
+
+        /**
+         * Портфолио — отдельная подсистема МЭШ. Если отправить роль
+         * семейного API (`2:2`) или не отправить её вовсе, контекст отвечает
+         * `500 code 442: Отсутствуют обязательные параметры: aupd_current_role`.
+         */
+        const val PORTFOLIO_SUBSYSTEM_ID = "4"
+        const val PORTFOLIO_CURRENT_ROLE = "4:1"
     }
 
     private val gson = GsonBuilder().setLenient().create()
@@ -230,12 +238,55 @@ class MeshClient(
      * HAR `school.mos.ru/portfolio/student/study` подтверждает Bearer-токен и
      * `x-mes-subsystem: studentportfolioweb`; семейные заголовки не нужны.
      */
-    private fun portfolioHeaders(): Map<String, String> =
-        (headers(includeAuthToken = false) + mapOf(
+    private fun portfolioHeaders(): Map<String, String> {
+        val extra = mutableMapOf(
             "Accept" to "application/json",
             "X-Mes-Subsystem" to "studentportfolioweb",
             "Referer" to (baseUrl.trimEnd('/') + "/portfolio/student/study")
-        )) - "Profile-Id" - "Profile-Type" - "X-Mes-RoleId"
+        )
+        portfolioCookieHeader()?.let { extra["Cookie"] = it }
+        return (headers(includeAuthToken = false) + extra) -
+            "Profile-Id" - "Profile-Type" - "X-Mes-RoleId"
+    }
+
+    /**
+     * Cookie для `/portfolio/app/`.
+     *
+     * HAR портфолио показывает `subsystem_id=4` и `aupd_current_role=4:1`
+     * (не семейные `2:2`). Без cookie контекст отвечает 500, даже если
+     * Bearer-токен валиден. Отправляем только известные auth/session-куки
+     * и ограничиваем длину, чтобы не получить 431.
+     */
+    private fun portfolioCookieHeader(): String? {
+        val jar = runCatching { cookieJar?.invoke() }.getOrNull().orEmpty()
+        val authToken = jar["aupd_token"]?.takeIf { it.isNotBlank() }
+            ?: token?.takeIf { it.isNotBlank() }
+        val ordered = listOf(
+            "aupd_token" to authToken,
+            "auth_flag" to (jar["auth_flag"] ?: "main"),
+            "subsystem_id" to PORTFOLIO_SUBSYSTEM_ID,
+            "aupd_current_role" to PORTFOLIO_CURRENT_ROLE,
+            "Ltpatoken2" to jar["Ltpatoken2"],
+            "JSESSIONID" to jar["JSESSIONID"],
+            "obr_id" to jar["obr_id"],
+            "user_login" to jar["user_login"],
+            "cluster" to jar["cluster"],
+            "student_person_id" to jar["student_person_id"]
+        )
+        val header = StringBuilder()
+        ordered.forEach { (name, raw) ->
+            val value = raw?.trim().orEmpty()
+            if (value.isBlank()) return@forEach
+            if (value.any { it == '\r' || it == '\n' || it == ';' }) return@forEach
+            val pair = "$name=$value"
+            if (header.length > 0 && header.length + 2 + pair.length > MAX_LAUNCH_COOKIE_LENGTH) {
+                return@forEach
+            }
+            if (header.length > 0) header.append("; ")
+            header.append(pair)
+        }
+        return header.toString().ifBlank { null }
+    }
 
     private fun refreshHeaders(current: String): Map<String, String> =
         MeshCore.baseHeaders() + MeshCore.authHeaders(current, null)
@@ -970,11 +1021,12 @@ class MeshClient(
     }
 
     /**
-     * Разворачивает `detailsUrl` результата в ссылку для браузера.
+     * Разворачивает `detailsUrl` результата в ссылку на попытку.
      *
      * Веб-приложение сначала делает авторизованный GET по `detailsUrl`,
-     * получает `{ "link": … }` и только потом открывает `link`. Прямое
-     * открытие `detailsUrl` показывало пользователю JSON/ошибку API.
+     * получает `{ "link": … }` и открывает страницу. Приложение берёт из
+     * этой ссылки ID и показывает тот же результат нативно. Прямое открытие
+     * `detailsUrl` показывало пользователю JSON/ошибку API.
      */
     fun getOlympiadDetailsLink(detailsUrl: String): String? {
         val raw = detailsUrl.trim()

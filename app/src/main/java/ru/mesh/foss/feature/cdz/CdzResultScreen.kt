@@ -55,6 +55,30 @@ fun CdzResultScreen(
     viewModel: CdzResultViewModel,
     onClose: () -> Unit,
 ) {
+    CdzAttemptResultScreen(
+        info = viewModel.info,
+        tasks = viewModel.tasks,
+        loading = viewModel.loading,
+        error = viewModel.error,
+        onClose = onClose,
+        onRetry = viewModel::load,
+    )
+}
+
+/**
+ * Общий рендер результата попытки. Используется и ЦДЗ, и олимпиадой:
+ * у обоих `webtests`-контуров совпадает структура `attempt_info`/`results`.
+ */
+@Composable
+fun CdzAttemptResultScreen(
+    info: JSONObject?,
+    tasks: List<CdzResultTask>,
+    loading: Boolean,
+    error: String?,
+    onClose: () -> Unit,
+    onRetry: () -> Unit,
+    title: String = Words.CdzResult.text,
+) {
     BackHandler(onBack = onClose)
 
     val liquid = LocalDesign.current == Design.LIQUID
@@ -63,7 +87,7 @@ fun CdzResultScreen(
         topBar = {
             if (liquid) {
                 LiquidTopBar(
-                    title = Words.CdzResult.text,
+                    title = title,
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Text("‹", style = MaterialTheme.typography.headlineMedium)
@@ -72,7 +96,7 @@ fun CdzResultScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text(Words.CdzResult.text) },
+                    title = { Text(title) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Text("‹", style = MaterialTheme.typography.headlineMedium)
@@ -89,8 +113,8 @@ fun CdzResultScreen(
         ) {
             val motion = MaterialTheme.motionScheme
             val phase = when {
-                viewModel.loading && viewModel.info == null -> ResultPhase.Loading
-                viewModel.error != null && viewModel.info == null -> ResultPhase.Error
+                loading && info == null -> ResultPhase.Loading
+                error != null && info == null -> ResultPhase.Error
                 else -> ResultPhase.Content
             }
             AnimatedContent(
@@ -102,10 +126,10 @@ fun CdzResultScreen(
                 when (shown) {
                     ResultPhase.Loading -> ResultLoading()
                     ResultPhase.Error -> ResultError(
-                        error = viewModel.error.orEmpty(),
-                        onRetry = viewModel::load,
+                        error = error.orEmpty(),
+                        onRetry = onRetry,
                     )
-                    ResultPhase.Content -> ResultContent(viewModel)
+                    ResultPhase.Content -> ResultContent(info = info, tasks = tasks)
                 }
             }
         }
@@ -153,15 +177,18 @@ private fun ResultError(
 }
 
 @Composable
-private fun ResultContent(viewModel: CdzResultViewModel) {
-    val info = viewModel.info ?: return
+private fun ResultContent(
+    info: JSONObject?,
+    tasks: List<CdzResultTask>,
+) {
+    val summary = info ?: return
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { ResultSummary(info) }
-        itemsIndexed(viewModel.tasks) { index, task ->
+        item { ResultSummary(summary) }
+        itemsIndexed(tasks) { index, task ->
             ResultTaskCard(number = index + 1, task = task)
         }
         item { Spacer(Modifier.height(20.dp)) }
