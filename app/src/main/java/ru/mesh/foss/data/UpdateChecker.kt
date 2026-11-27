@@ -110,6 +110,10 @@ object UpdateChecker {
         var best: UpdateInfo? = null
         var bestVersion: String? = null
         var bestCode: Long? = null
+        // Debug-сборка добавляет -debug к versionName. Это не часть semver,
+        // поэтому убираем суффикс и здесь: pickUpdate могут вызвать и тесты,
+        // и другие вызывающие без контекста PackageManager.
+        val installedVersion = installed.removeSuffix("-debug")
         for (release in releases) {
             if (release.draft) continue
             val tag = release.tagName?.trim().orEmpty()
@@ -118,7 +122,7 @@ object UpdateChecker {
             if (release.prerelease && !withPrereleases) continue
             val version = releaseVersion(release)
             val code = versionCodeFromBody(release)
-            if (!isNewer(release, version, code, installed, installedCode)) continue
+            if (!isNewer(release, version, code, installedVersion, installedCode)) continue
 
             val releaseUrl = release.htmlUrl?.takeIf { it.isNotBlank() } ?: RELEASES_PAGE
             val apkUrl = firstApkUrl(release) ?: releaseUrl
@@ -214,7 +218,7 @@ object UpdateChecker {
 
     /** "2.0.0-beta.5" → ([2, 0, 0], ["beta", "5"]); null — если не разбирается. */
     private fun parseVersion(raw: String): Pair<List<Int>, List<String>>? {
-        val clean = raw.trim().removePrefix("v")
+        val clean = raw.trim().removePrefix("v").removeSuffix("-debug").substringBefore('+')
         val core = clean.substringBefore('-')
         val nums = core.split('.').map { it.trim().toIntOrNull() ?: return null }
         if (nums.size != 3) return null
