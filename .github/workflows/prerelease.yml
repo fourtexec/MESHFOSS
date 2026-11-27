@@ -80,6 +80,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: preview-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
           name: MESH Ranker ${{ env.VERSION_NAME }}
           body: |
             Debug-сборка ветки `${{ github.ref_name }}` для проверки изменений
