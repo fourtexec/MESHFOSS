@@ -137,6 +137,12 @@ DTO — `VisitDurationsResponse`:
 Оба DTO лежат в `ru.mesh.foss.data.model.AttendanceModels`. Поля, которых нет в
 ответе, остаются `null`/пустыми списками; экран не падает.
 
+## Олимпиады
+
+Публичный read-only раздел `/api/contests/exec/v1/` вынесен в отдельный
+Retrofit-контракт `OlympiadApiService`; подробности — в
+[`docs/olympiads_api.md`](olympiads_api.md).
+
 ## Москвёнок и QR-вход
 
 QR-вход и «Москвёнок» используют отдельные сценарии (`QrLogin`, `MoskvenokApi`)

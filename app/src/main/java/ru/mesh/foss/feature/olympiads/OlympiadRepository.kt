@@ -1,0 +1,54 @@
+package ru.mesh.foss.feature.olympiads
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import ru.mesh.foss.data.MeshClient
+import ru.mesh.foss.data.model.OlympiadDetail
+import ru.mesh.foss.data.model.OlympiadDictionaries
+import ru.mesh.foss.data.model.OlympiadOverviewResponse
+import ru.mesh.foss.data.model.OlympiadRecommendation
+import ru.mesh.foss.data.model.OlympiadResult
+
+/** Слой данных экрана «Олимпиады»: только вызовы Retrofit-клиента. */
+interface OlympiadRepository {
+    suspend fun overview(
+        showParticipantContests: Boolean,
+        searchString: String,
+        page: Int,
+        size: Int,
+    ): OlympiadOverviewResponse
+
+    suspend fun dictionaries(): OlympiadDictionaries
+    suspend fun detail(contestId: String): OlympiadDetail
+    suspend fun result(contestId: String): OlympiadResult?
+    suspend fun recommendation(contestId: String): OlympiadRecommendation?
+}
+
+class MeshOlympiadRepository(private val client: MeshClient) : OlympiadRepository {
+
+    override suspend fun overview(
+        showParticipantContests: Boolean,
+        searchString: String,
+        page: Int,
+        size: Int,
+    ): OlympiadOverviewResponse = withContext(Dispatchers.IO) {
+        client.getOlympiadOverview(showParticipantContests, searchString, page, size)
+    }
+
+    override suspend fun dictionaries(): OlympiadDictionaries = withContext(Dispatchers.IO) {
+        client.getOlympiadDictionaries()
+    }
+
+    override suspend fun detail(contestId: String): OlympiadDetail = withContext(Dispatchers.IO) {
+        client.getOlympiadDetail(contestId)
+    }
+
+    override suspend fun result(contestId: String): OlympiadResult? = withContext(Dispatchers.IO) {
+        client.getOlympiadResult(contestId)
+    }
+
+    override suspend fun recommendation(contestId: String): OlympiadRecommendation? =
+        withContext(Dispatchers.IO) {
+            client.getOlympiadRecommendation(contestId)
+        }
+}

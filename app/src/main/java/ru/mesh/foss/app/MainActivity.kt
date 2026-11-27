@@ -16,6 +16,7 @@ import ru.mesh.foss.feature.homeworks.*
 import ru.mesh.foss.feature.login.*
 import ru.mesh.foss.feature.marks.*
 import ru.mesh.foss.feature.moskvenok.*
+import ru.mesh.foss.feature.olympiads.*
 import ru.mesh.foss.feature.profile.*
 import ru.mesh.foss.feature.ranking.*
 import ru.mesh.foss.feature.schedule.*
@@ -626,6 +627,7 @@ fun MainScaffold(
         "schedule" -> Words.Schedule.text
         "attendance" -> Words.Attendance.text
         "moskvenok" -> Words.Moskvenok.text
+        "olympiads" -> Words.Olympiads.text
         "food" -> Words.MealsAndBalance.text
         "settings" -> Words.Settings.text
         else -> Words.MeshRanking.text
@@ -893,6 +895,7 @@ fun MainScaffold(
                     )
                     "attendance" -> AttendanceScreen(client, studentId, personId)
                     "moskvenok" -> MoskvenokScreen(store)
+                    "olympiads" -> OlympiadScreen(client)
                     "food" -> FoodScreen(store, client, personId)
                     "settings" -> SettingsScreen(store, client, profile, onLogout)
                 }

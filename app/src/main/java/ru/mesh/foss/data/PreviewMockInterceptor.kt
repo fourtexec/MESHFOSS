@@ -20,6 +20,11 @@ internal class PreviewMockInterceptor : Interceptor {
         const val PREVIEW_STUDENT_ID = "17234613"
         const val PREVIEW_PERSON_ID = "11111111-1111-4111-8111-111111111111"
 
+        /** Синтетические олимпиады предпросмотра. */
+        const val PREVIEW_OLYMPIAD_ID = "demo-olympiad-1"
+        const val PREVIEW_OLYMPIAD_PAST_ID = "demo-olympiad-2"
+        private const val OLYMPIAD_BASE = "/api/contests/exec/v1/"
+
         private val SUBJECTS = listOf(
             1 to "Алгебра",
             2 to "Геометрия",
@@ -395,9 +400,183 @@ internal class PreviewMockInterceptor : Interceptor {
 
             path == MeshCore.Paths.FOOD_ORDERS -> 200 to mapOf("orders" to emptyList<Any>())
 
+            path == OLYMPIAD_BASE + "contests/overview" -> 200 to mapOf(
+                "page" to mapOf(
+                    "content" to previewOlympiads(),
+                    "totalElements" to 3,
+                    "totalPages" to 1,
+                    "number" to 0,
+                    "size" to 20
+                ),
+                "hiddenTotal" to 3
+            )
+
+            path == OLYMPIAD_BASE + "subjects" -> 200 to previewOlympiadSubjects()
+            path == OLYMPIAD_BASE + "parallels" -> 200 to previewOlympiadParallels()
+            path == OLYMPIAD_BASE + "contests/stages" -> 200 to previewOlympiadStages()
+            path == OLYMPIAD_BASE + "contests/levels" -> 200 to previewOlympiadLevels()
+
+            path.startsWith(OLYMPIAD_BASE + "contests/") -> {
+                val tail = path.removePrefix(OLYMPIAD_BASE + "contests/")
+                val id = tail.substringBefore('/')
+                val known = previewOlympiads().firstOrNull { (it["id"] as Map<*, *>)["value"] == id }
+                when {
+                    known == null -> 404 to mapOf("message" to "preview: unknown olympiad")
+                    tail == id -> 200 to previewOlympiadDetail(id)
+                    tail.endsWith("/participant") -> 200 to mapOf(
+                        "passingState" to "REGISTERED",
+                        "covered" to true
+                    )
+                    tail.endsWith("/recommendation") -> 200 to mapOf(
+                        "recommendation" to "Демо-рекомендация: проверьте расписание и попробуйте пробный тур."
+                    )
+                    tail.endsWith("/result") -> 200 to if (id == PREVIEW_OLYMPIAD_PAST_ID) {
+                        mapOf(
+                            "hasResult" to true,
+                            "resultModel" to mapOf(
+                                "startedAt" to "2026-11-05T09:00:00+03:00",
+                                "finishedAt" to "2026-11-12T18:00:00+03:00",
+                                "score" to mapOf(
+                                    "mark" to 18.0,
+                                    "markScale" to 25.0,
+                                    "passedCount" to 7,
+                                    "totalCount" to 10,
+                                    "partialPassedCount" to 2,
+                                    "wrongCount" to 1
+                                ),
+                                "reward" to mapOf("code" to "WINNER", "name" to "Победитель"),
+                                "participationStatus" to mapOf(
+                                    "code" to "IN_COMPETITION",
+                                    "name" to "В основном зачёте",
+                                    "justification" to "Демо-статус участия"
+                                ),
+                                "portfolioInfo" to "Результат можно добавить в портфолио"
+                            )
+                        )
+                    } else {
+                        mapOf("hasResult" to false)
+                    }
+                    else -> 404 to mapOf("message" to "preview: unknown olympiad path")
+                }
+            }
+
             else -> 200 to mapOf("payload" to emptyList<Any>())
         }
     }
+
+    private fun previewOlympiads(): List<Map<String, Any>> = listOf(
+        mapOf(
+            "id" to mapOf("value" to PREVIEW_OLYMPIAD_ID),
+            "contestName" to "Демо-олимпиада по математике",
+            "startAt" to "2026-12-10T10:00:00+03:00",
+            "finishAt" to "2026-12-20T18:00:00+03:00",
+            "statusCode" to "REGISTRATION",
+            "parallelIds" to listOf("7", "8"),
+            "subjectIds" to listOf("1"),
+            "stageCode" to "SCHOOL",
+            "teamContest" to false,
+            "recommendationExists" to true
+        ),
+        mapOf(
+            "id" to mapOf("value" to PREVIEW_OLYMPIAD_PAST_ID),
+            "contestName" to "Демо-олимпиада по информатике",
+            "startAt" to "2026-11-05T09:00:00+03:00",
+            "finishAt" to "2026-11-12T18:00:00+03:00",
+            "statusCode" to "PUBLISHED_FINAL_RESULTS",
+            "parallelIds" to listOf("8"),
+            "subjectIds" to listOf("3"),
+            "stageCode" to "MUNICIPAL",
+            "teamContest" to false,
+            "recommendationExists" to true
+        ),
+        mapOf(
+            "id" to mapOf("value" to "demo-olympiad-3"),
+            "contestName" to "Демо-олимпиада по физике",
+            "startAt" to "2026-11-25T10:00:00+03:00",
+            "finishAt" to "2026-12-02T18:00:00+03:00",
+            "statusCode" to "STARTED",
+            "parallelIds" to listOf("9", "10"),
+            "subjectIds" to listOf("4"),
+            "stageCode" to "REGIONAL",
+            "teamContest" to true,
+            "recommendationExists" to false
+        )
+    )
+
+    private fun previewOlympiadDetail(id: String): Map<String, Any> {
+        val item = previewOlympiads().first { (it["id"] as Map<*, *>)["value"] == id }
+        val subjectIds = item["subjectIds"] as? List<String> ?: emptyList()
+        val parallelIds = item["parallelIds"] as? List<String> ?: emptyList()
+        return mapOf(
+            "id" to mapOf("value" to id),
+            "contestName" to (item["contestName"] as? String).orEmpty(),
+            "statusCode" to (item["statusCode"] as? String).orEmpty(),
+            "commonInfo" to mapOf(
+                "stageCode" to (item["stageCode"] as? String).orEmpty(),
+                "subjectIds" to subjectIds,
+                "levelCode" to "1",
+                "coverage" to mapOf(
+                    "districtIds" to emptyList<String>(),
+                    "organizationIds" to emptyList<String>()
+                )
+            ),
+            "participationInfo" to mapOf(
+                "parallelIds" to parallelIds,
+                "teamContest" to (item["teamContest"] as? Boolean ?: false),
+                "startAt" to (item["startAt"] as? String).orEmpty(),
+                "finishAt" to (item["finishAt"] as? String).orEmpty()
+            ),
+            "additionalInfo" to mapOf(
+                "contestDescription" to
+                    "{\"blocks\":[{\"type\":\"paragraph\",\"content\":\"Демо-описание олимпиады без реальных данных.\"},{\"type\":\"paragraph\",\"content\":\"Проверка отображения rich-text.\"}]}",
+                "testContests" to listOf("https://example.org/demo-practice")
+            ),
+            "prevContestStages" to listOf(
+                mapOf(
+                    "contestId" to id,
+                    "name" to "Предыдущий этап демо-олимпиады",
+                    "subjects" to listOf(mapOf("id" to "1", "name" to "Математика")),
+                    "parallels" to listOf(mapOf("id" to "7", "name" to "7 класс")),
+                    "stage" to mapOf("id" to "SCHOOL", "name" to "Школьный этап"),
+                    "startedAt" to "2025-11-15T10:00:00+03:00",
+                    "rewards" to listOf(mapOf("id" to "WINNER", "name" to "Победитель")),
+                    "minRank" to 1,
+                    "minMark" to 15.0
+                )
+            ),
+            "recommendationExists" to true,
+            "teamContest" to (item["teamContest"] as? Boolean ?: false)
+        )
+    }
+
+    private fun previewOlympiadSubjects(): List<Map<String, String>> = listOf(
+        mapOf("id" to "1", "name" to "Математика"),
+        mapOf("id" to "2", "name" to "Русский язык"),
+        mapOf("id" to "3", "name" to "Информатика"),
+        mapOf("id" to "4", "name" to "Физика"),
+        mapOf("id" to "5", "name" to "История")
+    )
+
+    private fun previewOlympiadParallels(): List<Map<String, String>> = listOf(
+        mapOf("id" to "7", "name" to "7 класс"),
+        mapOf("id" to "8", "name" to "8 класс"),
+        mapOf("id" to "9", "name" to "9 класс"),
+        mapOf("id" to "10", "name" to "10 класс"),
+        mapOf("id" to "11", "name" to "11 класс")
+    )
+
+    private fun previewOlympiadStages(): List<Map<String, String>> = listOf(
+        mapOf("id" to "SCHOOL", "name" to "Школьный этап"),
+        mapOf("id" to "MUNICIPAL", "name" to "Муниципальный этап"),
+        mapOf("id" to "REGIONAL", "name" to "Региональный этап"),
+        mapOf("id" to "FINAL", "name" to "Заключительный этап")
+    )
+
+    private fun previewOlympiadLevels(): List<Map<String, String>> = listOf(
+        mapOf("id" to "1", "name" to "I уровень"),
+        mapOf("id" to "2", "name" to "II уровень"),
+        mapOf("id" to "3", "name" to "III уровень")
+    )
 
     private fun markItem(
         id: String,

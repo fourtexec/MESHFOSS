@@ -20,9 +20,19 @@ import retrofit2.Call
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import ru.mesh.foss.data.api.MeshApiService
+import ru.mesh.foss.data.api.OlympiadApiService
 import ru.mesh.foss.data.model.AttendanceResponse
 import ru.mesh.foss.data.model.HomeworkLaunchLink
 import ru.mesh.foss.data.model.MarkDetail
+import ru.mesh.foss.data.model.OlympiadDetail
+import ru.mesh.foss.data.model.OlympiadDictionaries
+import ru.mesh.foss.data.model.OlympiadDictionaryItem
+import ru.mesh.foss.data.model.OlympiadOverviewRequest
+import ru.mesh.foss.data.model.OlympiadOverviewResponse
+import ru.mesh.foss.data.model.OlympiadPageRequest
+import ru.mesh.foss.data.model.OlympiadParticipant
+import ru.mesh.foss.data.model.OlympiadRecommendation
+import ru.mesh.foss.data.model.OlympiadResult
 import ru.mesh.foss.data.model.VisitDurationsResponse
 
 /**
@@ -110,6 +120,12 @@ class MeshClient(
     @Volatile
     private var cachedLaunchService: MeshApiService? = null
 
+    @Volatile
+    private var cachedOlympiadBase: String? = null
+
+    @Volatile
+    private var cachedOlympiadService: OlympiadApiService? = null
+
     private fun createService(client: OkHttpClient): MeshApiService =
         Retrofit.Builder()
             .baseUrl(baseUrl.trimEnd('/') + "/")
@@ -139,11 +155,39 @@ class MeshClient(
         return built
     }
 
+    /** Отдельный контракт публичного раздела «Олимпиады». */
+    @Synchronized
+    private fun olympiadApi(): OlympiadApiService {
+        val normalized = baseUrl.trimEnd('/') + "/api/contests/exec/v1/"
+        cachedOlympiadService?.takeIf { cachedOlympiadBase == normalized }?.let { return it }
+        val built = Retrofit.Builder()
+            .baseUrl(normalized)
+            .client(http)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(OlympiadApiService::class.java)
+        cachedOlympiadBase = normalized
+        cachedOlympiadService = built
+        return built
+    }
+
     private fun headers(
         extra: Map<String, String> = emptyMap(),
         includeAuthToken: Boolean = true
     ): Map<String, String> =
         MeshCore.baseHeaders() + MeshCore.authHeaders(token, profileId, includeAuthToken) + extra
+
+    /**
+     * Заголовки публичного раздела олимпиад.
+     *
+     * Веб-приложение `/contests` шлёт `x-mes-subsystem: constuweb` и не
+     * передаёт `Profile-Id`, `Profile-Type` или `Auth-Token` семейного API.
+     */
+    private fun olympiadHeaders(): Map<String, String> =
+        (headers(includeAuthToken = false) + mapOf(
+            "Accept" to "application/json",
+            "X-Mes-Subsystem" to "constuweb"
+        )) - "Profile-Id" - "Profile-Type" - "X-Mes-RoleId"
 
     private fun refreshHeaders(current: String): Map<String, String> =
         MeshCore.baseHeaders() + MeshCore.authHeaders(current, null)
@@ -216,6 +260,14 @@ class MeshClient(
         404 -> MeshCore.MeshError(Words.MethodNotFound(path), "not-found", 404)
         else -> MeshCore.MeshError(Words.MeshErrorHttp(code), "http-$code", code)
     }
+
+    /** GET, для которого 404 — нормальный ответ («результата ещё нет»). */
+    private fun <T> optional(callFactory: () -> Call<T>, path: String): T? =
+        try {
+            execute(callFactory, path)
+        } catch (error: MeshCore.MeshError) {
+            if (error.status == 404) null else throw error
+        }
 
     /**
      * Единая точка выполнения запроса: коды, сеть и однократное обновление токена.
@@ -764,6 +816,106 @@ class MeshClient(
             pool.shutdown()
         }
         return out
+    }
+
+    // ------------------------------------------------------------- ОЛИМПИАДЫ ----
+
+    /** Справочники публичного раздела: кэшируются на время сессии. */
+    @Volatile
+    private var olympiadDictionariesCache: OlympiadDictionaries? = null
+
+    /**
+     * Список олимпиад.
+     * @param showParticipantContests true — «Мои олимпиады», false — «Все олимпиады».
+     */
+    fun getOlympiadOverview(
+        showParticipantContests: Boolean,
+        searchString: String = "",
+        page: Int = 0,
+        size: Int = 20,
+    ): OlympiadOverviewResponse {
+        val request = OlympiadOverviewRequest(
+            page = OlympiadPageRequest(number = page.coerceAtLeast(0), size = size.coerceIn(1, 50)),
+            searchString = searchString.trim(),
+            years = listOf(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)),
+            showParticipantContests = showParticipantContests,
+        )
+        return execute(
+            { olympiadApi().overview(request, olympiadHeaders()) },
+            "/api/contests/exec/v1/contests/overview"
+        )
+    }
+
+    fun getOlympiadSubjects(): List<OlympiadDictionaryItem> =
+        execute({ olympiadApi().subjects(olympiadHeaders()) }, "/api/contests/exec/v1/subjects")
+
+    fun getOlympiadParallels(): List<OlympiadDictionaryItem> =
+        execute({ olympiadApi().parallels(olympiadHeaders()) }, "/api/contests/exec/v1/parallels")
+
+    fun getOlympiadStages(): List<OlympiadDictionaryItem> =
+        execute({ olympiadApi().stages(olympiadHeaders()) }, "/api/contests/exec/v1/contests/stages")
+
+    fun getOlympiadLevels(): List<OlympiadDictionaryItem> =
+        execute({ olympiadApi().levels(olympiadHeaders()) }, "/api/contests/exec/v1/contests/levels")
+
+    /** Все справочники одним вызовом; запросы идут параллельно, как в вебе. */
+    fun getOlympiadDictionaries(force: Boolean = false): OlympiadDictionaries {
+        olympiadDictionariesCache?.takeIf { !force }?.let { return it }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+        try {
+            val subjects = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadSubjects() }
+            val parallels = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadParallels() }
+            val stages = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadStages() }
+            val levels = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadLevels() }
+            val result = OlympiadDictionaries(
+                subjects = subjects.get(),
+                parallels = parallels.get(),
+                stages = stages.get(),
+                levels = levels.get(),
+            )
+            olympiadDictionariesCache = result
+            return result
+        } finally {
+            pool.shutdown()
+        }
+    }
+
+    fun getOlympiadDetail(contestId: String): OlympiadDetail {
+        val id = requireContestId(contestId)
+        return execute(
+            { olympiadApi().detail(id, olympiadHeaders()) },
+            "/api/contests/exec/v1/contests/$id"
+        )
+    }
+
+    fun getOlympiadParticipant(contestId: String): OlympiadParticipant? {
+        val id = requireContestId(contestId)
+        return optional(
+            { olympiadApi().participant(id, olympiadHeaders()) },
+            "/api/contests/exec/v1/contests/$id/participant"
+        )
+    }
+
+    fun getOlympiadRecommendation(contestId: String): OlympiadRecommendation? {
+        val id = requireContestId(contestId)
+        return optional(
+            { olympiadApi().recommendation(id, olympiadHeaders()) },
+            "/api/contests/exec/v1/contests/$id/recommendation"
+        )
+    }
+
+    fun getOlympiadResult(contestId: String): OlympiadResult? {
+        val id = requireContestId(contestId)
+        return optional(
+            { olympiadApi().result(id, olympiadHeaders()) },
+            "/api/contests/exec/v1/contests/$id/result"
+        )
+    }
+
+    private fun requireContestId(contestId: String): String {
+        val id = contestId.trim()
+        if (id.isBlank()) throw MeshCore.MeshError(Words.OlympiadUnavailable.text, "bad-olympiad")
+        return id
     }
 
     // ------------------------------------------------------------------ ЕДА ----

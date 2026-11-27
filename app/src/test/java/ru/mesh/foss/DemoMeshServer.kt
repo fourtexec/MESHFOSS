@@ -4,8 +4,9 @@ import ru.mesh.foss.core.MeshCore
 
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
@@ -38,6 +39,12 @@ class DemoMeshServer(
         /** Демо-страница партнёра ЦДЗ. */
         const val DEMO_CDZ_PAGE = "/demo/cdz"
 
+        /** Синтетические олимпиады демо-режима (без реальных id и данных). */
+        const val DEMO_OLYMPIAD_ID = "demo-olympiad-1"
+        const val DEMO_OLYMPIAD_PAST_ID = "demo-olympiad-2"
+
+        private const val OLYMPIAD_BASE = "/api/contests/exec/v1/"
+
         /** Служебный ключ: ответ отдаётся как есть (строка), а не JSON-объектом. */
         private const val RAW_BODY = "__raw_body__"
 
@@ -64,7 +71,89 @@ class DemoMeshServer(
             "Контрольная работа", "Самостоятельная работа", "Ответ на уроке",
             "Домашняя работа", "Диктант", "Тест", "Проект", "Зачёт"
         )
+
+        private val OLYMPIAD_SUBJECTS = listOf(
+            "1" to "Математика",
+            "2" to "Русский язык",
+            "3" to "Информатика",
+            "4" to "Физика",
+            "5" to "История",
+        )
+        private val OLYMPIAD_PARALLELS = listOf(
+            "7" to "7 класс",
+            "8" to "8 класс",
+            "9" to "9 класс",
+            "10" to "10 класс",
+            "11" to "11 класс",
+        )
+        private val OLYMPIAD_STAGES = listOf(
+            "SCHOOL" to "Школьный этап",
+            "MUNICIPAL" to "Муниципальный этап",
+            "REGIONAL" to "Региональный этап",
+            "FINAL" to "Заключительный этап",
+        )
+        private val OLYMPIAD_LEVELS = listOf(
+            "1" to "I уровень",
+            "2" to "II уровень",
+            "3" to "III уровень",
+        )
+
+        private val OLYMPIADS = listOf(
+            DemoOlympiad(
+                id = DEMO_OLYMPIAD_ID,
+                name = "Демо-олимпиада по математике",
+                status = "REGISTRATION",
+                startAt = "2026-12-10T10:00:00+03:00",
+                finishAt = "2026-12-20T18:00:00+03:00",
+                subjectIds = listOf("1"),
+                parallelIds = listOf("7", "8"),
+                stageCode = "SCHOOL",
+                team = false,
+                mine = true,
+                hasResult = false,
+            ),
+            DemoOlympiad(
+                id = DEMO_OLYMPIAD_PAST_ID,
+                name = "Демо-олимпиада по информатике",
+                status = "PUBLISHED_FINAL_RESULTS",
+                startAt = "2026-11-05T09:00:00+03:00",
+                finishAt = "2026-11-12T18:00:00+03:00",
+                subjectIds = listOf("3"),
+                parallelIds = listOf("8"),
+                stageCode = "MUNICIPAL",
+                team = false,
+                mine = true,
+                hasResult = true,
+            ),
+            DemoOlympiad(
+                id = "demo-olympiad-3",
+                name = "Демо-олимпиада по физике",
+                status = "STARTED",
+                startAt = "2026-11-25T10:00:00+03:00",
+                finishAt = "2026-12-02T18:00:00+03:00",
+                subjectIds = listOf("4"),
+                parallelIds = listOf("9", "10"),
+                stageCode = "REGIONAL",
+                team = true,
+                mine = false,
+                hasResult = false,
+            ),
+        )
     }
+
+    private data class DemoOlympiad(
+        val id: String,
+        val name: String,
+        val status: String,
+        val startAt: String,
+        val finishAt: String,
+        val subjectIds: List<String>,
+        val parallelIds: List<String>,
+        val stageCode: String,
+        val team: Boolean,
+        val mine: Boolean,
+        val hasResult: Boolean,
+    )
 
     private data class Student(
         val personId: String,
@@ -98,6 +187,23 @@ class DemoMeshServer(
 
     @Volatile
     var lastLaunchReferer: String = ""
+        private set
+
+    /** Заголовки последнего запроса раздела «Олимпиады» — для проверки контракта. */
+    @Volatile
+    var lastOlympiadSubsystem: String = ""
+        private set
+
+    @Volatile
+    var lastOlympiadProfileId: String = ""
+        private set
+
+    @Volatile
+    var lastOlympiadAuthToken: String = ""
+        private set
+
+    @Volatile
+    var lastOlympiadAuthorization: String = ""
         private set
 
     init {
@@ -238,8 +344,8 @@ class DemoMeshServer(
     private fun handle(client: Socket) {
         client.use { socket ->
             try {
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
-                val requestLine = reader.readLine() ?: return
+                val input = BufferedInputStream(socket.getInputStream())
+                val requestLine = readHttpLine(input) ?: return
                 val parts = requestLine.split(" ")
                 if (parts.size < 2) return
                 val method = parts[0].uppercase()
@@ -249,36 +355,44 @@ class DemoMeshServer(
                 var profileId = ""
                 var cookie = ""
                 var referer = ""
+                var subsystem = ""
                 var contentLength = 0
                 while (true) {
-                    val line = reader.readLine() ?: break
+                    val line = readHttpLine(input) ?: break
                     if (line.isEmpty()) break
                     val lower = line.lowercase()
                     when {
                         lower.startsWith("authorization:") -> authorization = line.substringAfter(':').trim()
                         lower.startsWith("auth-token:") -> authToken = line.substringAfter(':').trim()
                         lower.startsWith("profile-id:") -> profileId = line.substringAfter(':').trim()
+                        lower.startsWith("x-mes-subsystem:") -> subsystem = line.substringAfter(':').trim()
                         lower.startsWith("cookie:") -> cookie = line.substringAfter(':').trim()
                         lower.startsWith("referer:") -> referer = line.substringAfter(':').trim()
                         lower.startsWith("content-length:") -> contentLength = line.substringAfter(':').trim().toIntOrNull() ?: 0
                     }
                 }
-                // Тело читаем посимвольно: в демо-запросах только ASCII-JSON.
+                // Тело читаем ровно contentLength байт: поиск может быть кириллицей.
                 val body = if (contentLength > 0) {
-                    val buffer = CharArray(contentLength)
+                    val buffer = ByteArray(contentLength)
                     var read = 0
                     while (read < contentLength) {
-                        val n = reader.read(buffer, read, contentLength - read)
+                        val n = input.read(buffer, read, contentLength - read)
                         if (n < 0) break
                         read += n
                     }
-                    String(buffer, 0, read)
+                    String(buffer, 0, read, Charsets.UTF_8)
                 } else {
                     ""
                 }
                 val token = authorization.removePrefix("Bearer").trim().ifBlank { authToken }
                 val bothAuth = authorization.isNotBlank() && authToken.isNotBlank()
                 val (pathOnly, _) = query(path)
+                if (pathOnly.startsWith("/api/contests/exec/v1/")) {
+                    lastOlympiadSubsystem = subsystem
+                    lastOlympiadProfileId = profileId
+                    lastOlympiadAuthToken = authToken
+                    lastOlympiadAuthorization = authorization
+                }
                 if (pathOnly == DEMO_CDZ_PAGE) {
                     respondRaw(socket, 200, "text/html; charset=utf-8", demoCdzPage(path))
                     return
@@ -293,6 +407,20 @@ class DemoMeshServer(
                 runCatching { respond(socket, 500, JSONObject().put("message", "demo error: ${error.message}")) }
             }
         }
+    }
+
+    /** Строка HTTP-заголовка в UTF-8; читаем байты, чтобы тело с кириллицей не сбивало Content-Length. */
+    private fun readHttpLine(input: InputStream): String? {
+        val out = ByteArrayOutputStream()
+        while (true) {
+            val byte = input.read()
+            if (byte < 0) {
+                return if (out.size() == 0) null else out.toString("UTF-8")
+            }
+            if (byte == '\n'.code) break
+            out.write(byte)
+        }
+        return out.toString("UTF-8").trimEnd('\r')
     }
 
     private fun query(path: String): Pair<String, Map<String, String>> {
@@ -721,9 +849,182 @@ class DemoMeshServer(
                 302 to JSONObject().put(RAW_BODY, "${baseUrl()}$DEMO_CDZ_PAGE?material_id=$material&registration=${java.util.UUID.randomUUID()}")
             }
 
+            path == OLYMPIAD_BASE + "contests/overview" -> {
+                val request = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
+                val mineOnly = request.optBoolean("showParticipantContests", true)
+                val search = request.optString("searchString").trim()
+                val pageRequest = request.optJSONObject("page")
+                val number = pageRequest?.optInt("number", 0) ?: 0
+                val size = (pageRequest?.optInt("size", 20) ?: 20).coerceIn(1, 50)
+                val filtered = OLYMPIADS.filter { olympiad ->
+                    (!mineOnly || olympiad.mine) &&
+                        (search.isBlank() || olympiad.name.contains(search, ignoreCase = true))
+                }
+                val content = JSONArray()
+                filtered.drop(number * size).take(size).forEach { olympiad ->
+                    content.put(olympiadOverview(olympiad))
+                }
+                val totalPages = if (filtered.isEmpty()) 0 else (filtered.size + size - 1) / size
+                200 to JSONObject()
+                    .put(
+                        "page",
+                        JSONObject()
+                            .put("content", content)
+                            .put("totalElements", filtered.size)
+                            .put("totalPages", totalPages)
+                            .put("number", number)
+                            .put("size", size)
+                    )
+                    .put("hiddenTotal", filtered.size)
+            }
+
+            path == OLYMPIAD_BASE + "subjects" -> 200 to dictionary(OLYMPIAD_SUBJECTS)
+            path == OLYMPIAD_BASE + "parallels" -> 200 to dictionary(OLYMPIAD_PARALLELS)
+            path == OLYMPIAD_BASE + "contests/stages" -> 200 to dictionary(OLYMPIAD_STAGES)
+            path == OLYMPIAD_BASE + "contests/levels" -> 200 to dictionary(OLYMPIAD_LEVELS)
+
+            path.startsWith(OLYMPIAD_BASE + "contests/") -> {
+                val tail = path.removePrefix(OLYMPIAD_BASE + "contests/")
+                val id = tail.substringBefore('/')
+                val olympiad = OLYMPIADS.firstOrNull { it.id == id }
+                if (olympiad == null) {
+                    return 404 to JSONObject().put("message", "demo: unknown olympiad")
+                }
+                when {
+                    tail == id -> 200 to olympiadDetail(olympiad)
+                    tail.endsWith("/participant") -> 200 to JSONObject()
+                        .put("passingState", if (olympiad.mine) "REGISTERED" else "UNREGISTERED")
+                        .put("covered", olympiad.mine)
+                    tail.endsWith("/recommendation") -> {
+                        if (!olympiad.mine) {
+                            404 to JSONObject().put("message", "demo: no recommendation")
+                        } else {
+                            200 to JSONObject().put(
+                                "recommendation",
+                                "Демо-рекомендация: проверьте расписание и попробуйте пробный тур."
+                            )
+                        }
+                    }
+                    tail.endsWith("/result") -> 200 to olympiadResult(olympiad)
+                    else -> 404 to JSONObject().put("message", "demo: unknown olympiad path")
+                }
+            }
 
             else -> 404 to JSONObject().put("message", "demo: unknown path $path")
         }
+    }
+
+    // ---------------------------------------------------------- ОЛИМПИАДЫ ----
+
+    private fun dictionary(items: List<Pair<String, String>>): JSONObject {
+        val array = JSONArray()
+        items.forEach { (id, name) ->
+            array.put(JSONObject().put("id", id).put("name", name))
+        }
+        // Справочники в API — голый JSON-массив, а не объект.
+        return JSONObject().put(RAW_BODY, array.toString())
+    }
+
+    private fun stringArray(values: List<String>): JSONArray {
+        val array = JSONArray()
+        values.forEach { array.put(it) }
+        return array
+    }
+
+    private fun olympiadOverview(olympiad: DemoOlympiad): JSONObject =
+        JSONObject()
+            .put("id", JSONObject().put("value", olympiad.id))
+            .put("contestName", olympiad.name)
+            .put("startAt", olympiad.startAt)
+            .put("finishAt", olympiad.finishAt)
+            .put("statusCode", olympiad.status)
+            .put("parallelIds", stringArray(olympiad.parallelIds))
+            .put("subjectIds", stringArray(olympiad.subjectIds))
+            .put("stageCode", olympiad.stageCode)
+            .put("teamContest", olympiad.team)
+            .put("recommendationExists", olympiad.mine)
+
+    private fun olympiadDetail(olympiad: DemoOlympiad): JSONObject {
+        val previous = JSONObject()
+            .put("contestId", olympiad.id)
+            .put("name", "Предыдущий этап демо-олимпиады")
+            .put("subjects", JSONArray().put(JSONObject().put("id", "1").put("name", "Математика")))
+            .put("parallels", JSONArray().put(JSONObject().put("id", "7").put("name", "7 класс")))
+            .put("stage", JSONObject().put("id", "SCHOOL").put("name", "Школьный этап"))
+            .put("startedAt", "2025-11-15T10:00:00+03:00")
+            .put("rewards", JSONArray().put(JSONObject().put("id", "WINNER").put("name", "Победитель")))
+            .put("minRank", 1)
+            .put("minMark", 15.0)
+        return JSONObject()
+            .put("id", JSONObject().put("value", olympiad.id))
+            .put("contestName", olympiad.name)
+            .put("statusCode", olympiad.status)
+            .put(
+                "commonInfo",
+                JSONObject()
+                    .put("stageCode", olympiad.stageCode)
+                    .put("subjectIds", stringArray(olympiad.subjectIds))
+                    .put("levelCode", "1")
+                    .put(
+                        "coverage",
+                        JSONObject()
+                            .put("districtIds", JSONArray())
+                            .put("organizationIds", JSONArray())
+                    )
+            )
+            .put(
+                "participationInfo",
+                JSONObject()
+                    .put("parallelIds", stringArray(olympiad.parallelIds))
+                    .put("teamContest", olympiad.team)
+                    .put("startAt", olympiad.startAt)
+                    .put("finishAt", olympiad.finishAt)
+            )
+            .put(
+                "additionalInfo",
+                JSONObject()
+                    .put(
+                        "contestDescription",
+                        "{\"blocks\":[{\"type\":\"paragraph\",\"content\":\"Демо-описание олимпиады без реальных данных.\"},{\"type\":\"paragraph\",\"content\":\"Проверка отображения rich-text.\"}]}"
+                    )
+                    .put("testContests", JSONArray().put("https://example.org/demo-practice"))
+            )
+            .put("prevContestStages", JSONArray().put(previous))
+            .put("recommendationExists", olympiad.mine)
+            .put("teamContest", olympiad.team)
+    }
+
+    private fun olympiadResult(olympiad: DemoOlympiad): JSONObject {
+        if (!olympiad.hasResult) {
+            return JSONObject().put("hasResult", false)
+        }
+        return JSONObject()
+            .put("hasResult", true)
+            .put(
+                "resultModel",
+                JSONObject()
+                    .put("startedAt", olympiad.startAt)
+                    .put("finishedAt", olympiad.finishAt)
+                    .put(
+                        "score",
+                        JSONObject()
+                            .put("mark", 18.0)
+                            .put("markScale", 25.0)
+                            .put("passedCount", 7)
+                            .put("totalCount", 10)
+                            .put("partialPassedCount", 2)
+                            .put("wrongCount", 1)
+                    )
+                    .put("reward", JSONObject().put("code", "WINNER").put("name", "Победитель"))
+                    .put(
+                        "participationStatus",
+                        JSONObject()
+                            .put("code", "IN_COMPETITION")
+                            .put("name", "В основном зачёте")
+                            .put("justification", "Демо-статус участия")
+                    )
+                    .put("portfolioInfo", "Результат можно добавить в портфолио")
+            )
     }
 
     // ------------------------------------------------------------- ЦДЗ демо --

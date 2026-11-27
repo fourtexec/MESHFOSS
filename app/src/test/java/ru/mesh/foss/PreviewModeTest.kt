@@ -74,4 +74,23 @@ class PreviewModeTest {
         val menu = client.getFoodMenu(PreviewMockInterceptor.PREVIEW_PERSON_ID, today, today)
         assertTrue(menu.length() >= 1)
     }
+
+    @Test
+    fun previewClientReturnsOlympiadsOffline() {
+        val client = previewClient()
+
+        val overview = client.getOlympiadOverview(showParticipantContests = true)
+        assertTrue(overview.page.content.size >= 2)
+        assertEquals(
+            PreviewMockInterceptor.PREVIEW_OLYMPIAD_ID,
+            overview.page.content.first().resolvedContestId
+        )
+
+        val detail = client.getOlympiadDetail(PreviewMockInterceptor.PREVIEW_OLYMPIAD_PAST_ID)
+        assertEquals("Демо-олимпиада по информатике", detail.contestName)
+
+        val result = client.getOlympiadResult(PreviewMockInterceptor.PREVIEW_OLYMPIAD_PAST_ID)
+        assertTrue(result?.hasResult == true)
+        assertEquals(18.0, result?.resultModel?.score?.mark ?: 0.0, 0.001)
+    }
 }

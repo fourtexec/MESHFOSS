@@ -3203,6 +3203,279 @@ internal enum class Words(
         "Actualizado %s",
         "Actualisé %s"
     ),
+    Olympiads(
+        "Олимпиады",
+        "Olympiads",
+        "Olimpiák",
+        "Olimpiadas",
+        "Olympiades"
+    ),
+    MyOlympiads(
+        "Мои олимпиады",
+        "My olympiads",
+        "Saját olimpiáim",
+        "Mis olimpiadas",
+        "Mes olympiades"
+    ),
+    AllOlympiads(
+        "Все олимпиады",
+        "All olympiads",
+        "Minden olimpia",
+        "Todas las olimpiadas",
+        "Toutes les olympiades"
+    ),
+    OlympiadSearchHint(
+        "Название олимпиады",
+        "Olympiad name",
+        "Olimpia neve",
+        "Nombre de la olimpiada",
+        "Nom de l’olympiade"
+    ),
+    OlympiadSearch(
+        "Поиск",
+        "Search",
+        "Keresés",
+        "Buscar",
+        "Rechercher"
+    ),
+    OlympiadUpcoming(
+        "Предстоящее",
+        "Upcoming",
+        "Közelgő",
+        "Próxima",
+        "À venir"
+    ),
+    OlympiadRunning(
+        "Уже идёт",
+        "In progress",
+        "Folyamatban",
+        "En curso",
+        "En cours"
+    ),
+    OlympiadFinished(
+        "Завершена",
+        "Finished",
+        "Befejezett",
+        "Finalizada",
+        "Terminée"
+    ),
+    OlympiadAbout(
+        "Об олимпиаде",
+        "About the olympiad",
+        "Az olimpiáról",
+        "Sobre la olimpiada",
+        "À propos de l’olympiade"
+    ),
+    OlympiadResults(
+        "Результаты",
+        "Results",
+        "Eredmények",
+        "Resultados",
+        "Résultats"
+    ),
+    OlympiadMainInfo(
+        "Основные сведения",
+        "Main information",
+        "Fő információ",
+        "Información principal",
+        "Informations principales"
+    ),
+    OlympiadAdditionalInfo(
+        "Дополнительная информация",
+        "Additional information",
+        "További információ",
+        "Información adicional",
+        "Informations complémentaires"
+    ),
+    OlympiadDescription(
+        "Описание",
+        "Description",
+        "Leírás",
+        "Descripción",
+        "Description"
+    ),
+    OlympiadTestContests(
+        "Ссылки на пробные олимпиады",
+        "Practice olympiad links",
+        "Gyakorló olimpiák linkjei",
+        "Enlaces a olimpiadas de práctica",
+        "Liens vers les olympiades d’entraînement"
+    ),
+    OlympiadPreviousStages(
+        "Связанные предыдущие этапы",
+        "Related previous stages",
+        "Kapcsolódó korábbi szakaszok",
+        "Etapas anteriores relacionadas",
+        "Étapes précédentes associées"
+    ),
+    OlympiadSubject(
+        "Предмет",
+        "Subject",
+        "Tantárgy",
+        "Materia",
+        "Matière"
+    ),
+    OlympiadStage(
+        "Этап",
+        "Stage",
+        "Szakasz",
+        "Etapa",
+        "Étape"
+    ),
+    OlympiadLevel(
+        "Уровень",
+        "Level",
+        "Szint",
+        "Nivel",
+        "Niveau"
+    ),
+    OlympiadParticipationType(
+        "Тип участия",
+        "Participation type",
+        "Részvétel típusa",
+        "Tipo de participación",
+        "Type de participation"
+    ),
+    OlympiadTeam(
+        "Командное",
+        "Team",
+        "Csapatos",
+        "En equipo",
+        "Par équipe"
+    ),
+    OlympiadIndividual(
+        "Индивидуальное",
+        "Individual",
+        "Egyéni",
+        "Individual",
+        "Individuel"
+    ),
+    OlympiadDates(
+        "Сроки",
+        "Dates",
+        "Időpontok",
+        "Fechas",
+        "Dates"
+    ),
+    OlympiadNoResults(
+        "Результатов пока нет",
+        "No results yet",
+        "Még nincsenek eredmények",
+        "Aún no hay resultados",
+        "Pas encore de résultats"
+    ),
+    OlympiadScore(
+        "Результат",
+        "Score",
+        "Eredmény",
+        "Puntuación",
+        "Score"
+    ),
+    OlympiadReward(
+        "Награда",
+        "Award",
+        "Díj",
+        "Premio",
+        "Récompense"
+    ),
+    OlympiadParticipationStatus(
+        "Статус участия",
+        "Participation status",
+        "Részvételi állapot",
+        "Estado de participación",
+        "Statut de participation"
+    ),
+    OlympiadPortfolio(
+        "Публикация в портфолио",
+        "Portfolio publication",
+        "Portfólióban való közzététel",
+        "Publicación en el portafolio",
+        "Publication dans le portfolio"
+    ),
+    OlympiadPassed(
+        "Верно",
+        "Correct",
+        "Helyes",
+        "Correctas",
+        "Correct"
+    ),
+    OlympiadPartial(
+        "Частично верно",
+        "Partially correct",
+        "Részben helyes",
+        "Parcialmente correctas",
+        "Partiellement correct"
+    ),
+    OlympiadWrong(
+        "Неверно",
+        "Incorrect",
+        "Helytelen",
+        "Incorrectas",
+        "Incorrect"
+    ),
+    OlympiadShowMore(
+        "Показать ещё",
+        "Show more",
+        "Továbbiak",
+        "Mostrar más",
+        "Afficher plus"
+    ),
+    OlympiadEmpty(
+        "Олимпиад не найдено",
+        "No olympiads found",
+        "Nem található olimpia",
+        "No se encontraron olimpiadas",
+        "Aucune olympiade trouvée"
+    ),
+    OlympiadRecommendation(
+        "Рекомендация",
+        "Recommendation",
+        "Ajánlás",
+        "Recomendación",
+        "Recommandation"
+    ),
+    OlympiadFinalResults(
+        "Итоговые результаты",
+        "Final results",
+        "Végeredmények",
+        "Resultados finales",
+        "Résultats finaux"
+    ),
+    OlympiadPreliminaryResults(
+        "Предварительные результаты",
+        "Preliminary results",
+        "Előzetes eredmények",
+        "Resultados preliminares",
+        "Résultats préliminaires"
+    ),
+    OlympiadDateTime(
+        "Дата и время прохождения",
+        "Date and time",
+        "Dátum és idő",
+        "Fecha y hora",
+        "Date et heure"
+    ),
+    OlympiadDetails(
+        "Подробнее",
+        "Details",
+        "Részletek",
+        "Detalles",
+        "Détails"
+    ),
+    OlympiadBack(
+        "К олимпиадам",
+        "Back to olympiads",
+        "Vissza az olimpiákhoz",
+        "Volver a las olimpiadas",
+        "Retour aux olympiades"
+    ),
+    OlympiadUnavailable(
+        "Олимпиада недоступна",
+        "Olympiad is unavailable",
+        "Az olimpia nem érhető el",
+        "La olimpiada no está disponible",
+        "L’olympiade est indisponible"
+    ),
     PreviewWithoutSignIn(
         "Предпросмотр без входа",
         "Preview without sign-in",
