@@ -1,6 +1,8 @@
 package ru.mesh.foss.feature.portfolio
 
 import ru.mesh.foss.core.DateText
+import ru.mesh.foss.data.model.PortfolioEvent
+import ru.mesh.foss.data.model.PortfolioReward
 import java.util.Locale
 
 /** Чистые преобразования данных портфолио — без Compose и Android. */
@@ -40,6 +42,31 @@ object PortfolioText {
             .mapNotNull { it.value?.trim()?.takeIf { value -> value.isNotEmpty() } }
             .distinct()
             .joinToString(", ")
+
+    /**
+     * Награда сама по себе часто называется просто «Победитель». Контекст
+     * («за что») берём из события, на которое указывает `entityId`.
+     */
+    fun rewardTitle(reward: PortfolioReward, event: PortfolioEvent?): String =
+        event?.name?.takeIf { it.isNotBlank() }
+            ?: reward.description?.takeIf { it.isNotBlank() }
+            ?: reward.name?.takeIf { it.isNotBlank() }
+            ?: reward.rewardType?.value.orEmpty()
+
+    fun rewardMeta(
+        reward: PortfolioReward,
+        event: PortfolioEvent?,
+        locale: Locale = Locale("ru"),
+    ): String {
+        val subject = subjectNames(event?.subjects)
+            .ifBlank { reward.category?.value.orEmpty() }
+        return listOfNotNull(
+            subject.takeIf { it.isNotBlank() },
+            event?.stageEvent?.takeIf { it.isNotBlank() },
+            reward.statusReward?.value?.takeIf { it.isNotBlank() },
+            reward.date?.let { date(it, locale) }?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
+    }
 
     fun initials(name: String?): String =
         name.orEmpty()

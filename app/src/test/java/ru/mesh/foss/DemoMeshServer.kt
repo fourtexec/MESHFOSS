@@ -955,7 +955,12 @@ class DemoMeshServer(
                         }
                         tail.endsWith("/result") -> 200 to olympiadResult(olympiad)
                         tail.endsWith("/url-details/link") -> 200 to JSONObject()
-                            .put("link", "https://example.org/demo-result")
+                            .put(
+                                "link",
+                                "https://school.mos.ru/api/launcher/v1/launch" +
+                                    "?activity_url=https%3A%2F%2Fuchebnik.mos.ru%2Fcontests" +
+                                    "%2Fchallenge%2F123456789%2Fattempt%2F987654321&role=student"
+                            )
                         else -> 404 to JSONObject().put("message", "demo: unknown olympiad path")
                     }
                 } else {
@@ -1070,7 +1075,7 @@ class DemoMeshServer(
         .put(
             JSONObject()
                 .put("id", 8001L)
-                .put("name", "Победитель школьного этапа")
+                .put("name", "Победитель")
                 .put("date", "2026-11-20")
                 .put("category", JSONObject().put("value", "Учеба"))
                 .put("statusReward", JSONObject().put("value", "Победитель"))

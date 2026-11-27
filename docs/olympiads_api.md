@@ -41,8 +41,11 @@
 `detailsUrl` не открывается в браузере. Приложение:
 
 1. делает авторизованный `GET` по `detailsUrl`;
-2. получает `{ "link": "https://uchebnik.mos.ru/contests/challenge/{challenge}/attempt/{attempt}" }`;
-3. извлекает `challenge` и `attempt`;
+2. получает `{ "link": "https://…" }`; это может быть как прямая страница
+   `uchebnik.mos.ru/contests/challenge/{challenge}/attempt/{attempt}`, так и
+   launcher-ссылка `school.mos.ru/api/launcher/v1/launch` с URL-encoded
+   `activity_url`;
+3. декодирует ссылку и извлекает `challenge` и `attempt`;
 4. читает результат через отдельный Retrofit-контракт
    `OlympiadAttemptApiService`:
 
@@ -124,9 +127,10 @@ GET https://uchebnik.mos.ru/webtests/contests/rest/secure/challenge/task/answers
 ```
 
 `detailsUrl` — не страница для браузера. Приложение делает по нему
-авторизованный `GET`, получает `{ "link": "https://…" }`, разбирает ID
-попытки и открывает результат нативно. Прямое открытие `detailsUrl`
-показывает JSON/ошибку API, а браузерная страница `link` не нужна.
+авторизованный `GET`, получает `{ "link": "https://…" }`, декодирует
+launcher-ссылку при необходимости, разбирает ID попытки и открывает
+результат нативно. Прямое открытие `detailsUrl` показывает JSON/ошибку API,
+а браузерная страница `link` не нужна.
 
 `/participant` также отдаёт `resultsPublicationInfoCode` и
 `checkResultsLink`. Код используется только для текста в пустой вкладке

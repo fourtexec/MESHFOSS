@@ -21,7 +21,8 @@ data class OlympiadAttemptData(
  * Загружает результат олимпиадной попытки по ссылке из `detailsUrl`.
  *
  * Ссылка сначала приходит из contest API, затем разворачивается в страницу
- * `uchebnik.mos.ru/contests/...`. Из неё берём ID и читаем JSON попытки.
+ * `uchebnik.mos.ru/contests/...` или launcher-ссылку с `activity_url`.
+ * Из неё берём ID и читаем JSON попытки.
  */
 interface OlympiadAttemptRepository {
     suspend fun load(link: String): OlympiadAttemptData
@@ -37,7 +38,10 @@ class UchebnikOlympiadAttemptRepository(
     override suspend fun load(link: String): OlympiadAttemptData = withContext(Dispatchers.IO) {
         val ids = OlympiadAttemptLink.parse(link)
             ?: throw IllegalArgumentException("bad olympiad details link")
-        val session = CdzNativeClient.fromSession(appContext, link)
+        // Для launcher-ссылки school.mos.ru Referer должен быть страницей
+        // uchebnik, иначе refresh/webtests могут ответить 401. Если ссылка
+        // уже прямая, сохраняем её query (registration/fetch).
+        val session = CdzNativeClient.fromSession(appContext, pageUrlFor(link, ids))
         val response = UchebnikContestClient(session).attempt(ids.challengeId, ids.attemptId)
 
         // Gson уже разобрал сетевой ответ. JSONObject здесь — только мост
@@ -155,4 +159,10 @@ class PreviewOlympiadAttemptRepository : OlympiadAttemptRepository {
         val tasks = parseResultTasks(payload)
         return OlympiadAttemptData(info = info, tasks = tasks)
     }
+}
+
+private fun pageUrlFor(link: String, ids: OlympiadAttemptIds): String {
+    val direct = link.contains("uchebnik.mos.ru/contests/challenge/", ignoreCase = true) ||
+        link.contains("uchebnik.mos.ru/exam/challenge/", ignoreCase = true)
+    return if (direct) link else ids.pageUrl
 }

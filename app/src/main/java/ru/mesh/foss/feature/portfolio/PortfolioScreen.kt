@@ -144,7 +144,12 @@ private fun PortfolioContent(
 
                 if (state.rewards.isNotEmpty()) {
                     item { PortfolioSectionTitle(Words.PortfolioRewards.text) }
-                    item { PortfolioRewardsCard(state.rewards) }
+                    item {
+                        PortfolioRewardsCard(
+                            rewards = state.rewards,
+                            events = state.events,
+                        )
+                    }
                 }
 
                 if (state.diagnostics.isNotEmpty()) {
@@ -557,36 +562,25 @@ private fun PortfolioEventRow(event: PortfolioEvent, rewards: List<PortfolioRewa
 }
 
 @Composable
-private fun PortfolioRewardsCard(rewards: List<PortfolioReward>) {
+private fun PortfolioRewardsCard(
+    rewards: List<PortfolioReward>,
+    events: List<PortfolioEvent>,
+) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val shown = if (showAll) rewards else rewards.take(6)
+    val eventsById = remember(events) {
+        events.mapNotNull { event ->
+            event.id?.toString()?.let { id -> id to event }
+        }.toMap()
+    }
     GlassCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             shown.forEachIndexed { index, reward ->
                 if (index > 0) HorizontalDivider(Modifier.padding(vertical = 7.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Text("🏆", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            reward.name.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        val meta = listOfNotNull(
-                            reward.category?.value?.takeIf { it.isNotBlank() },
-                            reward.statusReward?.value?.takeIf { it.isNotBlank() },
-                            reward.date?.let { PortfolioText.date(it, UiLanguage.locale) },
-                        ).joinToString(" · ")
-                        if (meta.isNotBlank()) {
-                            Text(
-                                meta,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+                PortfolioRewardRow(
+                    reward = reward,
+                    event = eventsById[reward.entityId],
+                )
             }
             if (rewards.size > 6) {
                 TextButton(onClick = { showAll = !showAll }) {
@@ -596,6 +590,46 @@ private fun PortfolioRewardsCard(rewards: List<PortfolioReward>) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PortfolioRewardRow(reward: PortfolioReward, event: PortfolioEvent?) {
+    val title = PortfolioText.rewardTitle(reward, event)
+    val meta = PortfolioText.rewardMeta(reward, event, UiLanguage.locale)
+    val badge = (reward.name ?: reward.rewardType?.value)?.takeIf { it.isNotBlank() }
+    val showBadge = event != null && badge != null && !badge.equals(title, ignoreCase = true)
+    Row(verticalAlignment = Alignment.Top) {
+        Text("🏆", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (showBadge && badge != null) {
+                Spacer(Modifier.height(4.dp))
+                PortfolioBadge(badge)
+            }
+            if (meta.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        PortfolioText.score(event?.result, event?.maxScore)?.let { score ->
+            Spacer(Modifier.width(8.dp))
+            Text(
+                score,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+            )
         }
     }
 }

@@ -168,9 +168,16 @@ class OlympiadTest {
         assertEquals("Победитель", result.resultModel?.reward?.label)
         val detailsUrl = result.resultModel?.detailsUrl
         assertNotNull(detailsUrl)
+        val detailsLink = client.getOlympiadDetailsLink(detailsUrl!!)
         assertEquals(
-            "https://example.org/demo-result",
-            client.getOlympiadDetailsLink(detailsUrl!!),
+            "https://school.mos.ru/api/launcher/v1/launch" +
+                "?activity_url=https%3A%2F%2Fuchebnik.mos.ru%2Fcontests" +
+                "%2Fchallenge%2F123456789%2Fattempt%2F987654321&role=student",
+            detailsLink,
+        )
+        assertEquals(
+            OlympiadAttemptIds(challengeId = 123456789L, attemptId = 987654321L),
+            OlympiadAttemptLink.parse(detailsLink),
         )
 
         assertNotNull(client.getOlympiadRecommendation(DemoMeshServer.DEMO_OLYMPIAD_ID))
@@ -191,6 +198,28 @@ class OlympiadTest {
             OlympiadAttemptLink.parse(
                 "https://uchebnik.mos.ru/exam/challenge/123456789/attempt/987654321"
             ),
+        )
+        assertEquals(
+            OlympiadAttemptIds(challengeId = 123456789L, attemptId = 987654321L),
+            OlympiadAttemptLink.parse(
+                "https://school.mos.ru/api/launcher/v1/launch" +
+                    "?activity_url=https%3A%2F%2Fuchebnik.mos.ru%2Fcontests%2Fchallenge" +
+                    "%2F123456789%2Fattempt%2F987654321&role=student"
+            ),
+        )
+        assertEquals(
+            OlympiadAttemptIds(challengeId = 123456789L, attemptId = 987654321L),
+            OlympiadAttemptLink.parse(
+                "https://uchebnik.mos.ru/launcher/api/v1/launch" +
+                    "?activityId=https%253A%252F%252Fuchebnik.mos.ru%252Fcontests" +
+                    "%252Fchallenge%252F123456789%252Fattempt%252F987654321"
+            ),
+        )
+        assertEquals(
+            "https://uchebnik.mos.ru/contests/challenge/123456789/attempt/987654321",
+            OlympiadAttemptLink.parse(
+                "https://uchebnik.mos.ru/contests/challenge/123456789/attempt/987654321"
+            )?.pageUrl,
         )
         assertNull(OlympiadAttemptLink.parse("https://example.org/demo-result"))
     }

@@ -700,7 +700,7 @@ internal class PreviewMockInterceptor : Interceptor {
     private fun previewPortfolioRewards(): List<Map<String, Any>> = listOf(
         mapOf(
             "id" to 8001L,
-            "name" to "Победитель школьного этапа",
+            "name" to "Победитель",
             "date" to "2026-11-20",
             "category" to mapOf("value" to "Учеба"),
             "statusReward" to mapOf("value" to "Победитель"),
@@ -708,7 +708,7 @@ internal class PreviewMockInterceptor : Interceptor {
         ),
         mapOf(
             "id" to 8002L,
-            "name" to "Призёр школьного этапа",
+            "name" to "Призёр",
             "date" to "2026-11-19",
             "category" to mapOf("value" to "Учеба"),
             "statusReward" to mapOf("value" to "Призёр"),

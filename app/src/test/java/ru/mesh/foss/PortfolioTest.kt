@@ -11,6 +11,7 @@ import org.junit.Test
 import ru.mesh.foss.data.MeshClient
 import ru.mesh.foss.data.model.PortfolioDiagnosticYear
 import ru.mesh.foss.data.model.PortfolioEventsResponse
+import ru.mesh.foss.data.model.PortfolioRewardsResponse
 import ru.mesh.foss.feature.portfolio.PortfolioText
 import java.util.Locale
 
@@ -60,6 +61,13 @@ class PortfolioTest {
         val rewards = client.getPortfolioRewards(DemoMeshServer.UUID_ME)
         assertEquals(1, rewards.size)
         assertEquals("7001", rewards.first().entityId)
+        assertEquals(
+            "Школьный этап по математике, 7 класс",
+            PortfolioText.rewardTitle(
+                rewards.first(),
+                events.firstOrNull { it.id?.toString() == rewards.first().entityId },
+            ),
+        )
 
         val finalMarks = client.getPortfolioFinalMarks(DemoMeshServer.UUID_ME)
         assertEquals(1, finalMarks.size)
@@ -147,5 +155,45 @@ class PortfolioTest {
         assertEquals("Призёр", PortfolioText.score("Призёр", null))
         assertEquals("ДП", PortfolioText.initials("Демидов Пётр Алексеевич"))
         assertEquals("10.12.2026", PortfolioText.date("2026-12-10", Locale("ru")))
+    }
+
+    @Test
+    fun `portfolio reward gets context from linked event`() {
+        val gson = GsonBuilder().setLenient().create()
+        val event = gson.fromJson(
+            """
+            {
+              "data": [{
+                "id": 7001,
+                "name": "Школьный этап ВсОШ по математике, 7 класс",
+                "stageEvent": "Школьный этап",
+                "result": "48.0",
+                "maxScore": 50.0,
+                "subjects": [{"value": "Математика"}]
+              }]
+            }
+            """.trimIndent(),
+            PortfolioEventsResponse::class.java,
+        ).data!!.first()
+        val reward = gson.fromJson(
+            """
+            {
+              "data": [{
+                "name": "Победитель",
+                "date": "2026-11-20",
+                "statusReward": {"value": "Разовая награда"},
+                "entityId": "7001"
+              }]
+            }
+            """.trimIndent(),
+            PortfolioRewardsResponse::class.java,
+        ).data!!.first()
+
+        assertEquals("Школьный этап ВсОШ по математике, 7 класс", PortfolioText.rewardTitle(reward, event))
+        assertEquals(
+            "Математика · Школьный этап · Разовая награда · 20.11.2026",
+            PortfolioText.rewardMeta(reward, event, Locale("ru")),
+        )
+        assertEquals("Победитель", PortfolioText.rewardTitle(reward, null))
     }
 }
