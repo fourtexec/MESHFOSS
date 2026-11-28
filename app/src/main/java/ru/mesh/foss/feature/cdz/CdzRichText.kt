@@ -19,11 +19,13 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.em
 
-/** Место для интерактивного пропуска внутри текста. */
+/** Место для интерактивного пропуска или формулы внутри текста. */
 data class CdzInlinePlaceholder(
     val position: Int,
     val id: String,
     val alternateText: String,
+    /** Если задано, вместо ответа рисуется нативная формула (корень/дробь). */
+    val math: CdzMathNode? = null,
 )
 
 /**
@@ -77,27 +79,31 @@ private fun appendStyledSegment(
 
 private fun cdzSpanStyle(tokens: Set<String>): SpanStyle {
     var style = SpanStyle()
-    if ("BOLD" in tokens) style = style.copy(fontWeight = FontWeight.Bold)
-    if ("ITALIC" in tokens) style = style.copy(fontStyle = FontStyle.Italic)
-    if ("CODE" in tokens || "MONOSPACE" in tokens) {
+    if (tokens.any { it in cdzBoldTokens }) style = style.copy(fontWeight = FontWeight.Bold)
+    if (tokens.any { it in cdzItalicTokens }) style = style.copy(fontStyle = FontStyle.Italic)
+    if (tokens.any { it in cdzCodeTokens }) {
         style = style.copy(fontFamily = FontFamily.Monospace)
     }
 
     val decorations = buildList {
-        if ("UNDERLINE" in tokens) add(TextDecoration.Underline)
-        if ("STRIKETHROUGH" in tokens || "STRIKE" in tokens) add(TextDecoration.LineThrough)
+        if (tokens.any { it in cdzUnderlineTokens }) add(TextDecoration.Underline)
+        if (tokens.any { it in cdzStrikeTokens }) add(TextDecoration.LineThrough)
+        if (tokens.any { it in cdzOverlineTokens }) add(TextDecoration.Overline)
     }
     if (decorations.isNotEmpty()) {
         style = style.copy(textDecoration = TextDecoration.combine(decorations))
     }
 
-    if ("SUB" in tokens) {
+    // В олимпиадных payload'ах встречается SUPER/SUBSCRIPT, а не только
+    // короткие SUP/SUB. Без алиасов кириллические индексы рисовались
+    // обычным размером на базовой линии.
+    if (tokens.any { it in cdzSubTokens }) {
         style = style.copy(
             baselineShift = BaselineShift.Subscript,
             fontSize = 0.78.em,
         )
     }
-    if ("SUP" in tokens) {
+    if (tokens.any { it in cdzSupTokens }) {
         style = style.copy(
             baselineShift = BaselineShift.Superscript,
             fontSize = 0.78.em,
@@ -105,6 +111,15 @@ private fun cdzSpanStyle(tokens: Set<String>): SpanStyle {
     }
     return style
 }
+
+private val cdzBoldTokens = setOf("BOLD", "STRONG", "BF")
+private val cdzItalicTokens = setOf("ITALIC", "EM", "EMPHASIS", "IT")
+private val cdzCodeTokens = setOf("CODE", "MONOSPACE", "TT")
+private val cdzUnderlineTokens = setOf("UNDERLINE", "U")
+private val cdzStrikeTokens = setOf("STRIKETHROUGH", "STRIKE", "S")
+private val cdzOverlineTokens = setOf("OVERLINE")
+private val cdzSubTokens = setOf("SUB", "SUBSCRIPT", "LOWER", "INFERIOR")
+private val cdzSupTokens = setOf("SUP", "SUPER", "SUPERSCRIPT", "UPPER", "SUPERIOR")
 
 /**
  * Текст задания с сохранением форматирования API.

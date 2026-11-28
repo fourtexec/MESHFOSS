@@ -7,6 +7,8 @@ package ru.mesh.foss.feature.cdz
 
 import ru.mesh.foss.core.MeshCdz
 import ru.mesh.foss.core.Words
+import ru.mesh.foss.feature.olympiads.ProgrammingResultContent
+import ru.mesh.foss.feature.olympiads.ProgrammingResultData
 import ru.mesh.foss.ui.Design
 import ru.mesh.foss.ui.GlassButton
 import ru.mesh.foss.ui.GlassCard
@@ -78,6 +80,7 @@ fun CdzAttemptResultScreen(
     onClose: () -> Unit,
     onRetry: () -> Unit,
     title: String = Words.CdzResult.text,
+    programming: ProgrammingResultData? = null,
 ) {
     BackHandler(onBack = onClose)
 
@@ -113,8 +116,8 @@ fun CdzAttemptResultScreen(
         ) {
             val motion = MaterialTheme.motionScheme
             val phase = when {
-                loading && info == null -> ResultPhase.Loading
-                error != null && info == null -> ResultPhase.Error
+                loading && info == null && programming == null -> ResultPhase.Loading
+                error != null && info == null && programming == null -> ResultPhase.Error
                 else -> ResultPhase.Content
             }
             AnimatedContent(
@@ -129,7 +132,11 @@ fun CdzAttemptResultScreen(
                         error = error.orEmpty(),
                         onRetry = onRetry,
                     )
-                    ResultPhase.Content -> ResultContent(info = info, tasks = tasks)
+                    ResultPhase.Content -> if (programming != null) {
+                        ProgrammingResultContent(data = programming)
+                    } else {
+                        ResultContent(info = info, tasks = tasks)
+                    }
                 }
             }
         }
@@ -182,16 +189,41 @@ private fun ResultContent(
     tasks: List<CdzResultTask>,
 ) {
     val summary = info ?: return
+    val contexts = remember(summary) { parseContextInfo(summary) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { ResultSummary(summary) }
+        itemsIndexed(contexts) { index, context ->
+            ResultContextCard(number = index + 1, context = context)
+        }
         itemsIndexed(tasks) { index, task ->
             ResultTaskCard(number = index + 1, task = task)
         }
         item { Spacer(Modifier.height(20.dp)) }
+    }
+}
+
+@Composable
+private fun ResultContextCard(
+    number: Int,
+    context: CdzContextInfo,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = context.caption.ifBlank { Words.OlympiadCommonInfo.text },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            CdzQuestionContent(context.elements)
+        }
     }
 }
 

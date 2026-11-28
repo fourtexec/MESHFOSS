@@ -118,6 +118,7 @@ fun OlympiadScreen(
         CdzAttemptResultScreen(
             info = attempt.info,
             tasks = attempt.tasks,
+            programming = attempt.programming,
             loading = attempt.loading,
             error = attempt.error,
             onClose = vm::closeAttempt,

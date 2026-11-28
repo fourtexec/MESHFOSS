@@ -1,5 +1,6 @@
 package ru.mesh.foss
 
+import ru.mesh.foss.feature.cdz.CdzHtmlBlock
 import ru.mesh.foss.feature.cdz.CdzInlineSelection
 import ru.mesh.foss.feature.cdz.cdzAtomicMediaType
 import ru.mesh.foss.feature.cdz.gapAnswers
@@ -12,7 +13,10 @@ import ru.mesh.foss.feature.cdz.inlineSelections
 import ru.mesh.foss.feature.cdz.inlineTextBlockStarts
 import ru.mesh.foss.feature.cdz.isInlineChoice
 import ru.mesh.foss.feature.cdz.mergeQuestionText
+import ru.mesh.foss.feature.cdz.parseCdzHtml
+import ru.mesh.foss.feature.cdz.parseContextInfo
 import ru.mesh.foss.feature.cdz.parseInlineChoices
+import ru.mesh.foss.feature.cdz.parseMath
 import ru.mesh.foss.feature.cdz.parseMathContent
 import ru.mesh.foss.feature.cdz.parseOptions
 import ru.mesh.foss.feature.cdz.parseTasks
@@ -79,6 +83,30 @@ class CdzRichTextTest {
     }
 
     @Test
+    fun `SUPER style uses draft block index after math insertion`() {
+        val content = JSONArray().put(
+            JSONObject()
+                .put("type", "content/math")
+                .put("position", 1)
+                .put("content", "x")
+        )
+        val styles = JSONArray().put(
+            JSONObject()
+                .put("text_block_index", 1)
+                .put("position", 0)
+                .put("offset", 2)
+                .put("content", JSONArray().put("SUPER"))
+        )
+
+        val merged = mergeQuestionText("abc", content, styles)
+        val span = merged.spans.single()
+
+        assertEquals("a x bc", merged.text)
+        assertEquals("bc", merged.text.substring(span.start, span.end))
+        assertEquals(setOf("SUPER"), span.tokens)
+    }
+
+    @Test
     fun `math content renders chemical subscripts`() {
         assertEquals("H₂S, SO₂", parseMathContent("{H_2S} , {SO_2}"))
         assertEquals(
@@ -86,6 +114,67 @@ class CdzRichTextTest {
             parseMathContent("{Na_2O} - {NO} - {B_2O_3}")
         )
         assertEquals("x² + H₂O", parseMathContent("x^{2} + H_2O"))
+    }
+
+    @Test
+    fun `math parser keeps cyrillic scripts as baseline spans`() {
+        val math = parseMath("p_{мат} + v_{М0}")
+
+        assertEquals("pмат + vМ0", math.text)
+        val subscripts = math.spans.filter { "SUB" in it.tokens }
+        assertEquals(
+            listOf("мат", "М0"),
+            subscripts.map { math.text.substring(it.start, it.end) },
+        )
+        assertTrue(math.inlines.isEmpty())
+    }
+
+    @Test
+    fun `html renderer skips hidden text and renders editor formulas`() {
+        val document = parseCdzHtml(
+            """
+            <p>Ответ: <span data-w-e-type="formula" data-value="x^2"></span></p>
+            <p data-w-e-type="invisibleText" style="font-size: 0px; color: white;">СЕКРЕТ</p>
+            """.trimIndent()
+        )
+        val text = document.blocks
+            .filterIsInstance<CdzHtmlBlock.Rich>()
+            .joinToString("\n") { it.content.text }
+            .trim()
+
+        assertEquals("Ответ: x²", text)
+    }
+
+    @Test
+    fun `context info keeps math inside the text block`() {
+        val result = JSONObject().put(
+            "groups_context_info",
+            JSONObject().put(
+                "0",
+                JSONObject()
+                    .put("caption", "Общее условие")
+                    .put(
+                        "content",
+                        JSONObject()
+                            .put("text", "Дано: ")
+                            .put(
+                                "content",
+                                JSONArray().put(
+                                    JSONObject()
+                                        .put("type", "content/math")
+                                        .put("position", 6)
+                                        .put("content", "v_{М0}")
+                                )
+                            )
+                    )
+            )
+        )
+
+        val contexts = parseContextInfo(result)
+        assertEquals(1, contexts.size)
+        assertEquals("Общее условие", contexts.single().caption)
+        val textBlock = contexts.single().elements.getJSONObject(0)
+        assertEquals(1, textBlock.getJSONArray("content").length())
     }
 
     @Test

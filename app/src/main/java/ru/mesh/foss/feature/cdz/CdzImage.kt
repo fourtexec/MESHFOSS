@@ -46,12 +46,13 @@ fun CdzRemoteImage(
     url: String,
     description: String,
     modifier: Modifier = Modifier,
+    referer: String = "https://uchebnik.mos.ru/",
 ) {
     if (url.isBlank()) return
     var bitmap by remember(url) { mutableStateOf(CdzImageCache.bitmaps.get(url)) }
     var failed by remember(url) { mutableStateOf(false) }
 
-    LaunchedEffect(url) {
+    LaunchedEffect(url, referer) {
         if (bitmap != null) return@LaunchedEffect
         val loaded = withContext(Dispatchers.IO) {
             runCatching {
@@ -63,7 +64,7 @@ fun CdzRemoteImage(
                     "User-Agent",
                     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/147.0 Mobile Safari/537.36"
                 )
-                connection.setRequestProperty("Referer", "https://uchebnik.mos.ru/")
+                connection.setRequestProperty("Referer", referer)
                 CookieManager.getInstance().getCookie(url)
                     ?.takeIf { it.isNotBlank() }
                     ?.let { cookies -> connection.setRequestProperty("Cookie", cookies) }

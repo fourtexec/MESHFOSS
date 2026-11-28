@@ -8,13 +8,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import ru.mesh.foss.data.CdzNativeClient
 import ru.mesh.foss.data.UchebnikContestClient
+import ru.mesh.foss.data.VrlabsResultClient
 import ru.mesh.foss.feature.cdz.CdzResultTask
 import ru.mesh.foss.feature.cdz.parseResultTasks
 
 /** Готовый нативный результат попытки: сводка и задания. */
 data class OlympiadAttemptData(
-    val info: JSONObject,
+    val info: JSONObject?,
     val tasks: List<CdzResultTask>,
+    val programming: ProgrammingResultData? = null,
 )
 
 /**
@@ -36,6 +38,20 @@ class UchebnikOlympiadAttemptRepository(
     private val gson = Gson()
 
     override suspend fun load(link: String): OlympiadAttemptData = withContext(Dispatchers.IO) {
+        val programming = ProgrammingOlympiadLink.parse(link)
+        if (programming != null) {
+            val session = CdzNativeClient.fromSession(appContext, programming.pageUrl)
+            val payload = VrlabsResultClient(session).load(
+                competitionId = programming.competitionId,
+                assignmentId = programming.assignmentId,
+                pageUrl = programming.pageUrl,
+            )
+            return@withContext OlympiadAttemptData(
+                info = null,
+                tasks = emptyList(),
+                programming = payload.toResultData(),
+            )
+        }
         val ids = OlympiadAttemptLink.parse(link)
             ?: throw IllegalArgumentException("bad olympiad details link")
         // Для launcher-ссылки school.mos.ru Referer должен быть страницей

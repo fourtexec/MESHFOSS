@@ -63,18 +63,15 @@ internal fun CdzQuestionBlock(
         return
     }
     if (type.startsWith("content/math") || block.optString("atomic_type") == "math") {
-        val math = parseMathContent(
+        val math = parseMathNodes(
             block.optString("content").ifBlank { block.optString("text") }
         )
-        if (math.isNotBlank()) {
-            CdzRichText(
-                text = math,
-                spans = emptyList(),
-                modifier = modifier,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        CdzMathInline(
+            node = math,
+            modifier = modifier,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         return
     }
 
@@ -88,19 +85,36 @@ internal fun CdzQuestionBlock(
         val measurer = rememberTextMeasurer()
         val labelStyle = MaterialTheme.typography.bodyLarge
         val inlineContent = merged.placeholders.associate { placeholder ->
+            val math = placeholder.math
             placeholder.id to InlineTextContent(
                 placeholder = Placeholder(
-                    width = inlinePlaceholderWidth(
-                        label = placeholder.alternateText,
-                        style = labelStyle,
-                        measurer = measurer,
-                        density = density,
-                    ),
-                    height = 1.5.em,
+                    width = if (math != null) {
+                        mathPlaceholderWidthEm(math).em
+                    } else {
+                        inlinePlaceholderWidth(
+                            label = placeholder.alternateText,
+                            style = labelStyle,
+                            measurer = measurer,
+                            density = density,
+                        )
+                    },
+                    height = if (math != null) {
+                        mathPlaceholderHeightEm(math).em
+                    } else {
+                        1.5.em
+                    },
                     placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
                 ),
             ) {
-                CdzInlineAnswer(placeholder.alternateText)
+                if (math != null) {
+                    CdzMathInline(
+                        node = math,
+                        style = labelStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                } else {
+                    CdzInlineAnswer(placeholder.alternateText)
+                }
             }
         }
         CdzRichText(

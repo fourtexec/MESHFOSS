@@ -72,9 +72,24 @@ GET https://uchebnik.mos.ru/webtests/contests/rest/secure/challenge/task/answers
 а затем все `content/math`, формулы уедут в конец задания. Чистый парсер
 `mergeQuestionText` вставляет их в `position`, добавляет пробелы на границе
 слова, убирает пробелы перед `.,;:!?` (кроме многоточия) и сдвигает
-`text_styles`. `parseMathContent` дополнительно переводит `\angle`, `\prime`,
-`\leq`/`\geq`, `\neq` и другие команды в Unicode-символы, чтобы в результате
-не оставался сырой LaTeX.
+`text_styles`.
+
+`parseMath`/`CdzMathInline` разбирают вложенные `\frac`, `\sqrt`, `\text`,
+`\mathbf`, `\mathit`, `\overline`, `\underline`, степени и индексы. Дроби и
+корни рисуются как Compose-контент, а не как `√(...)`. Простые односимвольные
+степени (`x^3`) остаются Unicode-символами для компактности, но произвольные
+индексы, включая кириллицу (`p_{мат}`, `v_{М0}`), получают
+`BaselineShift.Subscript`/`Superscript` и не теряют размер.
+
+`text_styles.text_block_index` считается по неатомарным блокам Draft.js:
+`content/math` и пропуски вставляются как atomic-блоки. Поэтому стили
+применяются к исходным координатам с учётом вставок; `SUPER`, `SUB`,
+`SUBSCRIPT`, `SUPERSCRIPT` и родственные алиасы нормализуются.
+
+`groups_context_info` — общее условие группы. Объект с ключом группы содержит
+`caption` и `content` (`text`, `content[]`, `text_styles`). Приложение
+показывает его отдельной карточкой перед заданиями; формулы и изображения
+внутри `content[]` вставляются в текст по `position`, а не дублируются.
 
 ### Ответы с пропусками
 
@@ -196,6 +211,45 @@ launcher-ссылку при необходимости, разбирает ID �
 `checkResultsLink`. Код используется только для текста в пустой вкладке
 результатов; `checkResultsLink` показывается кнопкой «Проверить баллы»,
 когда результаты ещё не загружены в МЭШ.
+
+## Программистские олимпиады (`vrlabs/informatics`)
+
+Результат может вести не на `uchebnik`, а на
+`school.mos.ru/vrlabs/informatics/student/olympiad/competition/{competitionId}/participation/results/{assignmentId}`.
+Ссылка может быть завёрнута в launcher-ссылки; `ProgrammingOlympiadLink`
+декодирует её и достаёт `competitionId`/`assignmentId`.
+
+Чтение результата:
+
+- `GET vrlabs/informatics/api/olympiad/result-page/{competitionId}` — название,
+  описание, инструкция, лимит времени;
+- `GET vrlabs/informatics/api/pass-test/{assignmentId}/state` — статус,
+  баллы, дата завершения, `autoCheckResults`, список заданий;
+- `GET vrlabs/informatics/api/pass-test/{assignmentId}/task/{taskId}` —
+  описание задания, форматы ввода/вывода, примеры, `taskAssignment`.
+
+Контракт — Retrofit + Gson (`ProgrammingApiService`,
+`ProgrammingModels`). OAuth/cookie-обмен и launcher-редиректы используют
+OkHttp как протокольное исключение; это только авторизация и `GET`, без
+`start-attempt`, отправки ответов и `complete_attempt`.
+
+OAuth: `GET /v1/oauth/authorize` с cookie-сессией даёт callback с `code` и
+`state`, затем `POST /vrlabs/informatics/api/authentication/token` с
+`launchContext` возвращает Bearer-токен. Токен и cookie не логируются и не
+попадают в документ/аналитику.
+
+Описание задания — HTML или LaTeX (`descriptionFormat`). `CdzHtml` разбирает
+разрешённые теги (`p`, `div`, `span`, `br`, `li`, `ul`, `ol`, `img`,
+`center`, `legend`, `note`, `input-specification`, `output-specification`,
+`scoring`), формулы `$$$…$$$`, `\(...\)`, `\[...\]`, `$...$`, editor
+`data-w-e-type="formula"` и `math-tex`. Скрытые `invisibleText` с
+`font-size: 0`, белым цветом или `display:none` пропускаются вместе с
+вложенными формулами, чтобы не показывать prompt-injection текст.
+
+UI показывает сводку, общее описание/инструкцию, задания с вердиктом и
+баллами, примеры, ответ ученика (`answersB`) или исходный код
+(`taskAssignment.content`), комментарий учителя. Правильный ответ
+показывается, если сервер его отдал; иначе остаются вердикт и баллы.
 
 ## Ограничения
 

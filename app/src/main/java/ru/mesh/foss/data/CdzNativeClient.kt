@@ -139,7 +139,9 @@ class CdzNativeClient(
     fun updateCookie(name: String, value: String) {
         if (name.isNotBlank() && value.isNotBlank()) jar[name] = value
     }
+    fun persistCookiesNow() = persistCookies()
     fun currentToken(): String? = token
+    fun currentAccessToken(): String? = accessToken.takeIf { it.isNotBlank() }
     fun currentProfileId(): String? = profileId
     fun currentUserId(): String? = userId
     fun currentPersonId(): String? = personId

@@ -3315,6 +3315,97 @@ internal enum class Words(
         "Resultados",
         "Résultats"
     ),
+    OlympiadCommonInfo(
+        "Общее условие",
+        "General information",
+        "Általános feltétel",
+        "Información general",
+        "Informations générales"
+    ),
+    ProgrammingDescription(
+        "Условие",
+        "Statement",
+        "Feltétel",
+        "Enunciado",
+        "Énoncé"
+    ),
+    ProgrammingInstruction(
+        "Инструкция",
+        "Instruction",
+        "Utasítás",
+        "Instrucción",
+        "Consigne"
+    ),
+    ProgrammingInput(
+        "Входные данные",
+        "Input",
+        "Bemenet",
+        "Entrada",
+        "Entrée"
+    ),
+    ProgrammingOutput(
+        "Выходные данные",
+        "Output",
+        "Kimenet",
+        "Salida",
+        "Sortie"
+    ),
+    ProgrammingExamples(
+        "Примеры",
+        "Examples",
+        "Példák",
+        "Ejemplos",
+        "Exemples"
+    ),
+    ProgrammingExampleInput(
+        "Ввод",
+        "Input",
+        "Bemenet",
+        "Entrada",
+        "Entrée"
+    ),
+    ProgrammingExampleOutput(
+        "Вывод",
+        "Output",
+        "Kimenet",
+        "Salida",
+        "Sortie"
+    ),
+    ProgrammingSourceCode(
+        "Решение",
+        "Solution",
+        "Megoldás",
+        "Solución",
+        "Solution"
+    ),
+    ProgrammingAnswer(
+        "Ответ",
+        "Answer",
+        "Válasz",
+        "Respuesta",
+        "Réponse"
+    ),
+    ProgrammingTeacherComment(
+        "Комментарий учителя",
+        "Teacher comment",
+        "Tanári megjegyzés",
+        "Comentario del profesor",
+        "Commentaire du professeur"
+    ),
+    ProgrammingTimeLimit(
+        "Ограничение времени: %s",
+        "Time limit: %s",
+        "Időkorlát: %s",
+        "Límite de tiempo: %s",
+        "Limite de temps : %s"
+    ),
+    ProgrammingStatus(
+        "Статус: %s",
+        "Status: %s",
+        "Állapot: %s",
+        "Estado: %s",
+        "Statut : %s"
+    ),
     OlympiadMainInfo(
         "Основные сведения",
         "Main information",

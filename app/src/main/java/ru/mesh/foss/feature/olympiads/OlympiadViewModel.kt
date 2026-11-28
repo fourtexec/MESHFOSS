@@ -44,6 +44,7 @@ data class OlympiadAttemptState(
     val loading: Boolean = true,
     val info: JSONObject? = null,
     val tasks: List<CdzResultTask> = emptyList(),
+    val programming: ProgrammingResultData? = null,
     val error: String? = null,
 )
 
@@ -226,6 +227,7 @@ class OlympiadViewModel(
                                 loading = false,
                                 info = data.info,
                                 tasks = data.tasks,
+                                programming = data.programming,
                                 error = null,
                             )
                         )

@@ -11,13 +11,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import ru.mesh.foss.data.MeshClient
+import ru.mesh.foss.data.ProgrammingAttemptPayload
 import ru.mesh.foss.data.model.OlympiadAttemptResponse
 import ru.mesh.foss.data.model.OlympiadDetail
 import ru.mesh.foss.data.model.OlympiadDictionaries
 import ru.mesh.foss.data.model.OlympiadOverviewResponse
+import ru.mesh.foss.data.model.ProgrammingAnswerB
+import ru.mesh.foss.data.model.ProgrammingAutoCheck
+import ru.mesh.foss.data.model.ProgrammingResultPage
+import ru.mesh.foss.data.model.ProgrammingState
+import ru.mesh.foss.data.model.ProgrammingStateTask
+import ru.mesh.foss.data.model.ProgrammingStateTaskInfo
+import ru.mesh.foss.data.model.ProgrammingTask
+import ru.mesh.foss.data.model.ProgrammingTaskAssignment
 import ru.mesh.foss.feature.olympiads.OlympiadAttemptIds
 import ru.mesh.foss.feature.olympiads.OlympiadAttemptLink
 import ru.mesh.foss.feature.olympiads.OlympiadText
+import ru.mesh.foss.feature.olympiads.ProgrammingOlympiadLink
+import ru.mesh.foss.feature.olympiads.toResultData
 import java.util.Locale
 
 /** JVM-тесты контракта «Олимпиады»: Gson-модели, демо-сервер и чистый текст. */
@@ -257,6 +268,77 @@ class OlympiadTest {
             )?.pageUrl,
         )
         assertNull(OlympiadAttemptLink.parse("https://example.org/demo-result"))
+    }
+
+    @Test
+    fun `programming result link is parsed from direct and launcher urls`() {
+        val direct = "https://school.mos.ru/vrlabs/informatics/student/olympiad/" +
+            "competition/123/participation/results/456?activityId=789&role=student"
+        val parsed = ProgrammingOlympiadLink.parse(direct)
+
+        assertNotNull(parsed)
+        assertEquals(123L, parsed?.competitionId)
+        assertEquals(456L, parsed?.assignmentId)
+        assertEquals(direct, parsed?.pageUrl)
+
+        val launcher = "https://school.mos.ru/api/launcher/v1/launch" +
+            "?activity_url=https%3A%2F%2Fschool.mos.ru%2Fvrlabs%2Finformatics" +
+            "%2Fstudent%2Folympiad%2Fcompetition%2F123%2Fparticipation" +
+            "%2Fresults%2F456%3FactivityId%3D789"
+        assertEquals(parsed, ProgrammingOlympiadLink.parse(launcher))
+        assertNull(ProgrammingOlympiadLink.parse("https://example.org/result/1"))
+    }
+
+    @Test
+    fun `programming payload maps text answers and source code`() {
+        val payload = ProgrammingAttemptPayload(
+            resultPage = ProgrammingResultPage(name = "Олимпиада", maxPointsCount = 10.0),
+            state = ProgrammingState(
+                assignmentStatus = "ACCEPTED",
+                collectedPoint = 6.0,
+                maxPoint = 10.0,
+                autoCheckResults = ProgrammingAutoCheck(correct = 1, partCorrect = 1, notCorrect = 0),
+                tasks = listOf(
+                    ProgrammingStateTask(
+                        checkResult = "CORRECT",
+                        collectedPoint = 3.0,
+                        task = ProgrammingStateTaskInfo(id = 11L, name = "Тест", type = "B", order = 1, maxPoint = 5.0),
+                    ),
+                    ProgrammingStateTask(
+                        checkResult = "PART_CORRECT",
+                        collectedPoint = 3.0,
+                        task = ProgrammingStateTaskInfo(id = 12L, name = "Код", type = "C", order = 2, maxPoint = 5.0),
+                    ),
+                ),
+            ),
+            tasks = listOf(
+                ProgrammingTask(
+                    taskId = 11L,
+                    name = "Тест",
+                    type = "B",
+                    taskAssignment = ProgrammingTaskAssignment(
+                        answersB = listOf(ProgrammingAnswerB(answer = "ответ", order = 1)),
+                    ),
+                ),
+                ProgrammingTask(
+                    taskId = 12L,
+                    name = "Код",
+                    type = "C",
+                    taskAssignment = ProgrammingTaskAssignment(content = "print(1)"),
+                ),
+            ),
+        )
+
+        val data = payload.toResultData()
+
+        assertEquals("Олимпиада", data.title)
+        assertEquals(6.0, data.score)
+        assertEquals(10.0, data.maxScore)
+        assertEquals(1, data.correct)
+        assertEquals(1, data.partial)
+        assertEquals("ответ", data.tasks[0].answer)
+        assertEquals("print(1)", data.tasks[1].sourceCode)
+        assertNull(data.tasks[1].answer)
     }
 
     @Test

@@ -208,6 +208,55 @@ fun parseTasks(attempt: JSONObject): List<CdzTask> {
         }
 }
 
+/**
+ * Общее условие группы (`groups_context_info`).
+ *
+ * В олимпиадных попытках сервер выносит общий текст/формулы перед заданиями.
+ * Без этого блока задачи выглядят оторванными от условия.
+ */
+data class CdzContextInfo(
+    val caption: String,
+    val elements: JSONArray,
+)
+
+fun parseContextInfo(result: JSONObject): List<CdzContextInfo> {
+    val groups = result.optJSONObject("groups_context_info") ?: return emptyList()
+    return groups.keys().asSequence()
+        .sortedBy { it.toIntOrNull() ?: Int.MAX_VALUE }
+        .mapNotNull { key ->
+            val group = groups.optJSONObject(key) ?: return@mapNotNull null
+            val content = group.optJSONObject("content") ?: return@mapNotNull null
+            val elements = JSONArray()
+            val text = content.optString("text")
+            val items = content.optJSONArray("content") ?: JSONArray()
+            if (text.isNotBlank()) {
+                // Формулы/картинки уже лежат внутри `content`; текстовый блок
+                // сам вставит их по `position`, поэтому не дублируем их сверху.
+                elements.put(
+                    JSONObject()
+                        .put("type", "content/text")
+                        .put("text_id", "context_$key")
+                        .put("text", text)
+                        .put(
+                            "text_styles",
+                            content.optJSONArray("text_styles") ?: JSONArray(),
+                        )
+                        .put("content", items)
+                )
+            } else {
+                for (index in 0 until items.length()) {
+                    val item = items.optJSONObject(index) ?: continue
+                    elements.put(item)
+                }
+            }
+            if (elements.length() == 0) return@mapNotNull null
+            CdzContextInfo(
+                caption = group.optString("caption").trim(),
+                elements = elements,
+            )
+        }
+}
+
 /** Задание в уже завершённой попытке: результат, ответ ученика и фидбек. */
 data class CdzResultTask(
     val id: Long,
@@ -558,20 +607,27 @@ fun mergeQuestionText(
     gaps: List<CdzGapAnswer> = emptyList(),
 ): CdzMergedText {
     val inserts = mutableListOf<MergedInsertion>()
+    val contentPositions = mutableListOf<Int>()
     if (content != null) {
         for (index in 0 until content.length()) {
             val part = content.optJSONObject(index) ?: continue
+            val rawPosition = part.optInt("position", -1)
+            if (rawPosition >= 0) {
+                contentPositions += rawPosition.coerceIn(0, text.length)
+            }
             val type = part.optString("type").trim()
             val atomic = part.optString("atomic_type").trim()
             if (!type.startsWith("content/math") && atomic != "math") continue
-            val math = parseMathContent(
+            val math = parseMath(
                 part.optString("content").ifBlank { part.optString("text") }
             )
-            if (math.isBlank()) continue
-            val rawPosition = part.optInt("position", -1)
+            if (math.text.isBlank() && math.inlines.isEmpty()) continue
             val position = if (rawPosition < 0) text.length else rawPosition.coerceIn(0, text.length)
             inserts += MergedInsertion(position, order = index, math = math)
         }
+    }
+    val gapPositions = gaps.mapNotNull { gap ->
+        gap.position.takeIf { it >= 0 }?.coerceIn(0, text.length)
     }
     gaps.forEachIndexed { index, gap ->
         if (gap.position < 0) return@forEachIndexed
@@ -582,13 +638,20 @@ fun mergeQuestionText(
             gap = gap.copy(values = listOf(value)),
         )
     }
+
+    // Draft.js-индексы `text_block_index` считают только неатомарные
+    // текстовые блоки. Формулы и пропуски вставляются как atomic-блоки,
+    // поэтому для стилей нужно восстановить именно эту последовательность.
+    val blockPositions = contentPositions + gapPositions
+    val sourceSpans = parseTextSpansForContent(text, styles, blockPositions)
     if (inserts.isEmpty()) {
-        return normalizeMergedText(CdzMergedText(text, parseTextSpans(text, styles)))
+        return normalizeMergedText(CdzMergedText(text, sourceSpans))
     }
 
-    val out = StringBuilder(text.length + inserts.sumOf { (it.math?.length ?: 0) + 2 })
+    val out = StringBuilder(text.length + inserts.sumOf { (it.math?.text?.length ?: 0) + 2 })
     val inserted = mutableListOf<Pair<Int, Int>>()
     val placeholders = mutableListOf<CdzInlinePlaceholder>()
+    val mathSpans = mutableListOf<CdzTextSpan>()
     var cursor = 0
     // Пропуски идут перед формулой в той же точке: ответ должен остаться
     // после знака вопроса/слова, а формула — на своей исходной позиции.
@@ -605,10 +668,25 @@ fun mergeQuestionText(
                     alternateText = gap.values.firstOrNull().orEmpty().ifBlank { "—" },
                 )
             } else {
-                val math = insertion.math.orEmpty()
+                val math = insertion.math ?: return@forEach
                 val before = out.length
                 if (out.isNotEmpty() && needsSpaceBefore(out.last())) out.append(' ')
-                out.append(math)
+                val mathStart = out.length
+                out.append(math.text)
+                math.spans.forEach { span ->
+                    mathSpans += span.copy(
+                        start = mathStart + span.start,
+                        end = mathStart + span.end,
+                    )
+                }
+                math.inlines.forEachIndexed { inlineIndex, inline ->
+                    placeholders += CdzInlinePlaceholder(
+                        position = mathStart + inline.position,
+                        id = "math_${insertion.order}_$inlineIndex",
+                        alternateText = inline.alternateText,
+                        math = inline.node,
+                    )
+                }
                 val next = text.getOrNull(at)
                 if (next != null && needsSpaceAfter(next)) out.append(' ')
                 inserted += at to (out.length - before)
@@ -618,21 +696,129 @@ fun mergeQuestionText(
     if (cursor < text.length) out.append(text, cursor, text.length)
 
     val merged = out.toString()
-    val sourceSpans = parseTextSpans(text, styles)
-    val mappedSpans = if (sourceSpans.isEmpty()) emptyList() else sourceSpans.mapNotNull { span ->
+    val mappedSpans = sourceSpans.mapNotNull { span ->
         val start = mapMergedPosition(span.start, inserted, includeAtPosition = true)
         val end = mapMergedPosition(span.end, inserted, includeAtPosition = false)
         if (end > start) span.copy(start = start, end = end) else null
-    }
+    } + mathSpans
     return normalizeMergedText(CdzMergedText(merged, mappedSpans, placeholders))
 }
 
 private data class MergedInsertion(
     val position: Int,
     val order: Int,
-    val math: String? = null,
+    val math: CdzMathRender? = null,
     val gap: CdzGapAnswer? = null,
 )
+
+/**
+ * `text_styles` с учётом Draft.js-блоков.
+ *
+ * `content/math` и пропуски в вебе вставляются atomic-блоками. После этого
+ * `text_block_index` считается по списку только текстовых блоков, а не по
+ * исходной строке. Здесь восстанавливаем этот список и переводим локальную
+ * позицию стиля в координаты исходного текста.
+ */
+private fun parseTextSpansForContent(
+    text: String,
+    styles: JSONArray?,
+    positions: List<Int>,
+): List<CdzTextSpan> {
+    if (text.isEmpty() || styles == null) return emptyList()
+    val blocks = draftTextBlocks(text, positions)
+    val result = mutableListOf<CdzTextSpan>()
+    for (index in 0 until styles.length()) {
+        val style = styles.optJSONObject(index) ?: continue
+        val rawStart = style.optInt("position", -1)
+        if (rawStart < 0) continue
+        val blockIndex = style.optInt("text_block_index", -1)
+        val local = if (blockIndex >= 0) {
+            val block = blocks.getOrNull(blockIndex) ?: continue
+            val start = block.start + rawStart
+            val end = start + style.optInt("offset", 0)
+            val blockEnd = block.start + block.text.length
+            if (start in block.start..blockEnd && end >= start) {
+                start to end.coerceAtMost(blockEnd)
+            } else {
+                null
+            }
+        } else {
+            rawStart to rawStart + style.optInt("offset", 0)
+        } ?: continue
+
+        var start = local.first.coerceIn(0, text.length)
+        var end = local.second.coerceAtLeast(start).coerceIn(0, text.length)
+        while (start < end && text[start].isWhitespace()) start++
+        while (end > start && text[end - 1].isWhitespace()) end--
+        if (start >= end) continue
+        val tokens = styleTokens(style)
+        if (tokens.isNotEmpty()) result += CdzTextSpan(start, end, tokens)
+    }
+    return result
+}
+
+private data class DraftTextBlock(
+    val start: Int,
+    val text: String,
+    val atomic: Boolean = false,
+)
+
+/**
+ * Повторяет преобразование web-бандла: текст режется вставками на позициях,
+ * формулы/пропуски становятся atomic-блоками, а `\n` создаёт новый блок.
+ */
+private fun draftTextBlocks(text: String, positions: List<Int>): List<DraftTextBlock> {
+    val blocks = mutableListOf(DraftTextBlock(0, ""))
+    val byPosition = positions
+        .filter { it in 0..text.length }
+        .groupingBy { it }
+        .eachCount()
+    for (position in 0..text.length) {
+        val count = byPosition[position] ?: 0
+        repeat(count) { item ->
+            if (item > 0) blocks += DraftTextBlock(position, "")
+            blocks += DraftTextBlock(position, "", atomic = true)
+        }
+        val char = text.getOrNull(position)
+        val current = blocks.removeLastOrNull() ?: DraftTextBlock(position, "")
+        when {
+            char == '\n' -> {
+                blocks += current
+                blocks += DraftTextBlock(position + 1, "")
+                if (current.atomic) blocks += DraftTextBlock(position + 1, "")
+            }
+            current.atomic -> {
+                blocks += current
+                if (char != null) blocks += DraftTextBlock(position, char.toString())
+            }
+            char != null -> blocks += current.copy(text = current.text + char)
+            else -> {
+                blocks += current
+                if (current.atomic) blocks += DraftTextBlock(position, "")
+            }
+        }
+    }
+    return blocks.filterNot { it.atomic }
+}
+
+private fun styleTokens(style: JSONObject): Set<String> {
+    val tokens = linkedSetOf<String>()
+    val content = style.optJSONArray("content")
+    if (content != null) {
+        for (index in 0 until content.length()) {
+            content.optString(index).trim()
+                .takeIf { it.isNotBlank() }
+                ?.uppercase()
+                ?.let(tokens::add)
+        }
+    } else {
+        style.optString("content").trim()
+            .takeIf { it.isNotBlank() }
+            ?.uppercase()
+            ?.let(tokens::add)
+    }
+    return tokens
+}
 
 private fun needsSpaceBefore(char: Char): Boolean =
     char.isLetterOrDigit() || char in ",.;:!?)]}»”"
@@ -1229,7 +1415,7 @@ private fun trimmedStyledText(raw: String, styles: JSONArray?): CdzMergedText {
  * строки строится карта старых индексов в новые, чтобы не сломать `text_styles`.
  * Многоточие `...` не склеиваем: пробел перед ним может быть осмысленным.
  */
-private fun normalizeMergedText(merged: CdzMergedText): CdzMergedText {
+internal fun normalizeMergedText(merged: CdzMergedText): CdzMergedText {
     val source = merged.text
     if (source.isEmpty()) return merged
     val out = StringBuilder(source.length)
