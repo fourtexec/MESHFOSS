@@ -284,7 +284,7 @@ class OlympiadTest {
         val launcher = "https://school.mos.ru/api/launcher/v1/launch" +
             "?activity_url=https%3A%2F%2Fschool.mos.ru%2Fvrlabs%2Finformatics" +
             "%2Fstudent%2Folympiad%2Fcompetition%2F123%2Fparticipation" +
-            "%2Fresults%2F456%3FactivityId%3D789"
+            "%2Fresults%2F456%3FactivityId%3D789%26role%3Dstudent"
         assertEquals(parsed, ProgrammingOlympiadLink.parse(launcher))
         assertNull(ProgrammingOlympiadLink.parse("https://example.org/result/1"))
     }

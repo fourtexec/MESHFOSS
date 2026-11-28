@@ -183,9 +183,28 @@ private fun renderMath(root: CdzMathNode, inlineAsText: Boolean): CdzMathRender 
     appendNode(root)
     return CdzMathRender(
         text = text.toString().replace('\u200B', ' '),
-        spans = spans,
+        spans = mergeMathSpans(spans),
         inlines = inlines,
     )
+}
+
+/**
+ * Склеивает соседние куски с одинаковыми стилями.
+ *
+ * Парсер добавляет span на каждый `Text`-узел, поэтому индекс из нескольких
+ * символов (`p_{мат}`) иначе превращается в три отдельных span'а.
+ */
+private fun mergeMathSpans(spans: List<CdzTextSpan>): List<CdzTextSpan> {
+    val result = mutableListOf<CdzTextSpan>()
+    spans.forEach { span ->
+        val last = result.lastOrNull()
+        if (last != null && last.end == span.start && last.tokens == span.tokens) {
+            result[result.lastIndex] = last.copy(end = span.end)
+        } else {
+            result += span
+        }
+    }
+    return result
 }
 
 private fun simpleScriptText(node: CdzMathNode, superscript: Boolean): String? {
