@@ -178,7 +178,10 @@ class PreviewOlympiadAttemptRepository : OlympiadAttemptRepository {
 }
 
 private fun pageUrlFor(link: String, ids: OlympiadAttemptIds): String {
-    val direct = link.contains("uchebnik.mos.ru/contests/challenge/", ignoreCase = true) ||
-        link.contains("uchebnik.mos.ru/exam/challenge/", ignoreCase = true)
+    val uri = runCatching { java.net.URI(link.trim()) }.getOrNull()
+    val host = uri?.host.orEmpty().lowercase()
+    val path = uri?.path.orEmpty().lowercase()
+    val direct = (host == "uchebnik.mos.ru" || host.endsWith(".uchebnik.mos.ru")) &&
+        (path.startsWith("/contests/challenge/") || path.startsWith("/exam/challenge/"))
     return if (direct) link else ids.pageUrl
 }

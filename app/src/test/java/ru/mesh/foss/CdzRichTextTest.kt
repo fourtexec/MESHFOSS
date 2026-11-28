@@ -222,6 +222,7 @@ class CdzRichTextTest {
         assertEquals("x ≤ 5", parseMathContent("x \\leq 5"))
         assertEquals("1 × 1: 2", parseMathContent("1 \\times 1 : 2"))
         assertEquals("100%", parseMathContent("100\\%"))
+        assertEquals("{a} + {b}", parseMathContent("\\text{{a} + {b}}"))
     }
 
     @Test

@@ -60,12 +60,12 @@ fun ProgrammingAttemptPayload.toResultData(): ProgrammingResultData {
             answers.joinToString("\n").takeIf { it.isNotBlank() }
         }
         ProgrammingResultTask(
-            number = stateTask.task?.order ?: task?.order ?: (index + 1),
+            number = stateTask.task.order ?: task?.order ?: (index + 1),
             name = task?.name?.trim().orEmpty()
-                .ifBlank { stateTask.task?.name.orEmpty().trim() },
+                .ifBlank { stateTask.task.name.orEmpty().trim() },
             type = task?.type?.trim().orEmpty()
-                .ifBlank { stateTask.task?.type.orEmpty().trim() },
-            maxScore = stateTask.task?.maxPoint ?: task?.maxPoint,
+                .ifBlank { stateTask.task.type.orEmpty().trim() },
+            maxScore = stateTask.task.maxPoint ?: task?.maxPoint,
             score = stateTask.collectedPoint ?: assignment?.pointCount,
             checkResult = stateTask.checkResult ?: assignment?.checkResult,
             status = assignment?.status,

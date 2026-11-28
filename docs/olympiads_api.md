@@ -241,8 +241,9 @@ OAuth: `GET /v1/oauth/authorize` с cookie-сессией даёт callback с `
 Описание задания — HTML или LaTeX (`descriptionFormat`). `CdzHtml` разбирает
 разрешённые теги (`p`, `div`, `span`, `br`, `li`, `ul`, `ol`, `img`,
 `center`, `legend`, `note`, `input-specification`, `output-specification`,
-`scoring`), формулы `$$$…$$$`, `\(...\)`, `\[...\]`, `$...$`, editor
-`data-w-e-type="formula"` и `math-tex`. Скрытые `invisibleText` с
+`scoring`), формулы `$$$…$$$`, `\(...\)`, `\[...\]`, editor
+`data-w-e-type="formula"` и `math-tex`. Одиночный `$...$` остаётся текстом:
+в задачах он слишком часто оказывается валютой. Скрытые `invisibleText` с
 `font-size: 0`, белым цветом или `display:none` пропускаются вместе с
 вложенными формулами, чтобы не показывать prompt-injection текст.
 

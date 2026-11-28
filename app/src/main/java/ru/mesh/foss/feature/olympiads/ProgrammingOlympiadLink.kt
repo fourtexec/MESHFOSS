@@ -22,7 +22,7 @@ object ProgrammingOlympiadLink {
         """/vrlabs/informatics/student/olympiad/competition/(\d+)/participation/results/(\d+)(?:/|$)"""
     )
     private val URL_START = Regex("""https?://""", RegexOption.IGNORE_CASE)
-    private val TRAILING = charArrayOf(')', ']', ',', ';', '"', '\'')
+    private val TRAILING = charArrayOf(')', ']', ',', ';', '.', '"', '\'')
 
     /**
      * Разбирает прямую ссылку и launcher-обёртки.
@@ -77,19 +77,19 @@ object ProgrammingOlympiadLink {
      */
     private fun queryCandidates(rawQuery: String): List<String> {
         val values = mutableListOf<String>()
-        rawQuery.split('&').forEach { pair ->
-            val value = pair.substringAfter('=', "")
-            if (value.isNotBlank()) values += value
-        }
         listOf("activity_url", "activityId").forEach { key ->
             val marker = "$key="
             val start = rawQuery.indexOf(marker)
             if (start >= 0) {
                 val rest = rawQuery.substring(start + marker.length)
-                if ("://" in rest) values += rest
+                if ("://" in rest || "%3A%2F%2F" in rest.uppercase()) values += rest
             }
         }
-        return values
+        rawQuery.split('&').forEach { pair ->
+            val value = pair.substringAfter('=', "")
+            if (value.isNotBlank()) values += value
+        }
+        return values.distinct()
     }
 
     private fun parseDirect(value: String): ProgrammingOlympiadIds? {

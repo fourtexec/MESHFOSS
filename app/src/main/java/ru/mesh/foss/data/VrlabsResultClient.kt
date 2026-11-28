@@ -9,6 +9,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -44,6 +45,8 @@ class VrlabsResultClient(
         private const val SCHOOL = "https://school.mos.ru"
         private const val UA =
             "Mozilla/5.0 (X11; Linux x86_64; rv:160.0) Gecko/20100101 Firefox/160.0"
+        private val URL_IN_TEXT = Regex("""https?://[^"'\s<>]+""", RegexOption.IGNORE_CASE)
+        private val URL_TRAILING = charArrayOf(')', ']', ',', ';', '.', '"', '\'')
     }
 
     private val gson = GsonBuilder().setLenient().create()
@@ -76,6 +79,13 @@ class VrlabsResultClient(
         val headers = apiHeaders(resolvedPage, token)
         val state = api.state(assignmentId, headers)
         val resultPage = runCatching { api.resultPage(competitionId, headers) }.getOrNull()
+        val expectedTaskIds = state.tasks.orEmpty()
+            .mapNotNull { it.task?.id }
+            .distinct()
+        val expectedTaskCount = expectedTaskIds.size
+            .takeIf { it > 0 }
+            ?: resultPage?.taskCount
+            ?: 0
         val taskList = coroutineScope {
             state.tasks.orEmpty()
                 .sortedBy { it.task?.order ?: Int.MAX_VALUE }
@@ -88,35 +98,46 @@ class VrlabsResultClient(
                 .awaitAll()
                 .filterNotNull()
         }
+        if (expectedTaskCount > 0 && taskList.isEmpty()) {
+            throw IllegalStateException("vrlabs tasks unavailable")
+        }
         ProgrammingAttemptPayload(resultPage, state, taskList)
     }
 
     private suspend fun resolvePageUrl(pageUrl: String): String {
-        val clean = pageUrl.replace("&amp;", "&")
+        val clean = pageUrl.replace("&amp;", "&").trim()
         val parsed = clean.toHttpUrlOrNull() ?: return clean
-        if (parsed.queryParameter("activityId") != null &&
-            parsed.queryParameter("actor") != null &&
-            parsed.queryParameter("fetch") != null
-        ) {
-            return clean
-        }
-        val base = clean.substringBefore('?')
+        if (isVrlabsResult(clean)) return clean
+
+        val base = parsed.newBuilder()
+            .query(null)
+            .fragment(null)
+            .build()
+            .toString()
         val activity = URLEncoder.encode(base, "UTF-8")
         val schoolUrl = "$SCHOOL/api/launcher/v1/url?activity_url=$activity"
         val first = getText(schoolUrl, clean, auth = false)?.trim().orEmpty()
         if (first.isBlank()) return clean
-        if (first.contains("/vrlabs/informatics/student/olympiad/")) {
-            return first.substringBefore('\n').trim().replace("&amp;", "&")
+        directPageFromText(first)?.let { return it }
+
+        val launcher = httpUrlsIn(first).firstOrNull {
+            it.encodedPath.endsWith("/launcher/api/v1/launch") ||
+                it.encodedPath.endsWith("/launcher/api/v1/url")
+        } ?: return clean
+        val launchPath = launcher.encodedPath
+        val uchebnikUrl = when {
+            launchPath.endsWith("/launcher/api/v1/launch") ->
+                launcher.newBuilder()
+                    .encodedPath(launchPath.dropLast("launch".length) + "url")
+                    .build()
+                    .toString()
+            launchPath.endsWith("/launcher/api/v1/url") -> launcher.toString()
+            else -> return clean
         }
-        val uchebnikUrl = first.replace("/launcher/api/v1/launch", "/launcher/api/v1/url")
-        if (!uchebnikUrl.contains("/launcher/api/v1/url")) return clean
         session.refreshSession()
         val second = getText(uchebnikUrl, first, auth = true)?.trim().orEmpty()
         if (second.isBlank()) return clean
-        if (second.contains("/vrlabs/informatics/student/olympiad/")) {
-            return second.substringBefore('\n').trim().replace("&amp;", "&")
-        }
-        return directPageFromHtml(second) ?: clean
+        return directPageFromText(second) ?: clean
     }
 
     private suspend fun token(pageUrl: String, params: Map<String, String>): String {
@@ -247,10 +268,43 @@ class VrlabsResultClient(
         }
     }
 
-    private fun directPageFromHtml(html: String): String? =
-        Regex(
-            """https?://[^"'\s<>]*/vrlabs/informatics/student/olympiad/competition/\d+/participation/results/\d+[^"'\s<>]*"""
-        ).find(html)?.value?.replace("&amp;", "&")
+    private fun isVrlabsResult(url: String): Boolean {
+        val parsed = url.toHttpUrlOrNull() ?: return false
+        val path = parsed.encodedPath.lowercase()
+        return path.startsWith("/vrlabs/informatics/student/olympiad/competition/") &&
+            "/participation/results/" in path
+    }
+
+    private fun httpUrlsIn(text: String): List<HttpUrl> {
+        val decoded = text
+            .replace("&amp;", "&")
+            .replace("\\/", "/")
+        val result = mutableListOf<HttpUrl>()
+        decoded.trim().toHttpUrlOrNull()?.let(result::add)
+        URL_IN_TEXT.findAll(decoded).forEach { match ->
+            match.value.trimEnd(*URL_TRAILING).toHttpUrlOrNull()?.let(result::add)
+        }
+        return result.distinctBy { it.toString() }
+    }
+
+    /**
+     * Ищет прямую страницу результата в ответе launcher'а. Ответ может быть
+     * готовым URL, HTML/JSON с URL или вложенной launcher-ссылкой с
+     * `activity_url`/`activityId`.
+     */
+    private fun directPageFromText(text: String, depth: Int = 0): String? {
+        if (depth > 4) return null
+        httpUrlsIn(text).forEach { candidate ->
+            val candidateText = candidate.toString()
+            if (isVrlabsResult(candidateText)) return candidateText
+            listOf("activity_url", "activityId").forEach { key ->
+                candidate.queryParameter(key)?.let { nested ->
+                    directPageFromText(nested, depth + 1)?.let { return it }
+                }
+            }
+        }
+        return null
+    }
 
     private fun encode(value: String): String =
         URLEncoder.encode(value, "UTF-8")

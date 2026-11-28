@@ -411,12 +411,8 @@ private fun isHiddenAttrs(attrs: Map<String, String>): Boolean {
     val style = parseStyle(attrs["style"].orEmpty())
     if (style["display"]?.equals("none", ignoreCase = true) == true) return true
     if (style["visibility"]?.equals("hidden", ignoreCase = true) == true) return true
-    if (style["opacity"]?.toDoubleOrNull() == 0.0) return true
-
-    val fontSize = style["font-size"].orEmpty()
-        .removeSuffix("px").removeSuffix("em").removeSuffix("rem").removeSuffix("%")
-        .trim().toDoubleOrNull()
-    if (fontSize == 0.0) return true
+    if (cssNumber(style["opacity"].orEmpty()) == 0.0) return true
+    if (cssNumber(style["font-size"].orEmpty()) == 0.0) return true
 
     val color = style["color"].orEmpty().lowercase().replace(" ", "")
     return color == "white" ||
@@ -425,6 +421,14 @@ private fun isHiddenAttrs(attrs: Map<String, String>): Boolean {
         color == "rgb(255,255,255)" ||
         color == "rgba(255,255,255,1)" ||
         color == "rgba(255,255,255,1.0)"
+}
+
+/** Числовая часть CSS-значения: `0px`, `0.9em`, `0pt` → `0.0`, `0.9`, `0.0`. */
+private fun cssNumber(raw: String): Double? {
+    val value = raw.trim()
+    val end = value.indexOfFirst { !it.isDigit() && it != '.' && it != '-' && it != '+' }
+    val number = if (end < 0) value else value.substring(0, end)
+    return number.toDoubleOrNull()
 }
 
 private fun parseStyle(raw: String): Map<String, String> = raw

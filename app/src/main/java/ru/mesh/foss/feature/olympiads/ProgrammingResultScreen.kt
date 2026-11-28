@@ -84,8 +84,8 @@ private fun ProgrammingSummary(data: ProgrammingResultData) {
             if (data.score != null && data.maxScore != null) {
                 Text(
                     text = Words.CdzScore(
-                        formatProgrammingScore(data.score ?: 0.0),
-                        formatProgrammingScore(data.maxScore ?: 0.0),
+                        formatProgrammingScore(data.score),
+                        formatProgrammingScore(data.maxScore),
                     ),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.primary,
@@ -113,7 +113,7 @@ private fun ProgrammingSummary(data: ProgrammingResultData) {
             if (data.timeLimitSeconds != null && data.timeLimitSeconds > 0) {
                 Text(
                     text = Words.ProgrammingTimeLimit(
-                        formatProgrammingDuration(data.timeLimitSeconds ?: 0)
+                        formatProgrammingDuration(data.timeLimitSeconds)
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
