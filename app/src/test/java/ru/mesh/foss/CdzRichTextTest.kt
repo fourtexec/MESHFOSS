@@ -242,6 +242,48 @@ class CdzRichTextTest {
     }
 
     @Test
+    fun `gap answers are inserted into question text at raw positions`() {
+        val text = "Первый? Второй?"
+        val positions = JSONArray()
+            .put(
+                JSONObject()
+                    .put("position_id", "p1")
+                    .put("text_id", "t1")
+                    .put("position", 7)
+            )
+            .put(
+                JSONObject()
+                    .put("position_id", "p2")
+                    .put("text_id", "t1")
+                    .put("position", text.length)
+            )
+        val payload = JSONObject()
+            .put(
+                "text_input_answer",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("position_id", "p2")
+                            .put("input_strings", JSONArray().put("2,4"))
+                    )
+                    .put(
+                        JSONObject()
+                            .put("position_id", "p1")
+                            .put("input_strings", JSONArray().put("1000"))
+                    )
+            )
+
+        val gaps = gapAnswers(payload, positions)
+        val merged = mergeQuestionText(text, null, null, gaps)
+
+        assertEquals(text, merged.text)
+        assertEquals(listOf(7, text.length), merged.placeholders.map { it.position })
+        assertEquals(listOf("1000", "2,4"), merged.placeholders.map { it.alternateText })
+        assertEquals(listOf("p1", "p2"), gaps.map { it.positionId })
+        assertEquals(listOf("t1", "t1"), gaps.map { it.textId })
+    }
+
+    @Test
     fun `text answers keep all acceptable variants`() {
         val payload = JSONObject()
             .put("number", JSONArray().put("10").put("10.0"))

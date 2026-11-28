@@ -32,10 +32,19 @@ data class CdzTextSpan(
     val tokens: Set<String>,
 )
 
-/** Текст условия после вставки `content/math` в позиции `position`. */
+/** Текст условия после вставки `content/math` и ответов в позиции `position`. */
 data class CdzMergedText(
     val text: String,
     val spans: List<CdzTextSpan>,
+    /** Пропуски, которые нужно нарисовать inline внутри [text]. */
+    val placeholders: List<CdzInlinePlaceholder> = emptyList(),
+)
+
+/** Пропуск `answer/gap/text/input`: id, текстовый блок и позиция в нём. */
+data class CdzGapPosition(
+    val id: String,
+    val textId: String,
+    val position: Int,
 )
 
 /**
@@ -43,11 +52,15 @@ data class CdzMergedText(
  *
  * [index] — позиция в `answer.text_position`, а [values] — один или несколько
  * допустимых вариантов. У правильного ответа сервер часто присылает несколько
- * `input_strings` на один пропуск.
+ * `input_strings` на один пропуск. [textId] и [position] позволяют вставить
+ * ответ обратно в текст задания, как это делает веб-версия.
  */
 data class CdzGapAnswer(
     val index: Int,
     val values: List<String>,
+    val positionId: String = "",
+    val textId: String = "",
+    val position: Int = -1,
 )
 
 /** Позиция на фоновом изображении в `answer/gap/match/background/image/selection`. */
@@ -542,42 +555,66 @@ fun mergeQuestionText(
     text: String,
     content: JSONArray?,
     styles: JSONArray? = null,
+    gaps: List<CdzGapAnswer> = emptyList(),
 ): CdzMergedText {
-    if (content == null) {
-        return normalizeMergedText(CdzMergedText(text, parseTextSpans(text, styles)))
+    val inserts = mutableListOf<MergedInsertion>()
+    if (content != null) {
+        for (index in 0 until content.length()) {
+            val part = content.optJSONObject(index) ?: continue
+            val type = part.optString("type").trim()
+            val atomic = part.optString("atomic_type").trim()
+            if (!type.startsWith("content/math") && atomic != "math") continue
+            val math = parseMathContent(
+                part.optString("content").ifBlank { part.optString("text") }
+            )
+            if (math.isBlank()) continue
+            val rawPosition = part.optInt("position", -1)
+            val position = if (rawPosition < 0) text.length else rawPosition.coerceIn(0, text.length)
+            inserts += MergedInsertion(position, order = index, math = math)
+        }
     }
-    val inserts = mutableListOf<Pair<Int, String>>()
-    for (index in 0 until content.length()) {
-        val part = content.optJSONObject(index) ?: continue
-        val type = part.optString("type").trim()
-        val atomic = part.optString("atomic_type").trim()
-        if (!type.startsWith("content/math") && atomic != "math") continue
-        val math = parseMathContent(
-            part.optString("content").ifBlank { part.optString("text") }
+    gaps.forEachIndexed { index, gap ->
+        if (gap.position < 0) return@forEachIndexed
+        val value = gap.values.joinToString(" / ").trim().ifBlank { "—" }
+        inserts += MergedInsertion(
+            position = gap.position.coerceIn(0, text.length),
+            order = index,
+            gap = gap.copy(values = listOf(value)),
         )
-        if (math.isBlank()) continue
-        val rawPosition = part.optInt("position", -1)
-        val position = if (rawPosition < 0) text.length else rawPosition.coerceIn(0, text.length)
-        inserts += position to math
     }
     if (inserts.isEmpty()) {
         return normalizeMergedText(CdzMergedText(text, parseTextSpans(text, styles)))
     }
 
-    val out = StringBuilder(text.length + inserts.sumOf { it.second.length + 2 })
+    val out = StringBuilder(text.length + inserts.sumOf { (it.math?.length ?: 0) + 2 })
     val inserted = mutableListOf<Pair<Int, Int>>()
+    val placeholders = mutableListOf<CdzInlinePlaceholder>()
     var cursor = 0
-    inserts.sortedBy { it.first }.forEach { (rawPosition, math) ->
-        val at = rawPosition.coerceIn(cursor, text.length)
-        if (at > cursor) out.append(text, cursor, at)
-        val before = out.length
-        if (out.isNotEmpty() && needsSpaceBefore(out.last())) out.append(' ')
-        out.append(math)
-        val next = text.getOrNull(at)
-        if (next != null && needsSpaceAfter(next)) out.append(' ')
-        inserted += at to (out.length - before)
-        cursor = at
-    }
+    // Пропуски идут перед формулой в той же точке: ответ должен остаться
+    // после знака вопроса/слова, а формула — на своей исходной позиции.
+    inserts.sortedWith(compareBy<MergedInsertion>({ it.position }, { it.gap == null }, { it.order }))
+        .forEach { insertion ->
+            val at = insertion.position.coerceIn(cursor, text.length)
+            if (at > cursor) out.append(text, cursor, at)
+            val gap = insertion.gap
+            if (gap != null) {
+                val id = "gap_${gap.positionId.ifBlank { "answer_${placeholders.size}" }}"
+                placeholders += CdzInlinePlaceholder(
+                    position = out.length,
+                    id = id,
+                    alternateText = gap.values.firstOrNull().orEmpty().ifBlank { "—" },
+                )
+            } else {
+                val math = insertion.math.orEmpty()
+                val before = out.length
+                if (out.isNotEmpty() && needsSpaceBefore(out.last())) out.append(' ')
+                out.append(math)
+                val next = text.getOrNull(at)
+                if (next != null && needsSpaceAfter(next)) out.append(' ')
+                inserted += at to (out.length - before)
+            }
+            cursor = at
+        }
     if (cursor < text.length) out.append(text, cursor, text.length)
 
     val merged = out.toString()
@@ -587,8 +624,15 @@ fun mergeQuestionText(
         val end = mapMergedPosition(span.end, inserted, includeAtPosition = false)
         if (end > start) span.copy(start = start, end = end) else null
     }
-    return normalizeMergedText(CdzMergedText(merged, mappedSpans))
+    return normalizeMergedText(CdzMergedText(merged, mappedSpans, placeholders))
 }
+
+private data class MergedInsertion(
+    val position: Int,
+    val order: Int,
+    val math: String? = null,
+    val gap: CdzGapAnswer? = null,
+)
 
 private fun needsSpaceBefore(char: Char): Boolean =
     char.isLetterOrDigit() || char in ",.;:!?)]}»”"
@@ -1212,7 +1256,10 @@ private fun normalizeMergedText(merged: CdzMergedText): CdzMergedText {
         val end = map[span.end.coerceIn(0, source.length)]
         if (end > start) span.copy(start = start, end = end) else null
     }
-    return CdzMergedText(text, spans)
+    val placeholders = merged.placeholders.map { placeholder ->
+        placeholder.copy(position = map[placeholder.position.coerceIn(0, source.length)])
+    }
+    return CdzMergedText(text, spans, placeholders)
 }
 
 /** Обрезает уже склеенный текст с формулами, не теряя сдвинутые стили. */
@@ -1226,7 +1273,10 @@ private fun trimMergedText(merged: CdzMergedText): CdzMergedText {
         val end = (span.end - first).coerceIn(0, text.length)
         if (end > start) span.copy(start = start, end = end) else null
     }
-    return CdzMergedText(text, spans)
+    val placeholders = merged.placeholders.map { placeholder ->
+        placeholder.copy(position = (placeholder.position - first).coerceIn(0, text.length))
+    }
+    return CdzMergedText(text, spans, placeholders)
 }
 
 /** Пропуски `answer/inline/choice/single`. */
@@ -1380,16 +1430,26 @@ fun textAnswers(answer: JSONObject?): List<String> {
  * `text_input_answer` приходит в произвольном порядке, поэтому без сортировки
  * «Ваш ответ» и «Правильный ответ» выглядят перепутанными.
  */
+fun gapPositions(answer: JSONObject?): List<CdzGapPosition> =
+    gapPositions(answer?.optJSONArray("text_position"))
+
+fun gapPositions(positions: JSONArray?): List<CdzGapPosition> {
+    if (positions == null) return emptyList()
+    return (0 until positions.length()).mapNotNull { index ->
+        val position = positions.optJSONObject(index) ?: return@mapNotNull null
+        val id = position.optString("position_id").trim()
+        if (id.isBlank()) null else CdzGapPosition(
+            id = id,
+            textId = position.optString("text_id").trim(),
+            position = position.optInt("position", -1),
+        )
+    }
+}
+
 fun gapAnswers(answer: JSONObject?, positions: JSONArray?): List<CdzGapAnswer> {
     val items = answer?.optJSONArray("text_input_answer") ?: return emptyList()
-    val order = linkedMapOf<String, Int>()
-    if (positions != null) {
-        for (index in 0 until positions.length()) {
-            val positionId = positions.optJSONObject(index)
-                ?.optString("position_id").orEmpty().trim()
-            if (positionId.isNotBlank()) order[positionId] = index
-        }
-    }
+    val ordered = gapPositions(positions)
+    val order = ordered.withIndex().associate { (index, position) -> position.id to index }
 
     val grouped = linkedMapOf<String, LinkedHashSet<String>>()
     val extra = linkedMapOf<String, LinkedHashSet<String>>()
@@ -1413,9 +1473,13 @@ fun gapAnswers(answer: JSONObject?, positions: JSONArray?): List<CdzGapAnswer> {
 
     val result = mutableListOf<CdzGapAnswer>()
     order.forEach { (positionId, index) ->
+        val position = ordered[index]
         result += CdzGapAnswer(
             index = index,
             values = grouped[positionId]?.toList().orEmpty(),
+            positionId = positionId,
+            textId = position.textId,
+            position = position.position,
         )
     }
     var nextIndex = order.size

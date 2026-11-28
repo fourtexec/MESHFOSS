@@ -43,6 +43,9 @@ interface OlympiadApiService {
     @GET("contests/levels")
     fun levels(@HeaderMap headers: Map<String, String>): Call<List<OlympiadDictionaryItem>>
 
+    @GET("years")
+    fun years(@HeaderMap headers: Map<String, String>): Call<List<Int>>
+
     @GET("contests/{contestId}")
     fun detail(
         @Path("contestId") contestId: String,

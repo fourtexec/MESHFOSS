@@ -3133,6 +3133,13 @@ internal enum class Words(
         "Posiciones seleccionadas: %1\$s",
         "Positions sélectionnées : %1\$s"
     ),
+    CdzAnswersInText(
+        "Ответы отмечены в тексте задания",
+        "Answers are marked in the task text",
+        "A válaszok a feladat szövegében vannak jelölve",
+        "Las respuestas están marcadas en el texto de la tarea",
+        "Les réponses sont indiquées dans le texte de la tâche"
+    ),
     CdzCorrectAnswer(
         "Правильный ответ",
         "Correct answer",
@@ -3244,6 +3251,34 @@ internal enum class Words(
         "Keresés",
         "Buscar",
         "Rechercher"
+    ),
+    OlympiadFilters(
+        "Фильтры",
+        "Filters",
+        "Szűrők",
+        "Filtros",
+        "Filtres"
+    ),
+    OlympiadApply(
+        "Применить",
+        "Apply",
+        "Alkalmaz",
+        "Aplicar",
+        "Appliquer"
+    ),
+    OlympiadReset(
+        "Сбросить",
+        "Reset",
+        "Visszaállítás",
+        "Restablecer",
+        "Réinitialiser"
+    ),
+    OlympiadParallel(
+        "Параллель",
+        "Parallel",
+        "Párhuzamos",
+        "Paralelo",
+        "Parallèle"
     ),
     OlympiadUpcoming(
         "Предстоящее",
@@ -3426,6 +3461,13 @@ internal enum class Words(
         "Részvételi állapot",
         "Estado de participación",
         "Statut de participation"
+    ),
+    OlympiadStatus(
+        "Статус",
+        "Status",
+        "Állapot",
+        "Estado",
+        "Statut"
     ),
     OlympiadPortfolio(
         "Публикация в портфолио",

@@ -937,11 +937,25 @@ class MeshClient(
         searchString: String = "",
         page: Int = 0,
         size: Int = 20,
+        subjectIds: List<String> = emptyList(),
+        stageCodes: List<String> = emptyList(),
+        parallelIds: List<String> = emptyList(),
+        years: List<Int>? = null,
+        includeCurrent: Boolean = true,
+        includeFuture: Boolean = true,
+        includeCompleted: Boolean = true,
     ): OlympiadOverviewResponse {
         val request = OlympiadOverviewRequest(
             page = OlympiadPageRequest(number = page.coerceAtLeast(0), size = size.coerceIn(1, 50)),
             searchString = searchString.trim(),
-            years = listOf(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)),
+            subjectIds = subjectIds.distinct(),
+            stageCodes = stageCodes.distinct(),
+            parallelIds = parallelIds.distinct(),
+            years = (years ?: listOf(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)))
+                .distinct(),
+            includeCurrent = includeCurrent,
+            includeFuture = includeFuture,
+            includeCompleted = includeCompleted,
             showParticipantContests = showParticipantContests,
         )
         return execute(
@@ -966,20 +980,29 @@ class MeshClient(
         execute({ olympiadApi().levels(olympiadHeaders()) }, "/api/contests/exec/v1/contests/levels")
             .orEmpty()
 
+    fun getOlympiadYears(): List<Int> =
+        execute({ olympiadApi().years(olympiadHeaders()) }, "/api/contests/exec/v1/years")
+
     /** Все справочники одним вызовом; запросы идут параллельно, как в вебе. */
     fun getOlympiadDictionaries(force: Boolean = false): OlympiadDictionaries {
         olympiadDictionariesCache?.takeIf { !force }?.let { return it }
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(5)
         try {
             val subjects = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadSubjects() }
             val parallels = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadParallels() }
             val stages = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadStages() }
             val levels = pool.submit<List<OlympiadDictionaryItem>> { getOlympiadLevels() }
+            // Новый справочник не должен ронять уже работающие фильтры, если
+            // конкретная версия API ещё не отдаёт `/years`.
+            val years = pool.submit<List<Int>> {
+                runCatching { getOlympiadYears() }.getOrDefault(emptyList())
+            }
             val result = OlympiadDictionaries(
                 subjects = subjects.get().orEmpty(),
                 parallels = parallels.get().orEmpty(),
                 stages = stages.get().orEmpty(),
                 levels = levels.get().orEmpty(),
+                years = years.get().orEmpty().sortedDescending(),
             )
             olympiadDictionariesCache = result
             return result

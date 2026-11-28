@@ -330,6 +330,14 @@ private fun ResultTaskCard(
     val correctness = task.feedback?.optString("correctness").orEmpty()
     val awaitingReview = task.status == "AWAIT_FOR_REVIEW"
     val verdict = if (awaitingReview) Words.CdzAwaitingReview.text else correctnessLabel(correctness)
+    val inlineGapAnswers = remember(task.userAnswer, task.answer) {
+        if (answerType(task.answer) == "answer/gap/text/input") {
+            gapAnswers(task.userAnswer, task.answer.optJSONArray("text_position"))
+        } else {
+            emptyList()
+        }
+    }
+    val answersInText = inlineGapAnswers.any { it.position >= 0 }
     val motion = MaterialTheme.motionScheme
     val verdictColor by animateColorAsState(
         targetValue = if (awaitingReview) {
@@ -369,7 +377,7 @@ private fun ResultTaskCard(
                 }
             }
             if (task.question.length() > 0) {
-                CdzQuestionContent(task.question)
+                CdzQuestionContent(task.question, inlineAnswers = inlineGapAnswers)
             }
             if (answerType(task.answer) == "answer/gap/match/background/image/selection") {
                 val background = task.answer.optJSONObject("background_image")
@@ -408,7 +416,15 @@ private fun ResultTaskCard(
                         }
                     }
                 }
-                ResultUserAnswer(task)
+                if (answersInText) {
+                    Text(
+                        text = Words.CdzAnswersInText.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    ResultUserAnswer(task)
+                }
             }
             if (!awaitingReview &&
                 (correctness == "INCORRECT" || correctness == "PARTIALLY_CORRECT")

@@ -30,6 +30,7 @@ enum class OlympiadParticipation { UNKNOWN, NOT_PARTICIPATED, PARTICIPATED }
 data class OlympiadDetailState(
     val contestId: String,
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val detail: OlympiadDetail? = null,
     val participant: OlympiadParticipant? = null,
     val participation: OlympiadParticipation = OlympiadParticipation.UNKNOWN,
@@ -55,6 +56,7 @@ data class OlympiadUiState(
     val items: List<OlympiadOverviewItem> = emptyList(),
     val total: Int = 0,
     val page: Int = 0,
+    val filters: OlympiadFilters = OlympiadFilters(),
     val dictionaries: OlympiadDictionaries = OlympiadDictionaries(),
     val error: String? = null,
     val detail: OlympiadDetailState? = null,
@@ -96,6 +98,18 @@ class OlympiadViewModel(
         load(reset = true)
     }
 
+    fun applyFilters(filters: OlympiadFilters) {
+        if (_state.value.filters == filters) return
+        _state.update {
+            it.copy(filters = filters, items = emptyList(), page = 0, total = 0)
+        }
+        load(reset = true)
+    }
+
+    fun resetFilters() {
+        applyFilters(OlympiadFilters())
+    }
+
     fun refresh() {
         load(reset = true, refreshing = true)
     }
@@ -110,7 +124,16 @@ class OlympiadViewModel(
         val id = contestId.trim()
         if (id.isBlank()) return
         detailJob?.cancel()
-        _state.update { it.copy(detail = OlympiadDetailState(contestId = id)) }
+        val previous = _state.value.detail?.takeIf { it.contestId == id && it.detail != null }
+        _state.update {
+            it.copy(
+                detail = if (previous != null) {
+                    previous.copy(refreshing = true, error = null)
+                } else {
+                    OlympiadDetailState(contestId = id)
+                }
+            )
+        }
         detailJob = viewModelScope.launch {
             try {
                 coroutineScope {
@@ -129,11 +152,22 @@ class OlympiadViewModel(
                     val recommendationText = recommendation.await()?.recommendation
 
                     updateDetail(id) {
+                        val keepParticipant = participantLookup.participation ==
+                            OlympiadParticipation.UNKNOWN
                         it.copy(
                             loading = false,
+                            refreshing = false,
                             detail = loaded,
-                            participant = participantLookup.participant,
-                            participation = participantLookup.participation,
+                            participant = if (keepParticipant) {
+                                it.participant
+                            } else {
+                                participantLookup.participant
+                            },
+                            participation = if (keepParticipant) {
+                                it.participation
+                            } else {
+                                participantLookup.participation
+                            },
                             result = resultValue,
                             recommendation = recommendationText,
                             error = null,
@@ -144,7 +178,11 @@ class OlympiadViewModel(
                 throw error
             } catch (error: Exception) {
                 updateDetail(id) {
-                    it.copy(loading = false, error = MeshCore.describeError(error))
+                    it.copy(
+                        loading = false,
+                        refreshing = false,
+                        error = MeshCore.describeError(error),
+                    )
                 }
             }
         }
@@ -243,6 +281,7 @@ class OlympiadViewModel(
         val snapshot = _state.value
         val tab = snapshot.tab
         val query = snapshot.query
+        val filters = snapshot.filters
         val page = if (reset) 0 else snapshot.page + 1
         _state.update {
             it.copy(
@@ -258,6 +297,7 @@ class OlympiadViewModel(
                 val response = repository.overview(
                     showParticipantContests = tab == OlympiadTab.MY,
                     searchString = query,
+                    filters = filters,
                     page = page,
                     size = PAGE_SIZE,
                 )

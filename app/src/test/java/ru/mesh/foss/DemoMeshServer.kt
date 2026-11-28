@@ -207,6 +207,11 @@ class DemoMeshServer(
     var lastOlympiadAuthorization: String = ""
         private set
 
+    /** Тело последнего запроса `/contests/overview` — для проверки фильтров. */
+    @Volatile
+    var lastOlympiadOverviewBody: String = ""
+        private set
+
     /** Заголовки последнего запроса раздела «Портфолио» — для проверки контракта. */
     @Volatile
     var lastPortfolioSubsystem: String = ""
@@ -879,6 +884,7 @@ class DemoMeshServer(
             }
 
             OLYMPIAD_BASE + "contests/overview" -> {
+                lastOlympiadOverviewBody = body
                 val request = runCatching { JSONObject(body) }.getOrDefault(JSONObject())
                 val mineOnly = request.optBoolean("showParticipantContests", true)
                 val search = request.optString("searchString").trim()
@@ -911,6 +917,10 @@ class DemoMeshServer(
             OLYMPIAD_BASE + "parallels" -> 200 to dictionary(OLYMPIAD_PARALLELS)
             OLYMPIAD_BASE + "contests/stages" -> 200 to dictionary(OLYMPIAD_STAGES)
             OLYMPIAD_BASE + "contests/levels" -> 200 to dictionary(OLYMPIAD_LEVELS)
+            OLYMPIAD_BASE + "years" -> 200 to JSONObject().put(
+                RAW_BODY,
+                JSONArray().put(2026).put(2025).put(2024).toString(),
+            )
 
             else -> {
                 if (path.startsWith(PORTFOLIO_BASE)) {

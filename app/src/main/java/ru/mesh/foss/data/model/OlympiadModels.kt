@@ -149,6 +149,7 @@ data class OlympiadDictionaries(
     val parallels: List<OlympiadDictionaryItem> = emptyList(),
     val stages: List<OlympiadDictionaryItem> = emptyList(),
     val levels: List<OlympiadDictionaryItem> = emptyList(),
+    val years: List<Int> = emptyList(),
 ) {
     fun subjectNames(ids: List<String>?): String = names(ids.orEmpty(), subjects)
 

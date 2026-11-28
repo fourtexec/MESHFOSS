@@ -3,11 +3,21 @@ package ru.mesh.foss.feature.cdz
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -21,6 +31,7 @@ import org.json.JSONObject
 fun CdzQuestionContent(
     elements: JSONArray,
     modifier: Modifier = Modifier,
+    inlineAnswers: List<CdzGapAnswer> = emptyList(),
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -28,7 +39,13 @@ fun CdzQuestionContent(
     ) {
         for (index in 0 until elements.length()) {
             val block = elements.optJSONObject(index) ?: continue
-            CdzQuestionBlock(block)
+            val textId = block.optString("text_id").trim()
+            val blockAnswers = if (textId.isBlank()) {
+                inlineAnswers.filter { it.textId.isBlank() }
+            } else {
+                inlineAnswers.filter { it.textId == textId }
+            }
+            CdzQuestionBlock(block, inlineAnswers = blockAnswers)
         }
     }
 }
@@ -38,6 +55,7 @@ fun CdzQuestionContent(
 internal fun CdzQuestionBlock(
     block: JSONObject,
     modifier: Modifier = Modifier,
+    inlineAnswers: List<CdzGapAnswer> = emptyList(),
 ) {
     val type = block.optString("type")
     if (type == "content/atomic") {
@@ -62,16 +80,37 @@ internal fun CdzQuestionBlock(
 
     val text = block.optString("text")
     val content = block.optJSONArray("content")
-    val merged = remember(block) {
-        mergeQuestionText(text, content, block.optJSONArray("text_styles"))
+    val merged = remember(block, inlineAnswers) {
+        mergeQuestionText(text, content, block.optJSONArray("text_styles"), inlineAnswers)
     }
-    if (merged.text.isNotBlank()) {
+    if (merged.text.isNotBlank() || merged.placeholders.isNotEmpty()) {
+        val density = LocalDensity.current
+        val measurer = rememberTextMeasurer()
+        val labelStyle = MaterialTheme.typography.bodyLarge
+        val inlineContent = merged.placeholders.associate { placeholder ->
+            placeholder.id to InlineTextContent(
+                placeholder = Placeholder(
+                    width = inlinePlaceholderWidth(
+                        label = placeholder.alternateText,
+                        style = labelStyle,
+                        measurer = measurer,
+                        density = density,
+                    ),
+                    height = 1.5.em,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                ),
+            ) {
+                CdzInlineAnswer(placeholder.alternateText)
+            }
+        }
         CdzRichText(
             text = merged.text,
             spans = merged.spans,
             modifier = modifier,
-            style = MaterialTheme.typography.bodyLarge,
+            style = labelStyle,
             color = MaterialTheme.colorScheme.onSurface,
+            inlineContent = inlineContent,
+            placeholders = merged.placeholders,
         )
     }
 
@@ -104,6 +143,24 @@ internal fun CdzQuestionBlock(
                 )
             }
         }
+    }
+}
+
+/** Ответ ученика, вставленный в текст задания на месте пропуска. */
+@Composable
+private fun CdzInlineAnswer(value: String) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+        contentColor = MaterialTheme.colorScheme.primary,
+    ) {
+        Text(
+            text = value.ifBlank { "—" },
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

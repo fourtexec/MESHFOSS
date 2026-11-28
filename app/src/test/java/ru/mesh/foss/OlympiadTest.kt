@@ -1,8 +1,10 @@
 package ru.mesh.foss
 
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -132,6 +134,38 @@ class OlympiadTest {
     }
 
     @Test
+    fun `overview filters are serialized with Gson request fields`() {
+        client().getOlympiadOverview(
+            showParticipantContests = false,
+            searchString = "физике",
+            page = 1,
+            size = 10,
+            subjectIds = listOf("4"),
+            stageCodes = listOf("REGIONAL"),
+            parallelIds = listOf("9", "10"),
+            years = listOf(2026, 2025),
+            includeCurrent = false,
+            includeFuture = true,
+            includeCompleted = false,
+        )
+
+        val body = JsonParser.parseString(server.lastOlympiadOverviewBody).asJsonObject
+        assertEquals("физике", body.get("searchString").asString)
+        assertEquals(1, body.getAsJsonObject("page").get("number").asInt)
+        assertEquals(10, body.getAsJsonObject("page").get("size").asInt)
+        assertEquals("4", body.getAsJsonArray("subjectIds")[0].asString)
+        assertEquals("REGIONAL", body.getAsJsonArray("stageCodes")[0].asString)
+        assertEquals("9", body.getAsJsonArray("parallelIds")[0].asString)
+        assertEquals("10", body.getAsJsonArray("parallelIds")[1].asString)
+        assertEquals(2026, body.getAsJsonArray("years")[0].asInt)
+        assertEquals(2025, body.getAsJsonArray("years")[1].asInt)
+        assertFalse(body.get("includeCurrent").asBoolean)
+        assertTrue(body.get("includeFuture").asBoolean)
+        assertFalse(body.get("includeCompleted").asBoolean)
+        assertFalse(body.get("showParticipantContests").asBoolean)
+    }
+
+    @Test
     fun `olympiad requests use constuweb without family profile headers`() {
         client().getOlympiadOverview(showParticipantContests = true)
 
@@ -150,6 +184,7 @@ class OlympiadTest {
         assertEquals("Математика", dictionaries.subjectNames(listOf("1")))
         assertEquals("8 класс", dictionaries.parallelNames(listOf("8")))
         assertEquals("Школьный этап", dictionaries.stageName("SCHOOL"))
+        assertEquals(listOf(2026, 2025, 2024), dictionaries.years)
 
         val detail = client.getOlympiadDetail(DemoMeshServer.DEMO_OLYMPIAD_PAST_ID)
         assertEquals("Демо-олимпиада по информатике", detail.contestName)

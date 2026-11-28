@@ -238,7 +238,7 @@ private data class InlinePlaceholderData(
  * микроскопическим, а верхнего предела нет — иначе длинный вариант
  * обрезался бы многоточием.
  */
-private fun inlinePlaceholderWidth(
+internal fun inlinePlaceholderWidth(
     label: String,
     style: TextStyle,
     measurer: TextMeasurer,

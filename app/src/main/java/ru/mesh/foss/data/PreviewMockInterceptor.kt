@@ -416,6 +416,7 @@ internal class PreviewMockInterceptor : Interceptor {
             path == OLYMPIAD_BASE + "parallels" -> 200 to previewOlympiadParallels()
             path == OLYMPIAD_BASE + "contests/stages" -> 200 to previewOlympiadStages()
             path == OLYMPIAD_BASE + "contests/levels" -> 200 to previewOlympiadLevels()
+            path == OLYMPIAD_BASE + "years" -> 200 to previewOlympiadYears()
 
             path.startsWith(OLYMPIAD_BASE + "contests/") -> {
                 val tail = path.removePrefix(OLYMPIAD_BASE + "contests/")
@@ -618,6 +619,11 @@ internal class PreviewMockInterceptor : Interceptor {
         mapOf("id" to "REGIONAL", "name" to "Региональный этап"),
         mapOf("id" to "FINAL", "name" to "Заключительный этап")
     )
+
+    private fun previewOlympiadYears(): List<Int> {
+        val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        return (year downTo year - 4).toList()
+    }
 
     private fun previewOlympiadLevels(): List<Map<String, String>> = listOf(
         mapOf("id" to "1", "name" to "I уровень"),

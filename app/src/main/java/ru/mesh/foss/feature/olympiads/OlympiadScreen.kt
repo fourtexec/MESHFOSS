@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package ru.mesh.foss.feature.olympiads
 
@@ -12,29 +15,41 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,6 +84,7 @@ import ru.mesh.foss.ui.Design
 import ru.mesh.foss.ui.GlassButton
 import ru.mesh.foss.ui.GlassCard
 import ru.mesh.foss.ui.GlassOutlinedButton
+import ru.mesh.foss.ui.LiquidModalScope
 import ru.mesh.foss.ui.LiquidSegmentedTabs
 import ru.mesh.foss.ui.LocalDesign
 import ru.mesh.foss.ui.LocalLiquidBottomPadding
@@ -123,6 +139,8 @@ fun OlympiadScreen(
             onTab = vm::setTab,
             onSearch = vm::search,
             onRefresh = vm::refresh,
+            onFilters = vm::applyFilters,
+            onResetFilters = vm::resetFilters,
             onLoadMore = vm::loadMore,
             onOpen = vm::openContest,
             modifier = modifier,
@@ -136,11 +154,14 @@ private fun OlympiadListScreen(
     onTab: (OlympiadTab) -> Unit,
     onSearch: (String) -> Unit,
     onRefresh: () -> Unit,
+    onFilters: (OlympiadFilters) -> Unit,
+    onResetFilters: () -> Unit,
     onLoadMore: () -> Unit,
     onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var search by rememberSaveable { mutableStateOf(state.query) }
+    var filtersOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.query) { search = state.query }
     val focus = LocalFocusManager.current
 
@@ -191,9 +212,24 @@ private fun OlympiadListScreen(
             TextButton(onClick = { focus.clearFocus(); onSearch(search) }) {
                 Text(Words.OlympiadSearch.text)
             }
-            TextButton(onClick = onRefresh, enabled = !state.refreshing && !state.loading) {
-                Text(Words.Refresh.text)
+            TextButton(onClick = { filtersOpen = true }) {
+                Text(
+                    if (state.filters.activeCount > 0) {
+                        "${Words.OlympiadFilters.text} · ${state.filters.activeCount}"
+                    } else {
+                        Words.OlympiadFilters.text
+                    }
+                )
             }
+        }
+        if (state.filters.hasActive) {
+            ActiveFilterChips(
+                filters = state.filters,
+                dictionaries = state.dictionaries,
+                onFilters = onFilters,
+                onReset = onResetFilters,
+            )
+            Spacer(Modifier.height(4.dp))
         }
 
         Box(Modifier.weight(1f)) {
@@ -294,7 +330,286 @@ private fun OlympiadListScreen(
             }
         }
     }
+    if (filtersOpen) {
+        OlympiadFilterSheet(
+            filters = state.filters,
+            dictionaries = state.dictionaries,
+            onApply = {
+                filtersOpen = false
+                onFilters(it)
+            },
+            onDismiss = { filtersOpen = false },
+        )
+    }
 }
+
+@Composable
+private fun ActiveFilterChips(
+    filters: OlympiadFilters,
+    dictionaries: OlympiadDictionaries,
+    onFilters: (OlympiadFilters) -> Unit,
+    onReset: () -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(vertical = 2.dp),
+    ) {
+        items(filters.years.sortedDescending()) { year ->
+            ActiveFilterChip("${Words.Year.text}: $year") {
+                onFilters(filters.withoutYear(year))
+            }
+        }
+        items(filters.subjectIds.sorted()) { id ->
+            ActiveFilterChip(dictionaries.subjectNames(listOf(id)).ifBlank { id }) {
+                onFilters(filters.withoutSubject(id))
+            }
+        }
+        items(filters.stageCodes.sorted()) { code ->
+            ActiveFilterChip(dictionaries.stageName(code) ?: code) {
+                onFilters(filters.withoutStage(code))
+            }
+        }
+        items(filters.parallelIds.sorted()) { id ->
+            ActiveFilterChip(dictionaries.parallelNames(listOf(id)).ifBlank { id }) {
+                onFilters(filters.withoutParallel(id))
+            }
+        }
+        if (!filters.includeCurrent) {
+            item {
+                ActiveFilterChip("− ${Words.OlympiadRunning.text}") {
+                    onFilters(filters.copy(includeCurrent = true))
+                }
+            }
+        }
+        if (!filters.includeFuture) {
+            item {
+                ActiveFilterChip("− ${Words.OlympiadUpcoming.text}") {
+                    onFilters(filters.copy(includeFuture = true))
+                }
+            }
+        }
+        if (!filters.includeCompleted) {
+            item {
+                ActiveFilterChip("− ${Words.OlympiadFinished.text}") {
+                    onFilters(filters.copy(includeCompleted = true))
+                }
+            }
+        }
+        item {
+            ActiveFilterChip(Words.OlympiadReset.text) { onReset() }
+        }
+    }
+}
+
+@Composable
+private fun ActiveFilterChip(label: String, onClick: () -> Unit) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        trailingIcon = { Text("×") },
+        shape = CircleShape,
+    )
+}
+
+@Composable
+private fun OlympiadFilterSheet(
+    filters: OlympiadFilters,
+    dictionaries: OlympiadDictionaries,
+    onApply: (OlympiadFilters) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draft by remember(filters) { mutableStateOf(filters) }
+    val liquid = LocalDesign.current == Design.LIQUID
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val years = remember(dictionaries.years) {
+        (dictionaries.years.ifEmpty {
+            ((currentOlympiadYear() - 5)..(currentOlympiadYear() + 1)).toList()
+        }).distinct().sortedDescending()
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = if (liquid) RoundedCornerShape(32.dp) else BottomSheetDefaults.ExpandedShape,
+        containerColor = if (liquid) {
+            Color.Transparent
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        contentWindowInsets = if (liquid) {
+            { WindowInsets(0, 0, 0, 0) }
+        } else {
+            { BottomSheetDefaults.modalWindowInsets }
+        },
+        dragHandle = if (liquid) null else { { BottomSheetDefaults.DragHandle() } },
+    ) {
+        val content: @Composable () -> Unit = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    Words.OlympiadFilters.text,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                FilterChipRow(
+                    title = Words.OlympiadSubject.text,
+                    options = dictionaries.subjects.mapNotNull { item ->
+                        item.id?.takeIf { it.isNotBlank() }?.let { it to (item.label ?: it) }
+                    },
+                    selected = draft.subjectIds,
+                    onToggle = { id ->
+                        draft = draft.copy(
+                            subjectIds = draft.subjectIds.toggle(id)
+                        )
+                    },
+                )
+                FilterChipRow(
+                    title = Words.OlympiadStage.text,
+                    options = dictionaries.stages.mapNotNull { item ->
+                        item.id?.takeIf { it.isNotBlank() }?.let { it to (item.label ?: it) }
+                    },
+                    selected = draft.stageCodes,
+                    onToggle = { code ->
+                        draft = draft.copy(
+                            stageCodes = draft.stageCodes.toggle(code)
+                        )
+                    },
+                )
+                FilterChipRow(
+                    title = Words.OlympiadParallel.text,
+                    options = dictionaries.parallels.mapNotNull { item ->
+                        item.id?.takeIf { it.isNotBlank() }?.let { it to (item.label ?: it) }
+                    },
+                    selected = draft.parallelIds,
+                    onToggle = { id ->
+                        draft = draft.copy(
+                            parallelIds = draft.parallelIds.toggle(id)
+                        )
+                    },
+                )
+                YearFilterRow(
+                    years = years,
+                    selected = draft.years,
+                    onToggle = { year ->
+                        draft = draft.copy(years = draft.years.toggle(year))
+                    },
+                )
+                FilterChipRow(
+                    title = Words.OlympiadStatus.text,
+                    options = listOf(
+                        "current" to Words.OlympiadRunning.text,
+                        "future" to Words.OlympiadUpcoming.text,
+                        "completed" to Words.OlympiadFinished.text,
+                    ),
+                    selected = buildSet {
+                        if (draft.includeCurrent) add("current")
+                        if (draft.includeFuture) add("future")
+                        if (draft.includeCompleted) add("completed")
+                    },
+                    onToggle = { key ->
+                        draft = when (key) {
+                            "current" -> draft.copy(includeCurrent = !draft.includeCurrent)
+                            "future" -> draft.copy(includeFuture = !draft.includeFuture)
+                            else -> draft.copy(includeCompleted = !draft.includeCompleted)
+                        }
+                    },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { draft = OlympiadFilters() }) {
+                        Text(Words.OlympiadReset.text)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    GlassButton(onClick = { onApply(draft) }) {
+                        Text(Words.OlympiadApply.text)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+        LiquidModalScope {
+            if (liquid) {
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Column(Modifier.padding(16.dp)) { content() }
+                }
+            } else {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { content() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterChipRow(
+    title: String,
+    options: List<Pair<String, String>>,
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (options.isEmpty()) {
+            Text(
+                Words.NoData.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(options) { (id, label) ->
+                    FilterChip(
+                        selected = id in selected,
+                        onClick = { onToggle(id) },
+                        label = { Text(label, maxLines = 1) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YearFilterRow(
+    years: List<Int>,
+    selected: Set<Int>,
+    onToggle: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            Words.Year.text,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(years) { year ->
+                FilterChip(
+                    selected = year in selected,
+                    onClick = { onToggle(year) },
+                    label = { Text(year.toString()) },
+                )
+            }
+        }
+    }
+}
+
+private fun <T> Set<T>.toggle(value: T): Set<T> =
+    if (value in this) this - value else this + value
 
 @Composable
 private fun OlympiadTabs(selected: OlympiadTab, onSelect: (OlympiadTab) -> Unit) {
@@ -415,19 +730,18 @@ private fun OlympiadDetailScreen(
             TextButton(onClick = onBack) {
                 Text("‹ ${Words.OlympiadBack.text}", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onRetry, enabled = !detail.loading) {
-                Text(Words.Refresh.text)
-            }
         }
         Box(Modifier.weight(1f)) {
             val loaded = detail.detail
             when {
-                detail.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                detail.loading && loaded == null -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
                     LoadingIndicator()
                 }
 
-                detail.error != null -> OlympiadError(
+                loaded == null && detail.error != null -> OlympiadError(
                     message = detail.error.orEmpty(),
                     onRetry = onRetry,
                 )
@@ -437,15 +751,23 @@ private fun OlympiadDetailScreen(
                     onRetry = onRetry,
                 )
 
-                else -> OlympiadDetailBody(
-                    detail = loaded,
-                    participant = detail.participant,
-                    participation = detail.participation,
-                    result = detail.result,
-                    recommendation = detail.recommendation,
-                    dictionaries = dictionaries,
-                    onOpenDetails = onOpenDetails,
-                )
+                else -> PullToRefreshBox(
+                    isRefreshing = detail.refreshing,
+                    onRefresh = onRetry,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    OlympiadDetailBody(
+                        detail = loaded,
+                        participant = detail.participant,
+                        participation = detail.participation,
+                        result = detail.result,
+                        recommendation = detail.recommendation,
+                        dictionaries = dictionaries,
+                        error = detail.error,
+                        onRetry = onRetry,
+                        onOpenDetails = onOpenDetails,
+                    )
+                }
             }
         }
     }
@@ -459,6 +781,8 @@ private fun OlympiadDetailBody(
     result: OlympiadResult?,
     recommendation: String?,
     dictionaries: OlympiadDictionaries,
+    error: String?,
+    onRetry: () -> Unit,
     onOpenDetails: (String) -> Unit,
 ) {
     val subjects = dictionaries.subjectNames(detail.commonInfo?.subjectIds.orEmpty())
@@ -473,6 +797,13 @@ private fun OlympiadDetailBody(
     val recommendationText = OlympiadText.plainDescription(recommendation)
     val uriHandler = LocalUriHandler.current
     var section by rememberSaveable { mutableStateOf(DETAIL_ABOUT) }
+    val hasResults = participation != OlympiadParticipation.NOT_PARTICIPATED &&
+        result?.hasResult == true &&
+        result.resultModel != null
+    val effectiveSection = if (hasResults) section else DETAIL_ABOUT
+    LaunchedEffect(hasResults) {
+        if (!hasResults) section = DETAIL_ABOUT
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -507,10 +838,27 @@ private fun OlympiadDetailBody(
                 }
             }
         }
-        item {
-            OlympiadDetailTabs(section) { section = it }
+        if (error != null) {
+            item {
+                GlassCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(
+                            error,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        TextButton(onClick = onRetry) { Text(Words.Retry.text) }
+                    }
+                }
+            }
         }
-        if (section == DETAIL_ABOUT) {
+        if (hasResults) {
+            item {
+                OlympiadDetailTabs(section) { section = it }
+            }
+        }
+        if (effectiveSection == DETAIL_ABOUT) {
             if (recommendationText.isNotBlank()) {
                 item {
                     OlympiadInfoCard(Words.OlympiadRecommendation.text) {

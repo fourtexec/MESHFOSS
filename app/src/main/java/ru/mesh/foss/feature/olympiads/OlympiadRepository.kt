@@ -15,6 +15,7 @@ interface OlympiadRepository {
     suspend fun overview(
         showParticipantContests: Boolean,
         searchString: String,
+        filters: OlympiadFilters,
         page: Int,
         size: Int,
     ): OlympiadOverviewResponse
@@ -32,10 +33,23 @@ class MeshOlympiadRepository(private val client: MeshClient) : OlympiadRepositor
     override suspend fun overview(
         showParticipantContests: Boolean,
         searchString: String,
+        filters: OlympiadFilters,
         page: Int,
         size: Int,
     ): OlympiadOverviewResponse = withContext(Dispatchers.IO) {
-        client.getOlympiadOverview(showParticipantContests, searchString, page, size)
+        client.getOlympiadOverview(
+            showParticipantContests = showParticipantContests,
+            searchString = searchString,
+            page = page,
+            size = size,
+            subjectIds = filters.subjectIds.toList(),
+            stageCodes = filters.stageCodes.toList(),
+            parallelIds = filters.parallelIds.toList(),
+            years = filters.years.toList(),
+            includeCurrent = filters.includeCurrent,
+            includeFuture = filters.includeFuture,
+            includeCompleted = filters.includeCompleted,
+        )
     }
 
     override suspend fun dictionaries(): OlympiadDictionaries = withContext(Dispatchers.IO) {
