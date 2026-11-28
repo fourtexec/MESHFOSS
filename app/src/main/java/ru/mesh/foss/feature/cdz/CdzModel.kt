@@ -255,6 +255,7 @@ fun parseContextInfo(result: JSONObject): List<CdzContextInfo> {
                 elements = elements,
             )
         }
+        .toList()
 }
 
 /** Задание в уже завершённой попытке: результат, ответ ученика и фидбек. */
