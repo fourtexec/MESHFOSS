@@ -1,6 +1,7 @@
 package ru.mesh.foss.data
 
 import com.google.gson.GsonBuilder
+import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -297,13 +298,30 @@ class VrlabsResultClient(
         httpUrlsIn(text).forEach { candidate ->
             val candidateText = candidate.toString()
             if (isVrlabsResult(candidateText)) return candidateText
-            listOf("activity_url", "activityId").forEach { key ->
-                candidate.queryParameter(key)?.let { nested ->
-                    directPageFromText(nested, depth + 1)?.let { return it }
-                }
+            nestedLauncherValues(candidate).forEach { nested ->
+                val decoded = runCatching { URLDecoder.decode(nested, "UTF-8") }.getOrDefault(nested)
+                directPageFromText(decoded, depth + 1)?.let { return it }
             }
         }
         return null
+    }
+
+    private fun nestedLauncherValues(url: HttpUrl): List<String> {
+        val rawQuery = url.encodedQuery ?: return emptyList()
+        val values = mutableListOf<String>()
+        listOf("activity_url", "activityId").forEach { key ->
+            val marker = "$key="
+            val start = rawQuery.indexOf(marker)
+            if (start >= 0) {
+                val rest = rawQuery.substring(start + marker.length)
+                if ("://" in rest || "%3A%2F%2F" in rest.uppercase()) values += rest
+            }
+        }
+        rawQuery.split('&').forEach { pair ->
+            val value = pair.substringAfter('=', "")
+            if (value.isNotBlank()) values += value
+        }
+        return values.distinct()
     }
 
     private fun encode(value: String): String =

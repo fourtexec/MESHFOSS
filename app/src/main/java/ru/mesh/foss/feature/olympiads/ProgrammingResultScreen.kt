@@ -435,7 +435,10 @@ private fun programmingVerdictColor(value: String?): Color = when (value?.upperc
 }
 
 private fun programmingStatus(value: String): String = when (value.uppercase()) {
-    "ACCEPTED" -> Words.CdzCompleted.text
+    "ACCEPTED", "COMPLETED", "DONE", "CHECKED" -> Words.CdzCompleted.text
+    "IN_PROGRESS", "STARTED" -> Words.CdzInProgress.text
+    "NOT_STARTED", "PENDING", "NEW" -> Words.CdzNotCompleted.text
+    "CHECKING", "ON_REVIEW", "WAITING_REVIEW" -> Words.CdzAwaitingReview.text
     else -> value
 }
 

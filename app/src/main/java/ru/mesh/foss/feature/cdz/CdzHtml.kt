@@ -418,6 +418,7 @@ private fun isHiddenAttrs(attrs: Map<String, String>): Boolean {
     return color == "white" ||
         color == "#fff" ||
         color == "#ffffff" ||
+        color == "#ffffffff" ||
         color == "rgb(255,255,255)" ||
         color == "rgba(255,255,255,1)" ||
         color == "rgba(255,255,255,1.0)"
