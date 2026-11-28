@@ -553,6 +553,7 @@ fun MainScaffold(
     onSwitchAccount: () -> Unit,
 ) {
     var currentTab by remember { mutableStateOf("ranking") }
+    var olympiadAttemptOpen by remember { mutableStateOf(false) }
     val hapticView = LocalView.current
     // Вибрация при нажатиях: общий переключатель в Настройках (mesh_settings),
     // читается при каждом событии — применяется сразу после переключения.
@@ -732,6 +733,9 @@ fun MainScaffold(
         },
         containerColor = if (liquid) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
+            // Экран результата олимпиады рисует собственный top bar.
+            // Второй bar из основного Scaffold давал двойную полосу «Результаты».
+            if (currentTab == "olympiads" && olympiadAttemptOpen) return@Scaffold
             if (liquid) {
                 LiquidTopBar(screenTitle, topActions)
                 return@Scaffold
@@ -897,7 +901,10 @@ fun MainScaffold(
                     )
                     "attendance" -> AttendanceScreen(client, studentId, personId)
                     "moskvenok" -> MoskvenokScreen(store)
-                    "olympiads" -> OlympiadScreen(client)
+                    "olympiads" -> OlympiadScreen(
+                        client = client,
+                        onAttemptOpenChanged = { olympiadAttemptOpen = it },
+                    )
                     "portfolio" -> PortfolioScreen(client, personId)
                     "food" -> FoodScreen(store, client, personId)
                     "settings" -> SettingsScreen(store, client, profile, onLogout)

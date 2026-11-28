@@ -3126,6 +3126,13 @@ internal enum class Words(
         "Imagen",
         "Image"
     ),
+    CdzSelectedPositions(
+        "Выбранные позиции: %1\$s",
+        "Selected positions: %1\$s",
+        "Kiválasztott pozíciók: %1\$s",
+        "Posiciones seleccionadas: %1\$s",
+        "Positions sélectionnées : %1\$s"
+    ),
     CdzCorrectAnswer(
         "Правильный ответ",
         "Correct answer",

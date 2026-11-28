@@ -371,6 +371,17 @@ private fun ResultTaskCard(
             if (task.question.length() > 0) {
                 CdzQuestionContent(task.question)
             }
+            if (answerType(task.answer) == "answer/gap/match/background/image/selection") {
+                val background = task.answer.optJSONObject("background_image")
+                val imageUrl = cdzAbsoluteUrl(
+                    background?.optString("relative_url").orEmpty()
+                        .ifBlank { background?.optString("preview_url").orEmpty() }
+                )
+                CdzRemoteImage(
+                    url = imageUrl,
+                    description = background?.optString("description").orEmpty(),
+                )
+            }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
@@ -445,10 +456,14 @@ private fun ResultAnswerPayload(
     val type = answerType(task.answer).ifBlank { payload.optString("@answer_type") }
     val options = remember(task.answer) { parseOptions(task.answer) }
     val byId = remember(options) { options.associateBy { it.id } }
+    val optionOrder = remember(options) {
+        options.withIndex().associate { (index, option) -> option.id to index }
+    }
 
     when (type) {
         "answer/single", "answer/multiple" -> {
-            val ids = selectedOptionIds(payload).toList()
+            val ids = selectedOptionIds(payload)
+                .sortedBy { optionOrder[it] ?: Int.MAX_VALUE }
             if (ids.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ids.forEach { id -> RichOptionLine(byId[id]) }
             }
@@ -462,7 +477,13 @@ private fun ResultAnswerPayload(
             }
         }
         "answer/match" -> {
-            val pairs = parseMatch(payload)
+            val pairs = parseMatch(payload).toList()
+                .sortedWith(
+                    compareBy<Pair<String, String>>(
+                        { optionOrder[it.first] ?: Int.MAX_VALUE },
+                        { optionOrder[it.second] ?: Int.MAX_VALUE },
+                    )
+                )
             if (pairs.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 pairs.forEach { (sourceId, targetId) ->
                     RichMatchLine(source = byId[sourceId], target = byId[targetId])
@@ -474,6 +495,7 @@ private fun ResultAnswerPayload(
             val lines = (0 until groups.length()).mapNotNull { index ->
                 val group = groups.optJSONObject(index) ?: return@mapNotNull null
                 val ids = stringIds(group.optJSONArray("options_ids"))
+                    .sortedBy { optionOrder[it] ?: Int.MAX_VALUE }
                 if (ids.isEmpty()) null else Triple(index, group.optString("group_id"), ids)
             }
             if (lines.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -502,29 +524,43 @@ private fun ResultAnswerPayload(
         "answer/inline/choice/single", "answer/gap/match/text" -> {
             val choices = remember(task.answer) { parseInlineChoices(task.answer) }
             val selections = inlineSelections(payload)
-            val picked = choices.mapNotNull { choice ->
-                choice.options.firstOrNull { it.id == selections[choice.positionId] }
+            val picked = choices.mapIndexedNotNull { index, choice ->
+                choice.options
+                    .firstOrNull { it.id == selections[choice.positionId] }
+                    ?.let { (index + 1) to it }
             }
             if (picked.isEmpty()) NoAnswer() else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                picked.forEach { option -> RichOptionLine(option) }
+                picked.forEach { (number, option) ->
+                    RichOptionLine(option, prefix = "$number. ")
+                }
             }
         }
+        "answer/gap/match/background/image/selection" -> {
+            val positions = remember(task.answer) { imageGapPositions(task.answer) }
+            val selected = imageGapSelection(payload, positions)
+            if (selected.isEmpty()) NoAnswer() else Text(
+                text = Words.CdzSelectedPositions(selected.joinToString(", ")),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
         "answer/number", "answer/number/interval", "answer/string", "answer/free" -> {
-            val text = textAnswer(payload).trim()
-            if (text.isBlank()) NoAnswer() else Text(
-                text = text,
+            val values = textAnswers(payload)
+            if (values.isEmpty()) NoAnswer() else Text(
+                text = values.joinToString(" / "),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
         "answer/gap/text/input" -> {
-            val lines = textInputAnswers(payload)
-            if (lines.isEmpty()) NoAnswer() else Column(
+            val gaps = gapAnswers(payload, task.answer.optJSONArray("text_position"))
+            if (gaps.isEmpty() || gaps.all { it.values.isEmpty() }) NoAnswer() else Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                lines.forEachIndexed { index, line ->
+                gaps.forEach { gap ->
+                    val value = gap.values.joinToString(" / ").ifBlank { "—" }
                     Text(
-                        text = "${index + 1}. $line",
+                        text = "${gap.index + 1}. $value",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -544,10 +580,10 @@ private fun ResultAnswerPayload(
             )
         }
         else -> {
-            val text = textAnswer(payload).trim()
-            if (text.isNotBlank()) {
+            val values = textAnswers(payload)
+            if (values.isNotEmpty()) {
                 Text(
-                    text = text,
+                    text = values.joinToString(" / "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )

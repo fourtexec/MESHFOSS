@@ -38,6 +38,24 @@ data class CdzMergedText(
     val spans: List<CdzTextSpan>,
 )
 
+/**
+ * Ответ на один пропуск `answer/gap/text/input`.
+ *
+ * [index] — позиция в `answer.text_position`, а [values] — один или несколько
+ * допустимых вариантов. У правильного ответа сервер часто присылает несколько
+ * `input_strings` на один пропуск.
+ */
+data class CdzGapAnswer(
+    val index: Int,
+    val values: List<String>,
+)
+
+/** Позиция на фоновом изображении в `answer/gap/match/background/image/selection`. */
+data class CdzImagePosition(
+    val id: String,
+    val number: Int,
+)
+
 /** Один вариант ответа: текст, картинка, видео и роль в сопоставлении. */
 data class CdzOption(
     val id: String,
@@ -408,10 +426,21 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
                 }
             }
         }
-        val styled = trimmedStyledText(
-            raw = option.optString("text").ifBlank { contentText.joinToString(" ") },
-            styles = option.optJSONArray("text_styles"),
-        )
+        val baseText = option.optString("text")
+        val styled = if (baseText.isNotBlank()) {
+            trimMergedText(
+                mergeQuestionText(
+                    text = baseText,
+                    content = content,
+                    styles = option.optJSONArray("text_styles"),
+                )
+            )
+        } else {
+            trimmedStyledText(
+                raw = contentText.joinToString(" "),
+                styles = option.optJSONArray("text_styles"),
+            )
+        }
         result += CdzOption(
             id = id,
             text = styled.text,
@@ -450,7 +479,12 @@ fun parseMathContent(raw: String?): String {
         .replace(Regex("""\\(?:left|right|big|Big|bigg|Bigg)\b"""), "")
         .replace(Regex("""\\[,;!]"""), " ")
         .replace("\\ ", " ")
-    mathSymbols.forEach { (command, symbol) -> text = text.replace(command, symbol) }
+        .replace("\\%", "%")
+        .replace("\\&", "&")
+        .replace("\\#", "#")
+    mathSymbols.entries.sortedByDescending { it.key.length }.forEach { (command, symbol) ->
+        text = text.replace(command, symbol)
+    }
     text = Regex("""\\([A-Za-z]+)""").replace(text) { match ->
         mathSymbols["\\${match.groupValues[1]}"] ?: match.groupValues[1]
     }
@@ -489,7 +523,10 @@ fun parseMathContent(raw: String?): String {
             index++
         }
     }
-    return out.toString().replace(Regex("""\s+"""), " ").trim()
+    return out.toString()
+        .replace(Regex("""\s+([.,;:!?])"""), "$1")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
 }
 
 /**
@@ -507,7 +544,7 @@ fun mergeQuestionText(
     styles: JSONArray? = null,
 ): CdzMergedText {
     if (content == null) {
-        return CdzMergedText(text, parseTextSpans(text, styles))
+        return normalizeMergedText(CdzMergedText(text, parseTextSpans(text, styles)))
     }
     val inserts = mutableListOf<Pair<Int, String>>()
     for (index in 0 until content.length()) {
@@ -524,7 +561,7 @@ fun mergeQuestionText(
         inserts += position to math
     }
     if (inserts.isEmpty()) {
-        return CdzMergedText(text, parseTextSpans(text, styles))
+        return normalizeMergedText(CdzMergedText(text, parseTextSpans(text, styles)))
     }
 
     val out = StringBuilder(text.length + inserts.sumOf { it.second.length + 2 })
@@ -550,7 +587,7 @@ fun mergeQuestionText(
         val end = mapMergedPosition(span.end, inserted, includeAtPosition = false)
         if (end > start) span.copy(start = start, end = end) else null
     }
-    return CdzMergedText(merged, mappedSpans)
+    return normalizeMergedText(CdzMergedText(merged, mappedSpans))
 }
 
 private fun needsSpaceBefore(char: Char): Boolean =
@@ -624,9 +661,18 @@ private val mathSuperscript = mapOf(
 private val mathSymbols = mapOf(
     "\\cdot" to "·", "\\times" to "×", "\\div" to "÷",
     "\\pm" to "±", "\\approx" to "≈", "\\le" to "≤", "\\ge" to "≥",
-    "\\ne" to "≠", "\\rightarrow" to "→", "\\to" to "→",
-    "\\leftarrow" to "←", "\\rightleftharpoons" to "⇌",
-    "\\uparrow" to "↑", "\\downarrow" to "↓", "\\infty" to "∞",
+    "\\leq" to "≤", "\\geq" to "≥", "\\ne" to "≠", "\\neq" to "≠",
+    "\\rightarrow" to "→", "\\to" to "→", "\\Rightarrow" to "⇒",
+    "\\leftarrow" to "←", "\\Leftarrow" to "⇐",
+    "\\leftrightarrow" to "↔", "\\Leftrightarrow" to "⇔",
+    "\\rightleftharpoons" to "⇌", "\\uparrow" to "↑", "\\downarrow" to "↓",
+    "\\infty" to "∞", "\\angle" to "∠", "\\prime" to "′",
+    "\\parallel" to "∥", "\\perp" to "⊥", "\\triangle" to "△",
+    "\\cong" to "≅", "\\sim" to "∼", "\\equiv" to "≡",
+    "\\in" to "∈", "\\notin" to "∉", "\\subset" to "⊂",
+    "\\cup" to "∪", "\\cap" to "∩", "\\emptyset" to "∅",
+    "\\varnothing" to "∅", "\\sum" to "∑", "\\prod" to "∏",
+    "\\int" to "∫", "\\ldots" to "…", "\\dots" to "…",
     "\\alpha" to "α", "\\beta" to "β", "\\gamma" to "γ",
     "\\delta" to "δ", "\\Delta" to "Δ", "\\epsilon" to "ε",
     "\\varepsilon" to "ε", "\\lambda" to "λ", "\\mu" to "μ",
@@ -1114,15 +1160,13 @@ fun parseTextSpans(
     return result
 }
 
-private data class StyledText(val text: String, val spans: List<CdzTextSpan>)
-
 /**
  * Обрезает внешние пробелы и сдвигает стилевые диапазоны на ту же величину.
  * Для обычного текста это сохраняет визуальную позицию формулы.
  */
-private fun trimmedStyledText(raw: String, styles: JSONArray?): StyledText {
+private fun trimmedStyledText(raw: String, styles: JSONArray?): CdzMergedText {
     val first = raw.indexOfFirst { !it.isWhitespace() }
-    if (first < 0) return StyledText("", emptyList())
+    if (first < 0) return CdzMergedText("", emptyList())
     val last = raw.indexOfLast { !it.isWhitespace() }
     val text = raw.substring(first, last + 1)
     val spans = parseTextSpans(raw, styles).mapNotNull { span ->
@@ -1130,7 +1174,59 @@ private fun trimmedStyledText(raw: String, styles: JSONArray?): StyledText {
         val end = (span.end - first).coerceIn(0, text.length)
         if (end > start) span.copy(start = start, end = end) else null
     }
-    return StyledText(text, spans)
+    return normalizeMergedText(CdzMergedText(text, spans))
+}
+
+/**
+ * Убирает пробелы перед знаками препинания и повторные пробелы.
+ *
+ * В олимпиадных `text` они встречаются регулярно (`«слово , ещё»`), а формулы
+ * и стили привязаны к старым координатам. Поэтому параллельно со сборкой
+ * строки строится карта старых индексов в новые, чтобы не сломать `text_styles`.
+ * Многоточие `...` не склеиваем: пробел перед ним может быть осмысленным.
+ */
+private fun normalizeMergedText(merged: CdzMergedText): CdzMergedText {
+    val source = merged.text
+    if (source.isEmpty()) return merged
+    val out = StringBuilder(source.length)
+    val map = IntArray(source.length + 1)
+    for (index in source.indices) {
+        map[index] = out.length
+        val char = source[index]
+        if (char == ' ' || char == '\t') {
+            val next = source.getOrNull(index + 1)
+            val beforePunctuation = next != null && next in ",;:!?"
+            val beforeSingleDot = next == '.' && source.getOrNull(index + 2) != '.'
+            if (beforePunctuation || beforeSingleDot) continue
+            if (out.isEmpty() || out.last() == ' ' || out.last() == '\t') continue
+            out.append(' ')
+        } else {
+            out.append(char)
+        }
+    }
+    map[source.length] = out.length
+    if (out.length == source.length && out.toString() == source) return merged
+    val text = out.toString()
+    val spans = merged.spans.mapNotNull { span ->
+        val start = map[span.start.coerceIn(0, source.length)]
+        val end = map[span.end.coerceIn(0, source.length)]
+        if (end > start) span.copy(start = start, end = end) else null
+    }
+    return CdzMergedText(text, spans)
+}
+
+/** Обрезает уже склеенный текст с формулами, не теряя сдвинутые стили. */
+private fun trimMergedText(merged: CdzMergedText): CdzMergedText {
+    val first = merged.text.indexOfFirst { !it.isWhitespace() }
+    if (first < 0) return CdzMergedText("", emptyList())
+    val last = merged.text.indexOfLast { !it.isWhitespace() }
+    val text = merged.text.substring(first, last + 1)
+    val spans = merged.spans.mapNotNull { span ->
+        val start = (span.start - first).coerceIn(0, text.length)
+        val end = (span.end - first).coerceIn(0, text.length)
+        if (end > start) span.copy(start = start, end = end) else null
+    }
+    return CdzMergedText(text, spans)
 }
 
 /** Пропуски `answer/inline/choice/single`. */
@@ -1249,28 +1345,116 @@ fun textAnswer(answer: JSONObject): String {
 }
 
 /**
- * Значения `answer/gap/text/input`: по строке на каждый заполненный пропуск.
+ * Все значения `answer/number` / `answer/string`.
+ *
+ * У правильного ответа сервер часто перечисляет несколько допустимых
+ * вариантов (`["10", "10.0"]`), а не одно значение. Для ввода ответа нужен
+ * первый, а для показа — все.
+ */
+fun textAnswers(answer: JSONObject?): List<String> {
+    val result = linkedSetOf<String>()
+    answer?.optJSONArray("string")?.let { array ->
+        for (index in 0 until array.length()) {
+            array.optString(index).trim().takeIf { it.isNotBlank() }?.let(result::add)
+        }
+    }
+    answer?.optJSONArray("number")?.let { array ->
+        for (index in 0 until array.length()) {
+            array.optString(index).trim().takeIf { it.isNotBlank() }?.let(result::add)
+        }
+    }
+    if (result.isEmpty()) {
+        answer?.optString("number").orEmpty().trim()
+            .takeIf { it.isNotBlank() }?.let(result::add)
+        answer?.optString("string").orEmpty().trim()
+            .takeIf { it.isNotBlank() }?.let(result::add)
+    }
+    return result.toList()
+}
+
+/**
+ * Ответы `answer/gap/text/input` в порядке пропусков из `answer.text_position`.
  *
  * Сервер кладёт их в `text_input_answer[].input_strings`, а не в `string`
- * или `number`, поэтому общий [textAnswer] их не видит.
+ * или `number`, поэтому общий [textAnswer] их не видит. Массив
+ * `text_input_answer` приходит в произвольном порядке, поэтому без сортировки
+ * «Ваш ответ» и «Правильный ответ» выглядят перепутанными.
  */
-fun textInputAnswers(answer: JSONObject?): List<String> {
+fun gapAnswers(answer: JSONObject?, positions: JSONArray?): List<CdzGapAnswer> {
     val items = answer?.optJSONArray("text_input_answer") ?: return emptyList()
-    val result = mutableListOf<String>()
-    val seen = linkedSetOf<String>()
+    val order = linkedMapOf<String, Int>()
+    if (positions != null) {
+        for (index in 0 until positions.length()) {
+            val positionId = positions.optJSONObject(index)
+                ?.optString("position_id").orEmpty().trim()
+            if (positionId.isNotBlank()) order[positionId] = index
+        }
+    }
+
+    val grouped = linkedMapOf<String, LinkedHashSet<String>>()
+    val extra = linkedMapOf<String, LinkedHashSet<String>>()
     for (index in 0 until items.length()) {
         val item = items.optJSONObject(index) ?: continue
+        val positionId = item.optString("position_id").trim()
         val strings = item.optJSONArray("input_strings") ?: continue
-        val values = (0 until strings.length())
-            .mapNotNull { stringIndex ->
-                strings.optString(stringIndex).trim().takeIf { it.isNotBlank() }
-            }
-        if (values.isEmpty()) continue
-        val line = values.joinToString(" ")
-        val key = item.optString("position_id").ifBlank { line }
-        if (seen.add(key)) result += line
+        val key = positionId.ifBlank { "item-$index" }
+        val target = if (order.isEmpty() || order.containsKey(positionId)) grouped else extra
+        for (stringIndex in 0 until strings.length()) {
+            val value = strings.optString(stringIndex).trim()
+            if (value.isNotBlank()) target.getOrPut(key) { linkedSetOf() }.add(value)
+        }
+    }
+
+    if (order.isEmpty()) {
+        return grouped.values.mapIndexed { index, values ->
+            CdzGapAnswer(index = index, values = values.toList())
+        }
+    }
+
+    val result = mutableListOf<CdzGapAnswer>()
+    order.forEach { (positionId, index) ->
+        result += CdzGapAnswer(
+            index = index,
+            values = grouped[positionId]?.toList().orEmpty(),
+        )
+    }
+    var nextIndex = order.size
+    extra.values.forEach { values ->
+        result += CdzGapAnswer(index = nextIndex++, values = values.toList())
     }
     return result
+}
+
+/**
+ * Плоский список строк для проверок «есть ли ответ» и старых тестов.
+ * Для отображения используйте [gapAnswers]: он сохраняет порядок пропусков.
+ */
+fun textInputAnswers(answer: JSONObject?): List<String> =
+    gapAnswers(answer, null)
+        .map { it.values.joinToString(" / ") }
+        .filter { it.isNotBlank() }
+
+/** Позиции на фоне image-selection задания; нумеруем в порядке API. */
+fun imageGapPositions(answer: JSONObject): List<CdzImagePosition> {
+    val positions = answer.optJSONArray("image_gaps_positions") ?: return emptyList()
+    return (0 until positions.length()).mapNotNull { index ->
+        val position = positions.optJSONObject(index) ?: return@mapNotNull null
+        val id = position.optString("position_id").trim()
+        if (id.isBlank()) null else CdzImagePosition(id = id, number = index + 1)
+    }
+}
+
+/** Номера выбранных позиций в порядке фона, а не в порядке ответа сервера. */
+fun imageGapSelection(
+    answer: JSONObject?,
+    positions: List<CdzImagePosition>,
+): List<Int> {
+    val ids = answer?.optJSONArray("position_ids") ?: return emptyList()
+    val byId = positions.associate { it.id to it.number }
+    return (0 until ids.length())
+        .mapNotNull { index -> byId[ids.optString(index).trim()] }
+        .distinct()
+        .sorted()
 }
 
 /** Порядок вариантов answer/order. */
@@ -1295,6 +1479,7 @@ fun hasAnswer(answer: JSONObject): Boolean {
     answer.optJSONArray("ids")?.let { return it.length() > 0 }
     answer.optJSONArray("ids_order")?.let { return it.length() > 0 }
     answer.optJSONArray("text_position_answer")?.let { return it.length() > 0 }
+    answer.optJSONArray("position_ids")?.let { return it.length() > 0 }
     if (textInputAnswers(answer).isNotEmpty()) return true
     answer.optJSONArray("groups")?.let { groups ->
         for (i in 0 until groups.length()) {
@@ -1353,6 +1538,7 @@ fun hasVisibleAnswer(answer: JSONObject?): Boolean {
     answer.optJSONArray("groups")?.let { return hasAnswer(answer) }
     answer.optJSONArray("ids_order")?.let { return it.length() > 0 }
     answer.optJSONArray("text_position_answer")?.let { return it.length() > 0 }
+    answer.optJSONArray("position_ids")?.let { return it.length() > 0 }
     if (textInputAnswers(answer).isNotEmpty()) return true
     answer.optJSONArray("answers")?.let { answers ->
         for (index in 0 until answers.length()) {

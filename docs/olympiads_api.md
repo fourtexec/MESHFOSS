@@ -69,15 +69,40 @@ GET https://uchebnik.mos.ru/webtests/contests/rest/secure/challenge/task/answers
 нужно вставить. Это не отдельный блок после текста: если отрисовать `text`,
 а затем все `content/math`, формулы уедут в конец задания. Чистый парсер
 `mergeQuestionText` вставляет их в `position`, добавляет пробелы на границе
-слова и сдвигает `text_styles`.
+слова, убирает пробелы перед `.,;:!?` (кроме многоточия) и сдвигает
+`text_styles`. `parseMathContent` дополнительно переводит `\angle`, `\prime`,
+`\leq`/`\geq`, `\neq` и другие команды в Unicode-символы, чтобы в результате
+не оставался сырой LaTeX.
 
 ### Ответы с пропусками
 
 `answer/gap/text/input` хранит ответ не в `string`/`number`, а в
 `user_answer.text_input_answer[].input_strings[]`. Правильный ответ в
 `answer_feedback.correct_answer` имеет ту же форму. Пустые `input_strings`
-означают пропуск, а не ошибку разбора; значения показываются по одному на
-пропуск.
+означают пропуск, а не ошибку разбора.
+
+Массив `text_input_answer[]` приходит в произвольном порядке, а не в порядке
+пропусков. `gapAnswers` сопоставляет `position_id` с `answer.text_position[]`
+и сортирует строки по номеру пропуска; иначе «Ваш ответ» и «Правильный ответ»
+выглядят перепутанными. Если у одного пропуска несколько `input_strings`,
+это допустимые варианты правильного ответа: они показываются через ` / `.
+
+### Порядок вариантов и сопоставлений
+
+`answer/options[]` и `answer/match` не гарантируют порядок, совпадающий с
+отображением. Для `answer/multiple` выбранные id сортируются по порядку
+`answer.options[]`, а пары `answer/match` — по позиции source-варианта. Так
+«Ваш ответ» и «Правильный ответ» показывают одни и те же элементы в одной
+последовательности. В `answer/number` и `answer/string` правильный ответ тоже
+может содержать несколько допустимых значений: они показываются через ` / `.
+
+### Задания с выбором позиций на изображении
+
+`answer/gap/match/background/image/selection` хранит фон в
+`answer.background_image` (`relative_url`/`preview_url`, `description`), а
+позиции — в `answer.image_gaps_positions[].position_id`. Ответ и правильный
+ответ лежат в `position_ids[]`. Номера позиций берутся из порядка
+`image_gaps_positions[]`, а не из порядка `position_ids[]`.
 
 ## `POST contests/overview`
 

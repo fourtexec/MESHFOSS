@@ -81,6 +81,7 @@ private const val DETAIL_RESULTS = "results"
 @Composable
 fun OlympiadScreen(
     client: MeshClient,
+    onAttemptOpenChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -89,6 +90,9 @@ fun OlympiadScreen(
         factory = OlympiadViewModel.factory(client, context),
     )
     val state by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(state.attempt != null) {
+        onAttemptOpenChanged(state.attempt != null)
+    }
     BackHandler(enabled = state.attempt != null || state.detail != null) {
         if (state.attempt != null) vm.closeAttempt() else vm.closeDetail()
     }

@@ -2,7 +2,10 @@ package ru.mesh.foss
 
 import ru.mesh.foss.feature.cdz.CdzInlineSelection
 import ru.mesh.foss.feature.cdz.cdzAtomicMediaType
+import ru.mesh.foss.feature.cdz.gapAnswers
 import ru.mesh.foss.feature.cdz.hasAnswer
+import ru.mesh.foss.feature.cdz.imageGapPositions
+import ru.mesh.foss.feature.cdz.imageGapSelection
 import ru.mesh.foss.feature.cdz.hasVisibleAnswer
 import ru.mesh.foss.feature.cdz.inlineAnswer
 import ru.mesh.foss.feature.cdz.inlineSelections
@@ -14,6 +17,7 @@ import ru.mesh.foss.feature.cdz.parseMathContent
 import ru.mesh.foss.feature.cdz.parseOptions
 import ru.mesh.foss.feature.cdz.parseTasks
 import ru.mesh.foss.feature.cdz.parseTextSpans
+import ru.mesh.foss.feature.cdz.textAnswers
 import ru.mesh.foss.feature.cdz.textInputAnswers
 
 import org.json.JSONArray
@@ -76,12 +80,21 @@ class CdzRichTextTest {
 
     @Test
     fun `math content renders chemical subscripts`() {
-        assertEquals("H₂S , SO₂", parseMathContent("{H_2S} , {SO_2}"))
+        assertEquals("H₂S, SO₂", parseMathContent("{H_2S} , {SO_2}"))
         assertEquals(
             "Na₂O - NO - B₂O₃",
             parseMathContent("{Na_2O} - {NO} - {B_2O_3}")
         )
         assertEquals("x² + H₂O", parseMathContent("x^{2} + H_2O"))
+    }
+
+    @Test
+    fun `math content renders angle prime and leq symbols`() {
+        assertEquals("∠", parseMathContent("\\angle"))
+        assertEquals("′", parseMathContent("\\prime"))
+        assertEquals("x ≤ 5", parseMathContent("x \\leq 5"))
+        assertEquals("1 × 1: 2", parseMathContent("1 \\times 1 : 2"))
+        assertEquals("100%", parseMathContent("100\\%"))
     }
 
     @Test
@@ -113,6 +126,34 @@ class CdzRichTextTest {
             merged.text,
         )
         assertTrue(merged.spans.isEmpty())
+    }
+
+    @Test
+    fun `merged text removes spaces before punctuation and keeps ellipsis`() {
+        assertEquals(
+            "Число. Ответ: да, нет",
+            mergeQuestionText("Число . Ответ : да ,  нет", null).text,
+        )
+        assertEquals(
+            "Слово ...",
+            mergeQuestionText("Слово ...", null).text,
+        )
+    }
+
+    @Test
+    fun `merged text normalization shifts text styles`() {
+        val styles = JSONArray().put(
+            JSONObject()
+                .put("position", 5)
+                .put("offset", 3)
+                .put("content", JSONArray().put("BOLD"))
+        )
+
+        val merged = mergeQuestionText("да , нет", null, styles)
+        val span = merged.spans.single()
+
+        assertEquals("да, нет", merged.text)
+        assertEquals("нет", merged.text.substring(span.start, span.end))
     }
 
     @Test
@@ -167,6 +208,69 @@ class CdzRichTextTest {
     }
 
     @Test
+    fun `gap answers follow question position order and keep variants`() {
+        fun item(positionId: String, vararg values: String): JSONObject {
+            val strings = JSONArray()
+            values.forEach { strings.put(it) }
+            return JSONObject()
+                .put("position_id", positionId)
+                .put("input_strings", strings)
+        }
+
+        val positions = JSONArray()
+            .put(JSONObject().put("position_id", "p1"))
+            .put(JSONObject().put("position_id", "p2"))
+            .put(JSONObject().put("position_id", "p3"))
+            .put(JSONObject().put("position_id", "p4"))
+        val answer = JSONObject()
+            .put("@answer_type", "answer/gap/text/input")
+            .put(
+                "text_input_answer",
+                JSONArray()
+                    .put(item("p3", "30"))
+                    .put(item("p1", "10"))
+                    .put(item("p2", "20", "21"))
+            )
+
+        val gaps = gapAnswers(answer, positions)
+
+        assertEquals(listOf(0, 1, 2, 3), gaps.map { it.index })
+        assertEquals(listOf("10"), gaps[0].values)
+        assertEquals(listOf("20", "21"), gaps[1].values)
+        assertEquals(listOf("30"), gaps[2].values)
+        assertTrue(gaps[3].values.isEmpty())
+    }
+
+    @Test
+    fun `text answers keep all acceptable variants`() {
+        val payload = JSONObject()
+            .put("number", JSONArray().put("10").put("10.0"))
+
+        assertEquals(listOf("10", "10.0"), textAnswers(payload))
+    }
+
+    @Test
+    fun `image selection positions use background order and stay visible`() {
+        val answer = JSONObject()
+            .put(
+                "image_gaps_positions",
+                JSONArray()
+                    .put(JSONObject().put("position_id", "a"))
+                    .put(JSONObject().put("position_id", "b"))
+                    .put(JSONObject().put("position_id", "c"))
+            )
+        val payload = JSONObject()
+            .put("@answer_type", "answer/gap/match/background/image/selection")
+            .put("position_ids", JSONArray().put("c").put("a"))
+
+        val positions = imageGapPositions(answer)
+
+        assertEquals(listOf(1, 3), imageGapSelection(payload, positions))
+        assertTrue(hasVisibleAnswer(payload))
+        assertTrue(hasAnswer(payload))
+    }
+
+    @Test
     fun `option math content is not rendered as a bare Variant`() {
         val option = JSONObject()
             .put("id", "math-option")
@@ -182,6 +286,28 @@ class CdzRichTextTest {
             JSONObject().put("options", JSONArray().put(option))
         ).single()
         assertEquals("Na₂S", parsed.text)
+    }
+
+    @Test
+    fun `option text keeps math at its position`() {
+        val option = JSONObject()
+            .put("id", "math-option")
+            .put("text", "Куб")
+            .put(
+                "content",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", "content/math")
+                        .put("position", 3)
+                        .put("content", "11 \\times 11")
+                )
+            )
+
+        val parsed = parseOptions(
+            JSONObject().put("options", JSONArray().put(option))
+        ).single()
+
+        assertEquals("Куб 11 × 11", parsed.text)
     }
 
     @Test
