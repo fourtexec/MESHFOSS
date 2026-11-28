@@ -46,14 +46,17 @@ object ProgrammingOlympiadLink {
 
             parseDirect(candidate)?.let { return it }
 
-            val decoded = runCatching { URLDecoder.decode(candidate, "UTF-8") }.getOrNull()
-            if (decoded != null && decoded != candidate) queue.addLast(decoded)
-
             val clean = candidate.replace("&amp;", "&")
             val uri = runCatching { URI(clean) }.getOrNull()
-            uri?.rawQuery?.split('&')?.forEach { pair ->
-                val value = pair.substringAfter('=', "")
-                if (value.isNotBlank()) queue.addLast(value)
+            val queryValues = uri?.rawQuery?.let(::queryCandidates).orEmpty()
+            queryValues.forEach(queue::addLast)
+
+            // Полный decode нужен для целиком закодированной ссылки. Для
+            // launcher-URL его пропускаем: иначе `&role=...` внутри
+            // `activity_url` начинает выглядеть отдельным параметром.
+            if (queryValues.isEmpty()) {
+                val decoded = runCatching { URLDecoder.decode(candidate, "UTF-8") }.getOrNull()
+                if (decoded != null && decoded != candidate) queue.addLast(decoded)
             }
 
             // Ссылка может быть внутри текста/HTML, а не быть всем candidate.
@@ -65,6 +68,28 @@ object ProgrammingOlympiadLink {
             }
         }
         return null
+    }
+
+    /**
+     * Возвращает значения query-параметров. Для launcher-параметров
+     * `activity_url`/`activityId` берём весь остаток: вложенная ссылка может
+     * содержать собственные `&`, которые нельзя резать как параметры внешней.
+     */
+    private fun queryCandidates(rawQuery: String): List<String> {
+        val values = mutableListOf<String>()
+        rawQuery.split('&').forEach { pair ->
+            val value = pair.substringAfter('=', "")
+            if (value.isNotBlank()) values += value
+        }
+        listOf("activity_url", "activityId").forEach { key ->
+            val marker = "$key="
+            val start = rawQuery.indexOf(marker)
+            if (start >= 0) {
+                val rest = rawQuery.substring(start + marker.length)
+                if ("://" in rest) values += rest
+            }
+        }
+        return values
     }
 
     private fun parseDirect(value: String): ProgrammingOlympiadIds? {

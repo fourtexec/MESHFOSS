@@ -146,7 +146,7 @@ private class CdzHtmlParser(private val source: String) {
                 break
             }
             if (tagStart > cursor) appendText(source.substring(cursor, tagStart))
-            val tagEnd = source.indexOf('>', tagStart + 1)
+            val tagEnd = findTagEnd(source, tagStart + 1)
             if (tagEnd < 0) {
                 appendText(source.substring(tagStart))
                 break
@@ -280,10 +280,10 @@ private class CdzHtmlParser(private val source: String) {
             return
         }
         val tokens = buildSet {
-            if (classes.any { it.contains("tex-font-style-bf") } || "bold" in classes) add("BOLD")
-            if (classes.any { it.contains("tex-font-style-it") } || "italic" in classes) add("ITALIC")
-            if (classes.any { it.contains("tex-font-style-underline") }) add("UNDERLINE")
-            if (classes.any { it.contains("tex-font-style-tt") }) add("CODE")
+            if ("tex-font-style-bf" in classes || "bold" in classes) add("BOLD")
+            if ("tex-font-style-it" in classes || "italic" in classes) add("ITALIC")
+            if ("tex-font-style-underline" in classes) add("UNDERLINE")
+            if ("tex-font-style-tt" in classes) add("CODE")
         }
         if (!selfClosing) {
             spanStack.addLast(SpanFrame(tokens, hidden = false, math = false))
@@ -383,13 +383,18 @@ private class CdzHtmlParser(private val source: String) {
     }
 }
 
+// Веб-бандл использует `$$$...$$$`, `\(...\)`, `\[...\]` и editor formula.
+// Одиночный `$...$` не поддерживаем: он слишком часто оказывается валютой.
 private val mathRegex = Regex(
-    """\$\$\$(.+?)\$\$\$|\\\((.+?)\\\)|\\\[(.+?)\\\]|\$(.+?)\$""",
+    """\$\$\$(.+?)\$\$\$|\\\((.+?)\\\)|\\\[(.+?)\\\]""",
     setOf(RegexOption.DOT_MATCHES_ALL),
 )
 
 private fun stripMathDelimiters(raw: String): String {
     var value = raw.trim()
+    if (value.startsWith("$$$") && value.endsWith("$$$")) {
+        value = value.substring(3, value.length - 3)
+    }
     if (value.startsWith("\\(") && value.endsWith("\\)")) {
         value = value.substring(2, value.length - 2)
     }
@@ -401,15 +406,58 @@ private fun stripMathDelimiters(raw: String): String {
 
 private fun isHiddenAttrs(attrs: Map<String, String>): Boolean {
     val editorType = attrs["data-w-e-type"].orEmpty()
-    val style = attrs["style"].orEmpty().lowercase().replace(" ", "")
-    return editorType.equals("invisibleText", ignoreCase = true) ||
-        style.contains("font-size:0") ||
-        style.contains("color:white") ||
-        style.contains("color:#fff") ||
-        style.contains("color:#ffffff") ||
-        style.contains("visibility:hidden") ||
-        style.contains("opacity:0") ||
-        style.contains("display:none")
+    if (editorType.equals("invisibleText", ignoreCase = true)) return true
+
+    val style = parseStyle(attrs["style"].orEmpty())
+    if (style["display"]?.equals("none", ignoreCase = true) == true) return true
+    if (style["visibility"]?.equals("hidden", ignoreCase = true) == true) return true
+    if (style["opacity"]?.toDoubleOrNull() == 0.0) return true
+
+    val fontSize = style["font-size"].orEmpty()
+        .removeSuffix("px").removeSuffix("em").removeSuffix("rem").removeSuffix("%")
+        .trim().toDoubleOrNull()
+    if (fontSize == 0.0) return true
+
+    val color = style["color"].orEmpty().lowercase().replace(" ", "")
+    return color == "white" ||
+        color == "#fff" ||
+        color == "#ffffff" ||
+        color == "rgb(255,255,255)" ||
+        color == "rgba(255,255,255,1)" ||
+        color == "rgba(255,255,255,1.0)"
+}
+
+private fun parseStyle(raw: String): Map<String, String> = raw
+    .split(';')
+    .mapNotNull { declaration ->
+        val colon = declaration.indexOf(':')
+        if (colon <= 0) return@mapNotNull null
+        val name = declaration.substring(0, colon).trim().lowercase()
+        val value = declaration.substring(colon + 1)
+            .substringBefore('!')
+            .trim()
+            .lowercase()
+        if (name.isBlank() || value.isBlank()) null else name to value
+    }
+    .toMap()
+
+/** Ищет `>` вне quoted-атрибутов: `data-value="x > 0"` не должен ломать тег. */
+private fun findTagEnd(source: String, start: Int): Int {
+    var quote: Char? = null
+    var index = start
+    while (index < source.length) {
+        val char = source[index]
+        if (quote != null) {
+            if (char == quote) quote = null
+        } else {
+            when (char) {
+                '"', '\'' -> quote = char
+                '>' -> return index
+            }
+        }
+        index++
+    }
+    return -1
 }
 
 private fun parseAttributes(raw: String): Map<String, String> {

@@ -146,6 +146,44 @@ class CdzRichTextTest {
     }
 
     @Test
+    fun `html hidden detection does not hide fractional size or yellow text`() {
+        val document = parseCdzHtml(
+            """
+            <p style="font-size:0.9em; color:#ffff00; opacity:0.5">Видно</p>
+            <p style="font-size:0px; color:white">Скрыто</p>
+            """.trimIndent()
+        )
+        val text = document.blocks
+            .filterIsInstance<CdzHtmlBlock.Rich>()
+            .joinToString("\n") { it.content.text }
+            .trim()
+
+        assertEquals("Видно", text)
+    }
+
+    @Test
+    fun `html keeps dollar amounts as text`() {
+        val document = parseCdzHtml("<p>Цена $5 и $10</p>")
+        val text = document.blocks
+            .filterIsInstance<CdzHtmlBlock.Rich>()
+            .joinToString("\n") { it.content.text }
+
+        assertEquals("Цена $5 и $10", text)
+    }
+
+    @Test
+    fun `html formula attributes may contain greater than`() {
+        val document = parseCdzHtml(
+            """<p><span data-w-e-type="formula" data-value="x > 0"></span></p>"""
+        )
+        val text = document.blocks
+            .filterIsInstance<CdzHtmlBlock.Rich>()
+            .joinToString("\n") { it.content.text }
+
+        assertEquals("x > 0", text)
+    }
+
+    @Test
     fun `context info keeps math inside the text block`() {
         val result = JSONObject().put(
             "groups_context_info",

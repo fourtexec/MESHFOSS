@@ -534,10 +534,19 @@ private class MathParser(private val source: String) {
 
     private fun parseOptionalGroup(style: CdzMathStyle): CdzMathNode? {
         if (index >= source.length || source[index] != '[') return null
-        val end = source.indexOf(']', index + 1)
-        if (end < 0) return null
-        val body = source.substring(index + 1, end)
-        index = end + 1
+        val start = index + 1
+        var depth = 1
+        var cursor = start
+        while (cursor < source.length && depth > 0) {
+            when (source[cursor]) {
+                '[' -> depth++
+                ']' -> depth--
+            }
+            cursor++
+        }
+        if (depth != 0) return null
+        val body = source.substring(start, cursor - 1)
+        index = cursor
         return CdzMathNode.Sequence(MathParser(body).parse(style))
     }
 
@@ -580,15 +589,35 @@ private class MathParser(private val source: String) {
 }
 
 private fun cleanTextGroup(raw: String): String {
-    var text = raw
-    while (text.startsWith("{") && text.endsWith("}")) {
-        text = text.substring(1, text.length - 1)
-    }
-    return text
+    return stripOuterBraces(raw)
         .replace("\\,", " ")
         .replace("\\ ", " ")
         .replace("~", " ")
         .replace(Regex("""\\([{}%$&#_])"""), "$1")
+}
+
+/** Снимает только парные внешние `{}`, не трогая `{a} + {b}`. */
+private fun stripOuterBraces(raw: String): String {
+    var value = raw
+    while (value.length >= 2 && value.first() == '{' && value.last() == '}') {
+        var depth = 0
+        var wrapsWhole = true
+        for (index in value.indices) {
+            when (value[index]) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0 && index != value.lastIndex) {
+                        wrapsWhole = false
+                        break
+                    }
+                }
+            }
+        }
+        if (!wrapsWhole || depth != 0) break
+        value = value.substring(1, value.length - 1)
+    }
+    return value
 }
 
 private val mathSubscript = mapOf(

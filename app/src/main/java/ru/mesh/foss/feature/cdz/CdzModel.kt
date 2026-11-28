@@ -525,68 +525,8 @@ fun parseOptions(answer: JSONObject): List<CdzOption> {
  * превращаем в Unicode-индексы. Это нужно и в условии, и в вариантах ответа.
  */
 fun parseMathContent(raw: String?): String {
-    var text = raw?.trim().orEmpty()
-    if (text.isBlank()) return ""
-
-    val fraction = Regex("""\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}""")
-    repeat(3) {
-        text = fraction.replace(text) { match ->
-            "${match.groupValues[1]}/${match.groupValues[2]}"
-        }
-    }
-    text = Regex("""\\sqrt\s*\{([^{}]*)\}""").replace(text) { "√(${it.groupValues[1]})" }
-    val wrapper = Regex("""\\(?:text|mathrm|mathbf|mathit|operatorname|ce|pu)\s*\{([^{}]*)\}""")
-    repeat(3) { text = wrapper.replace(text) { it.groupValues[1] } }
-
-    text = text
-        .replace(Regex("""\\(?:left|right|big|Big|bigg|Bigg)\b"""), "")
-        .replace(Regex("""\\[,;!]"""), " ")
-        .replace("\\ ", " ")
-        .replace("\\%", "%")
-        .replace("\\&", "&")
-        .replace("\\#", "#")
-    mathSymbols.entries.sortedByDescending { it.key.length }.forEach { (command, symbol) ->
-        text = text.replace(command, symbol)
-    }
-    text = Regex("""\\([A-Za-z]+)""").replace(text) { match ->
-        mathSymbols["\\${match.groupValues[1]}"] ?: match.groupValues[1]
-    }
-
-    val out = StringBuilder()
-    var index = 0
-    while (index < text.length) {
-        val char = text[index]
-        if (char == '_' || char == '^') {
-            val superscript = char == '^'
-            val next = text.getOrNull(index + 1)
-            if (next == null) {
-                index++
-                continue
-            }
-            val body: String
-            val end: Int
-            if (next == '{') {
-                val parsed = readMathGroup(text, index + 1)
-                body = parsed.first
-                end = parsed.second
-            } else if (next == '\\') {
-                val command = Regex("""^\\[A-Za-z]+""").find(text.substring(index + 1))
-                body = command?.value.orEmpty()
-                end = if (command == null) index + 2 else index + 1 + command.value.length
-            } else {
-                body = next.toString()
-                end = index + 2
-            }
-            out.append(mathScript(body, superscript))
-            index = end
-        } else if (char == '{' || char == '}') {
-            index++
-        } else {
-            out.append(char)
-            index++
-        }
-    }
-    return out.toString()
+    if (raw.isNullOrBlank()) return ""
+    return parseMathText(raw)
         .replace(Regex("""\s+([.,;:!?])"""), "$1")
         .replace(Regex("""\s+"""), " ")
         .trim()
@@ -838,80 +778,6 @@ private fun mapMergedPosition(
     }
     return position + shift
 }
-
-private fun readMathGroup(text: String, open: Int): Pair<String, Int> {
-    var depth = 0
-    val body = StringBuilder()
-    var index = open
-    while (index < text.length) {
-        when (text[index]) {
-            '{' -> {
-                if (depth > 0) body.append('{')
-                depth++
-            }
-            '}' -> {
-                depth--
-                if (depth == 0) return body.toString() to (index + 1)
-                if (depth > 0) body.append('}')
-            }
-            else -> body.append(text[index])
-        }
-        index++
-    }
-    return body.toString() to text.length
-}
-
-private fun mathScript(body: String, superscript: Boolean): String {
-    val table = if (superscript) mathSuperscript else mathSubscript
-    val out = StringBuilder()
-    body.forEach { char -> out.append(table[char] ?: char) }
-    return out.toString()
-}
-
-private val mathSubscript = mapOf(
-    '0' to '₀', '1' to '₁', '2' to '₂', '3' to '₃', '4' to '₄',
-    '5' to '₅', '6' to '₆', '7' to '₇', '8' to '₈', '9' to '₉',
-    '+' to '₊', '-' to '₋', '=' to '₌', '(' to '₍', ')' to '₎',
-    'a' to 'ₐ', 'e' to 'ₑ', 'h' to 'ₕ', 'i' to 'ᵢ', 'j' to 'ⱼ',
-    'k' to 'ₖ', 'l' to 'ₗ', 'm' to 'ₘ', 'n' to 'ₙ', 'o' to 'ₒ',
-    'p' to 'ₚ', 'r' to 'ᵣ', 's' to 'ₛ', 't' to 'ₜ', 'u' to 'ᵤ',
-    'v' to 'ᵥ', 'x' to 'ₓ',
-)
-
-private val mathSuperscript = mapOf(
-    '0' to '⁰', '1' to '¹', '2' to '²', '3' to '³', '4' to '⁴',
-    '5' to '⁵', '6' to '⁶', '7' to '⁷', '8' to '⁸', '9' to '⁹',
-    '+' to '⁺', '-' to '⁻', '=' to '⁼', '(' to '⁽', ')' to '⁾',
-    'a' to 'ᵃ', 'b' to 'ᵇ', 'c' to 'ᶜ', 'd' to 'ᵈ', 'e' to 'ᵉ',
-    'f' to 'ᶠ', 'g' to 'ᵍ', 'h' to 'ʰ', 'i' to 'ⁱ', 'j' to 'ʲ',
-    'k' to 'ᵏ', 'l' to 'ˡ', 'm' to 'ᵐ', 'n' to 'ⁿ', 'o' to 'ᵒ',
-    'p' to 'ᵖ', 'r' to 'ʳ', 's' to 'ˢ', 't' to 'ᵗ', 'u' to 'ᵘ',
-    'v' to 'ᵛ', 'w' to 'ʷ', 'x' to 'ˣ', 'y' to 'ʸ', 'z' to 'ᶻ',
-)
-
-private val mathSymbols = mapOf(
-    "\\cdot" to "·", "\\times" to "×", "\\div" to "÷",
-    "\\pm" to "±", "\\approx" to "≈", "\\le" to "≤", "\\ge" to "≥",
-    "\\leq" to "≤", "\\geq" to "≥", "\\ne" to "≠", "\\neq" to "≠",
-    "\\rightarrow" to "→", "\\to" to "→", "\\Rightarrow" to "⇒",
-    "\\leftarrow" to "←", "\\Leftarrow" to "⇐",
-    "\\leftrightarrow" to "↔", "\\Leftrightarrow" to "⇔",
-    "\\rightleftharpoons" to "⇌", "\\uparrow" to "↑", "\\downarrow" to "↓",
-    "\\infty" to "∞", "\\angle" to "∠", "\\prime" to "′",
-    "\\parallel" to "∥", "\\perp" to "⊥", "\\triangle" to "△",
-    "\\cong" to "≅", "\\sim" to "∼", "\\equiv" to "≡",
-    "\\in" to "∈", "\\notin" to "∉", "\\subset" to "⊂",
-    "\\cup" to "∪", "\\cap" to "∩", "\\emptyset" to "∅",
-    "\\varnothing" to "∅", "\\sum" to "∑", "\\prod" to "∏",
-    "\\int" to "∫", "\\ldots" to "…", "\\dots" to "…",
-    "\\alpha" to "α", "\\beta" to "β", "\\gamma" to "γ",
-    "\\delta" to "δ", "\\Delta" to "Δ", "\\epsilon" to "ε",
-    "\\varepsilon" to "ε", "\\lambda" to "λ", "\\mu" to "μ",
-    "\\pi" to "π", "\\rho" to "ρ", "\\sigma" to "σ",
-    "\\theta" to "θ", "\\varphi" to "φ", "\\phi" to "φ",
-    "\\omega" to "ω", "\\Omega" to "Ω", "\\degree" to "°",
-    "\\circ" to "°",
-)
 
 /**
  * Тип атома: `image` или `video`.
