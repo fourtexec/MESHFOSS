@@ -76,7 +76,6 @@ data class CdzMathStyle(
     val italic: Boolean = false,
     val code: Boolean = false,
     val underline: Boolean = false,
-    val overline: Boolean = false,
 )
 
 /** Inline-элемент внутри формулы: дробь или корень. */
@@ -127,7 +126,6 @@ private fun renderMath(root: CdzMathNode, inlineAsText: Boolean): CdzMathRender 
             if (style.italic) add("ITALIC")
             if (style.code) add("CODE")
             if (style.underline) add("UNDERLINE")
-            if (style.overline) add("OVERLINE")
         }
         if (tokens.isNotEmpty()) {
             spans += CdzTextSpan(start, text.length, tokens)
@@ -175,7 +173,9 @@ private fun renderMath(root: CdzMathNode, inlineAsText: Boolean): CdzMathRender 
                     inlines += CdzMathInline(text.length, node, alternate)
                 }
             }
-            is CdzMathNode.Overline -> appendNode(node.body, tokens + "OVERLINE")
+            // Compose TextDecoration не умеет overline; не теряем содержимое
+            // формулы и не показываем сырые команды.
+            is CdzMathNode.Overline -> appendNode(node.body, tokens)
             is CdzMathNode.Underline -> appendNode(node.body, tokens + "UNDERLINE")
         }
     }
@@ -224,7 +224,6 @@ private fun mathSpanStyle(tokens: Set<String>): SpanStyle {
     if ("CODE" in tokens) style = style.copy(fontFamily = FontFamily.Monospace)
     val decorations = buildList {
         if ("UNDERLINE" in tokens) add(TextDecoration.Underline)
-        if ("OVERLINE" in tokens) add(TextDecoration.Overline)
     }
     if (decorations.isNotEmpty()) {
         style = style.copy(textDecoration = TextDecoration.combine(decorations))

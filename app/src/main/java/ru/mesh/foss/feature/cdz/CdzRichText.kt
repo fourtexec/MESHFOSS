@@ -88,7 +88,6 @@ private fun cdzSpanStyle(tokens: Set<String>): SpanStyle {
     val decorations = buildList {
         if (tokens.any { it in cdzUnderlineTokens }) add(TextDecoration.Underline)
         if (tokens.any { it in cdzStrikeTokens }) add(TextDecoration.LineThrough)
-        if (tokens.any { it in cdzOverlineTokens }) add(TextDecoration.Overline)
     }
     if (decorations.isNotEmpty()) {
         style = style.copy(textDecoration = TextDecoration.combine(decorations))
@@ -117,7 +116,6 @@ private val cdzItalicTokens = setOf("ITALIC", "EM", "EMPHASIS", "IT")
 private val cdzCodeTokens = setOf("CODE", "MONOSPACE", "TT")
 private val cdzUnderlineTokens = setOf("UNDERLINE", "U")
 private val cdzStrikeTokens = setOf("STRIKETHROUGH", "STRIKE", "S")
-private val cdzOverlineTokens = setOf("OVERLINE")
 private val cdzSubTokens = setOf("SUB", "SUBSCRIPT", "LOWER", "INFERIOR")
 private val cdzSupTokens = setOf("SUP", "SUPER", "SUPERSCRIPT", "UPPER", "SUPERIOR")
 
