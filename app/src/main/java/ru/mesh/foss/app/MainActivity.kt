@@ -735,7 +735,12 @@ fun MainScaffold(
         topBar = {
             // Экран результата олимпиады рисует собственный top bar.
             // Второй bar из основного Scaffold давал двойную полосу «Результаты».
-            if (currentTab == "olympiads" && olympiadAttemptOpen) return@Scaffold
+            // Нулевой Spacer оставляет topBar непустым, иначе Scaffold добавит
+            // ещё один status-bar inset под вложенный экран.
+            if (currentTab == "olympiads" && olympiadAttemptOpen) {
+                Spacer(Modifier.height(0.dp))
+                return@Scaffold
+            }
             if (liquid) {
                 LiquidTopBar(screenTitle, topActions)
                 return@Scaffold
