@@ -61,6 +61,24 @@ GET https://uchebnik.mos.ru/webtests/contests/rest/secure/challenge/task/answers
 задания, ответ ученика, правильный ответ и баллы. Запросы `start-attempt`,
 отправка ответов и `complete_attempt` не вызываются.
 
+### Условие и формулы
+
+`question_elements[]` может быть `content/text` с отдельным массивом
+`content[]`. Элементы `content/math` содержат LaTeX-подобный `content` и
+`position` — смещение в символах внутри родительского `text`, куда формулу
+нужно вставить. Это не отдельный блок после текста: если отрисовать `text`,
+а затем все `content/math`, формулы уедут в конец задания. Чистый парсер
+`mergeQuestionText` вставляет их в `position`, добавляет пробелы на границе
+слова и сдвигает `text_styles`.
+
+### Ответы с пропусками
+
+`answer/gap/text/input` хранит ответ не в `string`/`number`, а в
+`user_answer.text_input_answer[].input_strings[]`. Правильный ответ в
+`answer_feedback.correct_answer` имеет ту же форму. Пустые `input_strings`
+означают пропуск, а не ошибку разбора; значения показываются по одному на
+пропуск.
+
 ## `POST contests/overview`
 
 Тело запроса:

@@ -3,15 +3,18 @@ package ru.mesh.foss
 import ru.mesh.foss.feature.cdz.CdzInlineSelection
 import ru.mesh.foss.feature.cdz.cdzAtomicMediaType
 import ru.mesh.foss.feature.cdz.hasAnswer
+import ru.mesh.foss.feature.cdz.hasVisibleAnswer
 import ru.mesh.foss.feature.cdz.inlineAnswer
 import ru.mesh.foss.feature.cdz.inlineSelections
 import ru.mesh.foss.feature.cdz.inlineTextBlockStarts
 import ru.mesh.foss.feature.cdz.isInlineChoice
+import ru.mesh.foss.feature.cdz.mergeQuestionText
 import ru.mesh.foss.feature.cdz.parseInlineChoices
 import ru.mesh.foss.feature.cdz.parseMathContent
 import ru.mesh.foss.feature.cdz.parseOptions
 import ru.mesh.foss.feature.cdz.parseTasks
 import ru.mesh.foss.feature.cdz.parseTextSpans
+import ru.mesh.foss.feature.cdz.textInputAnswers
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -79,6 +82,88 @@ class CdzRichTextTest {
             parseMathContent("{Na_2O} - {NO} - {B_2O_3}")
         )
         assertEquals("x² + H₂O", parseMathContent("x^{2} + H_2O"))
+    }
+
+    @Test
+    fun `math content is inserted at positions instead of appended`() {
+        val content = JSONArray()
+            .put(
+                JSONObject()
+                    .put("type", "content/math")
+                    .put("position", 5)
+                    .put("content", "x")
+            )
+            .put(
+                JSONObject()
+                    .put("type", "content/math")
+                    .put("position", 16)
+                    .put("content", "x^3 + 4x = 8.")
+            )
+            .put(
+                JSONObject()
+                    .put("type", "content/math")
+                    .put("position", 23)
+                    .put("content", "x^7 + 64x^2 + 7.")
+            )
+
+        val merged = mergeQuestionText("Числотаково, чтоНайдите", content)
+
+        assertEquals(
+            "Число x таково, что x³ + 4x = 8. Найдите x⁷ + 64x² + 7.",
+            merged.text,
+        )
+        assertTrue(merged.spans.isEmpty())
+    }
+
+    @Test
+    fun `math insertion keeps existing spaces and shifts text styles`() {
+        val content = JSONArray().put(
+            JSONObject()
+                .put("type", "content/math")
+                .put("position", 5)
+                .put("content", "x")
+        )
+        val styles = JSONArray().put(
+            JSONObject()
+                .put("position", 0)
+                .put("offset", 5)
+                .put("content", JSONArray().put("BOLD"))
+        )
+
+        val merged = mergeQuestionText("Число таково", content, styles)
+
+        assertEquals("Число x таково", merged.text)
+        assertEquals(0, merged.spans.single().start)
+        assertEquals(5, merged.spans.single().end)
+    }
+
+    @Test
+    fun `gap text input answers are readable and visible`() {
+        val answer = JSONObject()
+            .put("@answer_type", "answer/gap/text/input")
+            .put(
+                "text_input_answer",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("position_id", "p1")
+                            .put("input_strings", JSONArray().put("12"))
+                    )
+                    .put(
+                        JSONObject()
+                            .put("position_id", "p2")
+                            .put("input_strings", JSONArray().put("34"))
+                    )
+                    .put(
+                        JSONObject()
+                            .put("position_id", "p1")
+                            .put("input_strings", JSONArray().put("12"))
+                    )
+            )
+
+        assertEquals(listOf("12", "34"), textInputAnswers(answer))
+        assertTrue(hasVisibleAnswer(answer))
+        assertTrue(hasAnswer(answer))
     }
 
     @Test

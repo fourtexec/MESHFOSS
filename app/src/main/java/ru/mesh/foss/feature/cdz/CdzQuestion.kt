@@ -61,38 +61,28 @@ internal fun CdzQuestionBlock(
     }
 
     val text = block.optString("text")
-    if (text.isNotBlank()) {
-        val spans = remember(block) {
-            parseTextSpans(text, block.optJSONArray("text_styles"))
-        }
+    val content = block.optJSONArray("content")
+    val merged = remember(block) {
+        mergeQuestionText(text, content, block.optJSONArray("text_styles"))
+    }
+    if (merged.text.isNotBlank()) {
         CdzRichText(
-            text = text,
-            spans = spans,
+            text = merged.text,
+            spans = merged.spans,
             modifier = modifier,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
 
-    val content = block.optJSONArray("content") ?: return
+    if (content == null) return
     for (partIndex in 0 until content.length()) {
         val part = content.optJSONObject(partIndex) ?: continue
         val partType = part.optString("type")
         if (partType.startsWith("content/math") ||
             part.optString("atomic_type") == "math"
         ) {
-            val math = parseMathContent(
-                part.optString("content").ifBlank { part.optString("text") }
-            )
-            if (math.isNotBlank()) {
-                CdzRichText(
-                    text = math,
-                    spans = emptyList(),
-                    modifier = modifier,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            // Math already inserted into [merged] at its `position`.
             continue
         }
         if (cdzAtomicMediaType(part).isNotBlank()) {

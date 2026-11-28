@@ -32,6 +32,12 @@ data class CdzTextSpan(
     val tokens: Set<String>,
 )
 
+/** Текст условия после вставки `content/math` в позиции `position`. */
+data class CdzMergedText(
+    val text: String,
+    val spans: List<CdzTextSpan>,
+)
+
 /** Один вариант ответа: текст, картинка, видео и роль в сопоставлении. */
 data class CdzOption(
     val id: String,
@@ -484,6 +490,85 @@ fun parseMathContent(raw: String?): String {
         }
     }
     return out.toString().replace(Regex("""\s+"""), " ").trim()
+}
+
+/**
+ * Склеивает обычный текст условия с `content/math` по полю `position`.
+ *
+ * В олимпиадных `question_elements` формулы не лежат внутри `text`: сервер
+ * присылает чистый текст и отдельные math-блоки с координатой вставки. Если
+ * просто отрисовать `text`, а потом все `content`, формулы уезжают в конец
+ * задания. Здесь они возвращаются на свои места; пробелы добавляются только
+ * там, где формула примыкает к слову.
+ */
+fun mergeQuestionText(
+    text: String,
+    content: JSONArray?,
+    styles: JSONArray? = null,
+): CdzMergedText {
+    if (content == null) {
+        return CdzMergedText(text, parseTextSpans(text, styles))
+    }
+    val inserts = mutableListOf<Pair<Int, String>>()
+    for (index in 0 until content.length()) {
+        val part = content.optJSONObject(index) ?: continue
+        val type = part.optString("type").trim()
+        val atomic = part.optString("atomic_type").trim()
+        if (!type.startsWith("content/math") && atomic != "math") continue
+        val math = parseMathContent(
+            part.optString("content").ifBlank { part.optString("text") }
+        )
+        if (math.isBlank()) continue
+        val rawPosition = part.optInt("position", -1)
+        val position = if (rawPosition < 0) text.length else rawPosition.coerceIn(0, text.length)
+        inserts += position to math
+    }
+    if (inserts.isEmpty()) {
+        return CdzMergedText(text, parseTextSpans(text, styles))
+    }
+
+    val out = StringBuilder(text.length + inserts.sumOf { it.second.length + 2 })
+    val inserted = mutableListOf<Pair<Int, Int>>()
+    var cursor = 0
+    inserts.sortedBy { it.first }.forEach { (rawPosition, math) ->
+        val at = rawPosition.coerceIn(cursor, text.length)
+        if (at > cursor) out.append(text, cursor, at)
+        val before = out.length
+        if (out.isNotEmpty() && needsSpaceBefore(out.last())) out.append(' ')
+        out.append(math)
+        val next = text.getOrNull(at)
+        if (next != null && needsSpaceAfter(next)) out.append(' ')
+        inserted += at to (out.length - before)
+        cursor = at
+    }
+    if (cursor < text.length) out.append(text, cursor, text.length)
+
+    val merged = out.toString()
+    val sourceSpans = parseTextSpans(text, styles)
+    val mappedSpans = if (sourceSpans.isEmpty()) emptyList() else sourceSpans.mapNotNull { span ->
+        val start = mapMergedPosition(span.start, inserted, includeAtPosition = true)
+        val end = mapMergedPosition(span.end, inserted, includeAtPosition = false)
+        if (end > start) span.copy(start = start, end = end) else null
+    }
+    return CdzMergedText(merged, mappedSpans)
+}
+
+private fun needsSpaceBefore(char: Char): Boolean =
+    char.isLetterOrDigit() || char in ",.;:!?)]}»”"
+
+private fun needsSpaceAfter(char: Char): Boolean =
+    char.isLetterOrDigit() || char in "(«“\""
+
+private fun mapMergedPosition(
+    position: Int,
+    inserted: List<Pair<Int, Int>>,
+    includeAtPosition: Boolean,
+): Int {
+    var shift = 0
+    inserted.forEach { (at, length) ->
+        if (at < position || (includeAtPosition && at == position)) shift += length
+    }
+    return position + shift
 }
 
 private fun readMathGroup(text: String, open: Int): Pair<String, Int> {
@@ -1163,6 +1248,31 @@ fun textAnswer(answer: JSONObject): String {
     return answer.optString("string")
 }
 
+/**
+ * Значения `answer/gap/text/input`: по строке на каждый заполненный пропуск.
+ *
+ * Сервер кладёт их в `text_input_answer[].input_strings`, а не в `string`
+ * или `number`, поэтому общий [textAnswer] их не видит.
+ */
+fun textInputAnswers(answer: JSONObject?): List<String> {
+    val items = answer?.optJSONArray("text_input_answer") ?: return emptyList()
+    val result = mutableListOf<String>()
+    val seen = linkedSetOf<String>()
+    for (index in 0 until items.length()) {
+        val item = items.optJSONObject(index) ?: continue
+        val strings = item.optJSONArray("input_strings") ?: continue
+        val values = (0 until strings.length())
+            .mapNotNull { stringIndex ->
+                strings.optString(stringIndex).trim().takeIf { it.isNotBlank() }
+            }
+        if (values.isEmpty()) continue
+        val line = values.joinToString(" ")
+        val key = item.optString("position_id").ifBlank { line }
+        if (seen.add(key)) result += line
+    }
+    return result
+}
+
 /** Порядок вариантов answer/order. */
 fun orderIds(answer: JSONObject, options: List<CdzOption>): MutableList<String> {
     val saved = answer.optJSONArray("ids_order")
@@ -1185,6 +1295,7 @@ fun hasAnswer(answer: JSONObject): Boolean {
     answer.optJSONArray("ids")?.let { return it.length() > 0 }
     answer.optJSONArray("ids_order")?.let { return it.length() > 0 }
     answer.optJSONArray("text_position_answer")?.let { return it.length() > 0 }
+    if (textInputAnswers(answer).isNotEmpty()) return true
     answer.optJSONArray("groups")?.let { groups ->
         for (i in 0 until groups.length()) {
             val ids = groups.optJSONObject(i)?.optJSONArray("options_ids")
@@ -1242,6 +1353,7 @@ fun hasVisibleAnswer(answer: JSONObject?): Boolean {
     answer.optJSONArray("groups")?.let { return hasAnswer(answer) }
     answer.optJSONArray("ids_order")?.let { return it.length() > 0 }
     answer.optJSONArray("text_position_answer")?.let { return it.length() > 0 }
+    if (textInputAnswers(answer).isNotEmpty()) return true
     answer.optJSONArray("answers")?.let { answers ->
         for (index in 0 until answers.length()) {
             val item = answers.optJSONObject(index) ?: continue

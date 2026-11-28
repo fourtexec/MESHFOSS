@@ -517,6 +517,20 @@ private fun ResultAnswerPayload(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
+        "answer/gap/text/input" -> {
+            val lines = textInputAnswers(payload)
+            if (lines.isEmpty()) NoAnswer() else Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                lines.forEachIndexed { index, line ->
+                    Text(
+                        text = "${index + 1}. $line",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
         "answer/string/multiple" -> {
             val answers = payload.optJSONArray("answers") ?: JSONArray()
             val lines = (0 until answers.length()).mapNotNull { index ->
